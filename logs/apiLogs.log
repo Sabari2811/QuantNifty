@@ -1,0 +1,17 @@
+2026-07-04 22:15:49,103 - <Response [200]>
+2026-07-04 22:15:49,110 - Get Quotes response : {'Success': [{'exchange_code': 'NSE', 'product_type': '', 'stock_code': 'NIFTY', 'expiry_date': None, 'right': None, 'strike_price': 0.0, 'ltp': 24270.85, 'ltt': '03-Jul-2026 16:00:01', 'best_bid_price': 0.0, 'best_bid_quantity': '0', 'best_offer_price': 0.0, 'best_offer_quantity': '0', 'open': 24375.65, 'high': 24378.15, 'low': 24252.35, 'previous_close': 24175.7, 'ltp_percent_change': 0.393577021554702, 'upper_circuit': 0.0, 'lower_circuit': 0.0, 'total_quantity_traded': '0', 'spot_price': None}, {'exchange_code': 'NA', 'product_type': '', 'stock_code': 'NIFTY', 'expiry_date': None, 'right': None, 'strike_price': 0.0, 'ltp': 0.0, 'ltt': 'NA', 'best_bid_price': 0.0, 'best_bid_quantity': '0', 'best_offer_price': 0.0, 'best_offer_quantity': '0', 'open': 0.0, 'high': 0.0, 'low': 0.0, 'previous_close': 0.0, 'ltp_percent_change': 0.0, 'upper_circuit': 0.0, 'lower_circuit': 0.0, 'total_quantity_traded': '0', 'spot_price': None}], 'Status': 200, 'Error': None}
+2026-07-04 22:20:06,825 - <Response [200]>
+2026-07-04 22:20:06,828 - Get Quotes response : {'Success': [{'exchange_code': 'NSE', 'product_type': '', 'stock_code': 'NIFTY', 'expiry_date': None, 'right': None, 'strike_price': 0.0, 'ltp': 24270.85, 'ltt': '03-Jul-2026 16:00:01', 'best_bid_price': 0.0, 'best_bid_quantity': '0', 'best_offer_price': 0.0, 'best_offer_quantity': '0', 'open': 24375.65, 'high': 24378.15, 'low': 24252.35, 'previous_close': 24175.7, 'ltp_percent_change': 0.393577021554702, 'upper_circuit': 0.0, 'lower_circuit': 0.0, 'total_quantity_traded': '0', 'spot_price': None}, {'exchange_code': 'NA', 'product_type': '', 'stock_code': 'NIFTY', 'expiry_date': None, 'right': None, 'strike_price': 0.0, 'ltp': 0.0, 'ltt': 'NA', 'best_bid_price': 0.0, 'best_bid_quantity': '0', 'best_offer_price': 0.0, 'best_offer_quantity': '0', 'open': 0.0, 'high': 0.0, 'low': 0.0, 'previous_close': 0.0, 'ltp_percent_change': 0.0, 'upper_circuit': 0.0, 'lower_circuit': 0.0, 'total_quantity_traded': '0', 'spot_price': None}], 'Status': 200, 'Error': None}
+2026-07-04 22:22:07,990 - <Response [200]>
+2026-07-04 22:22:07,993 - Get Option chain Quotes response : {'Success': None, 'Status': 500, 'Error': 'No Data Found'}
+2026-07-04 22:25:32,022 - Exception in get_names : 'There is no item named None in the archive'
+2026-07-04 22:34:00,159 - <Response [200]>
+2026-07-04 22:34:00,163 - Get Option chain Quotes response : {'Success': None, 'Status': 500, 'Error': 'No Data Found'}
+2026-07-04 22:34:00,329 - <Response [200]>
+2026-07-04 22:34:00,334 - Get Option chain Quotes response : {'Success': None, 'Status': 500, 'Error': 'No Data Found'}
+2026-07-04 22:47:17,515 - <Response [200]>
+2026-07-04 22:47:17,518 - Get Quotes response : {'Success': None, 'Status': 500, 'Error': 'No Data Found'}
+2026-07-04 23:11:35,869 - <Response [200]>
+2026-07-04 23:11:35,872 - Get funds response: {'Success': {'bank_account': '50100652772433', 'total_bank_balance': 0.0, 'allocated_equity': 0.0, 'allocated_fno': 0.0, 'allocated_commodity': 0.0, 'allocated_currency': 0.0, 'block_by_trade_equity': 0.0, 'block_by_trade_fno': 0.0, 'block_by_trade_commodity': 0.0, 'block_by_trade_currency': 0.0, 'block_by_trade_balance': 0.0, 'unallocated_balance': '0'}, 'Status': 200, 'Error': None}
+2026-07-04 23:13:27,307 - <Response [200]>
+2026-07-04 23:13:27,311 - Get Portfolio Positions response : {'Success': None, 'Status': 200, 'Error': 'No Positions available.'}
