@@ -1,0 +1,31 @@
+class MarketStructure:
+
+    def gamma_wall(self, df):
+
+        idx = df["NET_GEX"].idxmax()
+
+        return df.loc[idx]
+
+    def call_wall(self, df):
+
+        idx = df["CE_OI"].idxmax()
+
+        return df.loc[idx]
+
+    def put_wall(self, df):
+
+        idx = df["PE_OI"].idxmax()
+
+        return df.loc[idx]
+
+    def summary(self, df):
+
+        return {
+
+            "gamma_wall": self.gamma_wall(df),
+
+            "call_wall": self.call_wall(df),
+
+            "put_wall": self.put_wall(df),
+
+        }
