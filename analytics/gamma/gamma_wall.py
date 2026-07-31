@@ -3,67 +3,126 @@ import pandas as pd
 
 class GammaWallDetector:
     """
-    Detects Gamma Walls from the enriched option chain.
+    Detects Gamma Wall levels.
+
+    Gamma Wall:
+        Strike having the highest NET_GEX.
+
+    Positive Wall:
+        Strike with highest positive NET_GEX.
+
+    Negative Wall:
+        Strike with lowest (most negative) NET_GEX.
     """
 
-    def detect(self, df):
+    # ======================================================
+    # MAIN
+    # ======================================================
 
-        if df.empty:
-            return None
+    def analyze(self, df):
+
+        if df is None or df.empty:
+            return {
+                "gamma_wall": None,
+                "call_wall": None,
+                "put_wall": None,
+                "net_gex": None
+            }
+
+        if "NET_GEX" not in df.columns:
+            return {
+                "gamma_wall": None,
+                "call_wall": None,
+                "put_wall": None,
+                "net_gex": None
+            }
+
+        # ----------------------------
+        # Gamma Wall
+        # ----------------------------
 
         idx = df["NET_GEX"].idxmax()
 
-        return df.loc[idx]
+        row = df.loc[idx]
 
-    def top_walls(self, df, top_n=5):
+        gamma_wall = row["Strike"]
+        net_gex = row["NET_GEX"]
 
-        return (
-            df.sort_values(
-                by="NET_GEX",
-                ascending=False
-            )
-            .head(top_n)
-            .reset_index(drop=True)
-        )
-
-    def strongest_positive_wall(self, df):
+        # ----------------------------
+        # Call Wall
+        # Highest Positive GEX
+        # ----------------------------
 
         positive = df[df["NET_GEX"] > 0]
 
         if positive.empty:
-            return None
+            call_wall = None
+        else:
+            call_wall = positive.loc[
+                positive["NET_GEX"].idxmax(),
+                "Strike"
+            ]
 
-        return positive.loc[
-            positive["NET_GEX"].idxmax()
-        ]
-
-    def strongest_negative_wall(self, df):
+        # ----------------------------
+        # Put Wall
+        # Most Negative GEX
+        # ----------------------------
 
         negative = df[df["NET_GEX"] < 0]
 
         if negative.empty:
-            return None
-
-        return negative.loc[
-            negative["NET_GEX"].idxmin()
-        ]
-
-    def summary(self, df):
-
-        primary = self.detect(df)
-
-        positive = self.strongest_positive_wall(df)
-
-        negative = self.strongest_negative_wall(df)
+            put_wall = None
+        else:
+            put_wall = negative.loc[
+                negative["NET_GEX"].idxmin(),
+                "Strike"
+            ]
 
         return {
 
-            "primary_wall": primary,
+            "gamma_wall": gamma_wall,
 
-            "positive_wall": positive,
+            "call_wall": call_wall,
 
-            "negative_wall": negative,
+            "put_wall": put_wall,
 
-            "top_walls": self.top_walls(df)
+            "net_gex": float(net_gex)
 
         }
+
+    # ======================================================
+    # Helpers
+    # ======================================================
+
+    def top_walls(self, df, top_n=5):
+
+        if df is None or df.empty:
+            return pd.DataFrame()
+
+        return (
+
+            df.sort_values(
+
+                by="NET_GEX",
+
+                ascending=False
+
+            )
+
+            .head(top_n)
+
+            .reset_index(drop=True)
+
+        )
+
+    def summary(self, df):
+
+        return self.analyze(df)
+
+    # ======================================================
+    # Backward Compatibility
+    # ======================================================
+
+    def detect(self, df):
+
+        return self.analyze(df)

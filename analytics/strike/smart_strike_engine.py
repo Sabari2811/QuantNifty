@@ -1,0 +1,281 @@
+import pandas as pd
+
+from config.strike_weights import (
+    ATM_WEIGHT,
+    GEX_WEIGHT,
+    OI_WEIGHT,
+    VOLUME_WEIGHT,
+    DELTA_WEIGHT,
+    IV_WEIGHT,
+    DEALER_WEIGHT,
+    PROBABILITY_WEIGHT,
+    ATR_WEIGHT
+)
+
+
+class SmartStrikeEngine:
+    """
+    QuantNifty Smart Strike Engine V2
+
+    Scores strikes using
+
+    • ATM Distance
+    • Signed Gamma Exposure
+    • Open Interest
+    • Volume
+    • Delta
+    • IV
+    • Dealer Position
+    • Signal Probability
+    • ATR
+    """
+
+    def analyze(
+
+        self,
+
+        greeks_df,
+
+        signal,
+
+        dealer,
+
+        probability,
+
+        atr,
+
+        spot
+
+    ):
+
+        if greeks_df.empty:
+
+            return None
+
+        trade_signal = signal["signal"]
+
+        option_type = "CE" if trade_signal == "BUY CALL" else "PE"
+
+        ranked = []
+
+        # =============================================
+        # Iterate all strikes
+        # =============================================
+
+        for _, row in greeks_df.iterrows():
+
+            score = 0
+
+            reasons = []
+
+            strike = row["Strike"]
+
+            # =============================================
+            # ATM Distance
+            # =============================================
+
+            distance = abs(strike - spot)
+
+            if distance <= 50:
+
+                score += ATM_WEIGHT
+
+                reasons.append("ATM Strike")
+
+            elif distance <= 100:
+
+                score += ATM_WEIGHT * 0.75
+
+            else:
+
+                score += ATM_WEIGHT * 0.40
+
+            # =============================================
+            # Signed Gamma Exposure
+            # =============================================
+
+            gex = row["NET_GEX"]
+
+            if trade_signal == "BUY CALL":
+
+                if gex > 0:
+
+                    score += GEX_WEIGHT
+
+                    reasons.append("Positive GEX")
+
+            elif trade_signal == "BUY PUT":
+
+                if gex < 0:
+
+                    score += GEX_WEIGHT
+
+                    reasons.append("Negative GEX")
+
+            # =============================================
+            # Open Interest
+            # =============================================
+
+            oi = row[f"{option_type}_OI"]
+
+            oi_score = min(
+
+                oi / 10000,
+
+                OI_WEIGHT
+
+            )
+
+            score += oi_score
+
+            if oi_score > 10:
+
+                reasons.append("High OI")
+
+            # =============================================
+            # Volume
+            # =============================================
+
+            volume = row[f"{option_type}_VOLUME"]
+
+            volume_score = min(
+
+                volume / 10000,
+
+                VOLUME_WEIGHT
+
+            )
+
+            score += volume_score
+
+            if volume_score > 8:
+
+                reasons.append("Good Liquidity")
+
+            # =============================================
+            # Delta
+            # =============================================
+
+            delta = row[f"{option_type}_DELTA"]
+
+            if pd.notna(delta):
+
+                if option_type == "CE":
+
+                    if 0.45 <= delta <= 0.65:
+
+                        score += DELTA_WEIGHT
+
+                        reasons.append("Ideal Delta")
+
+                else:
+
+                    if -0.65 <= delta <= -0.45:
+
+                        score += DELTA_WEIGHT
+
+                        reasons.append("Ideal Delta")
+
+            # =============================================
+            # IV
+            # =============================================
+
+            iv = row[f"{option_type}_IV"]
+
+            if pd.notna(iv):
+
+                if iv < 0.25:
+
+                    score += IV_WEIGHT
+
+                    reasons.append("Cheap IV")
+
+            # =============================================
+            # Dealer Context
+            # =============================================
+
+            if trade_signal == "BUY CALL":
+
+                if dealer["dealer_gamma"] == "LONG":
+
+                    score += DEALER_WEIGHT
+
+                    reasons.append("Dealer Long Gamma")
+
+            if trade_signal == "BUY PUT":
+
+                if dealer["dealer_gamma"] == "SHORT":
+
+                    score += DEALER_WEIGHT
+
+                    reasons.append("Dealer Short Gamma")
+
+            # =============================================
+            # Probability
+            # =============================================
+
+            confidence = probability["confidence"]
+
+            score += (
+
+                confidence / 100
+
+            ) * PROBABILITY_WEIGHT
+
+            if confidence >= 70:
+
+                reasons.append("High Confidence")
+
+            # =============================================
+            # ATR
+            # =============================================
+
+            volatility = atr["volatility"]
+
+            if volatility == "NORMAL":
+
+                score += ATR_WEIGHT
+
+                reasons.append("Normal Volatility")
+
+            elif volatility == "LOW":
+
+                score += ATR_WEIGHT * 0.8
+
+            else:
+
+                score += ATR_WEIGHT * 0.5
+
+            ranked.append({
+
+                "strike": strike,
+
+                "option_type": option_type,
+
+                "score": round(score, 2),
+
+                "delta": delta,
+
+                "iv": iv,
+
+                "gex": gex,
+
+                "oi": oi,
+
+                "volume": volume,
+
+                "reasons": reasons
+
+            })
+
+        ranked = sorted(
+
+            ranked,
+
+            key=lambda x: x["score"],
+
+            reverse=True
+
+        )
+
+        return ranked[0]

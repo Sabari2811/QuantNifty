@@ -1,16 +1,13 @@
+import pandas as pd
+
+
 class DealerPositionEngine:
     """
     Dealer Position Engine
 
-    Combines:
-
-    - Gamma Exposure
-    - Gamma Flip
-    - Gamma Wall
-    - Spot Price
-
-    Returns an institutional interpretation of
-    dealer positioning.
+    Determines dealer positioning from
+    Gamma Exposure, Gamma Flip,
+    Gamma Wall and Spot Price.
     """
 
     def __init__(self):
@@ -19,13 +16,20 @@ class DealerPositionEngine:
     def analyze(
         self,
         greeks_engine,
-        greeks_df,
+        greeks_df: pd.DataFrame,
         gamma_flip,
         gamma_wall,
         spot_price
     ):
 
-        total_gex = greeks_engine.total_gex(greeks_df)
+        # ---------------------------------------
+        # Total Gamma Exposure
+        # ---------------------------------------
+
+        if "NET_GEX" not in greeks_df.columns:
+            raise ValueError("NET_GEX column missing.")
+
+        total_gex = greeks_df["NET_GEX"].fillna(0).sum()
 
         result = {}
 
@@ -39,10 +43,34 @@ class DealerPositionEngine:
             result["dealer_gamma"] = "SHORT"
 
         # ---------------------------------------
-        # Market Mode
+        # Gamma Flip
         # ---------------------------------------
 
         flip = gamma_flip.get("gamma_flip")
+
+        # ---------------------------------------
+        # Gamma Wall
+        # ---------------------------------------
+
+        if isinstance(gamma_wall, dict):
+
+            wall = gamma_wall.get("gamma_wall")
+
+            call_wall = gamma_wall.get("call_wall")
+
+            put_wall = gamma_wall.get("put_wall")
+
+        else:
+
+            wall = None
+
+            call_wall = None
+
+            put_wall = None
+
+        # ---------------------------------------
+        # Market Mode
+        # ---------------------------------------
 
         if flip is None:
 
@@ -51,52 +79,65 @@ class DealerPositionEngine:
         else:
 
             if total_gex > 0 and spot_price >= flip:
+
                 result["market_mode"] = "PINNED"
 
             elif total_gex < 0 and spot_price < flip:
+
                 result["market_mode"] = "TRENDING"
 
             else:
+
                 result["market_mode"] = "TRANSITION"
 
         # ---------------------------------------
         # Support / Resistance
         # ---------------------------------------
 
-        wall = gamma_wall["Strike"]
+        if wall is not None:
 
-        if wall > spot_price:
+            if flip is None:
 
-            result["support"] = flip
-            result["resistance"] = wall
+                result["support"] = wall
+                result["resistance"] = None
+
+            elif wall > spot_price:
+
+                result["support"] = flip
+                result["resistance"] = wall
+
+            else:
+
+                result["support"] = wall
+                result["resistance"] = flip
 
         else:
 
-            result["support"] = wall
+            result["support"] = None
             result["resistance"] = flip
 
         # ---------------------------------------
-        # Volatility
+        # Expected Volatility
         # ---------------------------------------
 
-        if result["dealer_gamma"] == "LONG":
-
-            result["expected_volatility"] = "LOW"
-
-        else:
-
-            result["expected_volatility"] = "HIGH"
+        result["expected_volatility"] = (
+            "LOW"
+            if total_gex >= 0
+            else "HIGH"
+        )
 
         # ---------------------------------------
-        # Probability Scores
+        # Probabilities
         # ---------------------------------------
 
-        if result["market_mode"] == "PINNED":
+        mode = result["market_mode"]
+
+        if mode == "PINNED":
 
             result["mean_reversion_probability"] = 80
             result["breakout_probability"] = 20
 
-        elif result["market_mode"] == "TRENDING":
+        elif mode == "TRENDING":
 
             result["mean_reversion_probability"] = 20
             result["breakout_probability"] = 80
@@ -106,9 +147,18 @@ class DealerPositionEngine:
             result["mean_reversion_probability"] = 50
             result["breakout_probability"] = 50
 
+        # ---------------------------------------
+        # Summary
+        # ---------------------------------------
+
         result["gamma_flip"] = flip
+
         result["gamma_wall"] = wall
+
+        result["call_wall"] = call_wall
+
+        result["put_wall"] = put_wall
         result["spot"] = spot_price
-        result["total_gex"] = total_gex
+        result["total_gex"] = float(total_gex)
 
         return result

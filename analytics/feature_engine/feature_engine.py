@@ -1,0 +1,90 @@
+class FeatureEngine:
+    """
+    Combines outputs from all analytics
+    engines into one feature dictionary.
+
+    This dictionary will later be used by:
+
+    - Prediction Engine
+    - Institutional Score
+    - Backtesting
+    - Machine Learning
+    """
+
+    def __init__(self):
+        pass
+
+    def build(
+
+        self,
+
+        dealer,
+
+        dealer_flow,
+
+        expected_move,
+
+        max_pain,
+
+        pcr,
+
+        market_structure,
+
+        technical,
+
+        probability,
+
+        signal,
+
+        smart_strike,
+
+        trade_plan,
+
+        risk,
+
+        oi_classification=None
+
+    ):
+
+        features = {}
+
+        # Dealer
+        features["dealer"] = dealer
+
+        # Dealer Flow
+        features["dealer_flow"] = dealer_flow
+
+        # Expected Move
+        features["expected_move"] = expected_move
+
+        # Max Pain
+        features["max_pain"] = max_pain
+
+        # PCR
+        features["pcr"] = pcr
+
+        # Market Structure
+        features["market_structure"] = market_structure
+
+        # Technical
+        features["technical"] = technical
+
+        # Probability
+        features["probability"] = probability
+
+        # Signal
+        features["signal"] = signal
+
+        # Smart Strike
+        features["smart_strike"] = smart_strike
+
+        # Trade Plan
+        features["trade_plan"] = trade_plan
+
+        # Risk
+        features["risk"] = risk
+
+        # OI Classification
+        features["oi_classification"] = oi_classification
+
+        return features

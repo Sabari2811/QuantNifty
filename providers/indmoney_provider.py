@@ -29,9 +29,10 @@ class INDMoneyProvider(BaseProvider):
 
     def connect(self):
 
-        print("=" * 50)
-        print("      CONNECTING TO INDMONEY")
-        print("=" * 50)
+        print("=" * 60)
+        print("CONNECTING TO INDMONEY")
+        print("=" * 60)
+
         print("✓ API Token Loaded")
 
         return True
@@ -94,10 +95,6 @@ class INDMoneyProvider(BaseProvider):
         if not security_ids:
             return {}
 
-        # ---------------------------------------
-        # Remove duplicates / None
-        # ---------------------------------------
-
         ids = []
 
         for sid in security_ids:
@@ -110,20 +107,15 @@ class INDMoneyProvider(BaseProvider):
             if sid not in ids:
                 ids.append(sid)
 
-        print("\n" + "=" * 70)
+        print()
+        print("=" * 70)
         print("OPTION QUOTE REQUEST")
         print("=" * 70)
 
-        print("\nSecurity IDs:")
+        print("Security IDs")
         print(ids)
 
         quotes = {}
-
-        # ---------------------------------------
-        # INDMONEY occasionally rejects
-        # very large requests.
-        # Fetch in small batches.
-        # ---------------------------------------
 
         batch_size = 10
 
@@ -141,7 +133,8 @@ class INDMoneyProvider(BaseProvider):
                 f"?scrip-codes={scrip_codes}"
             )
 
-            print("\n------------------------------------------------")
+            print()
+            print("--------------------------------------------")
             print("Request")
             print(url)
 
@@ -155,7 +148,7 @@ class INDMoneyProvider(BaseProvider):
 
             if response.status_code != 200:
 
-                print("\nBatch Failed")
+                print("Batch Failed")
                 print(response.text)
 
                 continue
@@ -167,12 +160,13 @@ class INDMoneyProvider(BaseProvider):
 
             quotes.update(data["data"])
 
-        print("\nQuotes Received :", len(quotes))
+        print()
+        print("Quotes Received :", len(quotes))
 
         return quotes
 
     # ==========================================================
-    # INDEX QUOTE USING SECURITY ID
+    # INDEX QUOTE BY SECURITY ID
     # ==========================================================
 
     def get_index_quote_by_id(self, security_id):
@@ -181,27 +175,14 @@ class INDMoneyProvider(BaseProvider):
 
         url = (
             f"{self.base_url}/market/quotes/full"
-            f"?scrip-codes=NSE_{security_id}"
+            f"?scrip-codes=NIDX_{security_id}"
         )
-
-        print("\n" + "=" * 60)
-        print("INDEX QUOTE REQUEST")
-        print("=" * 60)
-
-        print("\nURL:")
-        print(url)
 
         response = requests.get(
             url,
             headers=self.headers,
             timeout=30
         )
-
-        print("\nStatus Code:")
-        print(response.status_code)
-
-        print("\nResponse:")
-        print(response.text)
 
         response.raise_for_status()
 
@@ -210,7 +191,9 @@ class INDMoneyProvider(BaseProvider):
         if data.get("status") != "success":
             return None
 
-        return data["data"].get(f"NSE_{security_id}")
+        return data["data"].get(
+            f"NIDX_{security_id}"
+        )
 
     # ==========================================================
     # INDEX QUOTE
@@ -227,6 +210,7 @@ class INDMoneyProvider(BaseProvider):
         )
 
         if security_id is None:
+
             raise ValueError(
                 f"Index not found : {index_name}"
             )
@@ -236,14 +220,266 @@ class INDMoneyProvider(BaseProvider):
         )
 
     # ==========================================================
-    # PLACE HOLDERS
+    # EXTRACT PRICE
     # ==========================================================
 
-    def get_spot_price(self):
-        raise NotImplementedError()
+    def _extract_price(self, quote):
 
-    def get_option_chain(self):
-        raise NotImplementedError()
+        if quote is None:
+            return None
 
-    def place_order(self):
-        raise NotImplementedError()
+        for key in (
+
+            "live_price",
+
+            "ltp",
+
+            "LTP",
+
+            "last_price",
+
+            "lastPrice",
+
+            "close"
+
+        ):
+
+            value = quote.get(key)
+
+            if value is not None:
+
+                return float(value)
+
+        return None
+
+    # ==========================================================
+    # LIVE SPOT PRICE
+    # ==========================================================
+
+    def get_spot_price(self, symbol):
+
+        symbol = symbol.upper()
+
+        mapping = {
+
+            "NIFTY": "NIFTY 50",
+
+            "BANKNIFTY": "NIFTY BANK",
+
+            "FINNIFTY": "NIFTY FIN SERVICE",
+
+            "MIDCPNIFTY": "NIFTY MID SELECT"
+
+        }
+
+        if symbol not in mapping:
+
+            raise ValueError(
+                f"Unsupported Symbol : {symbol}"
+            )
+
+        quote = self.get_index_quote(
+            mapping[symbol]
+        )
+
+        price = self._extract_price(
+            quote
+        )
+
+        if price is None:
+
+            raise Exception(
+
+                f"Unable to extract spot price.\nResponse : {quote}"
+
+            )
+
+        return price
+    # ==========================================================
+    # HISTORICAL DATA
+    # ==========================================================
+
+    def get_historical_data(
+
+        self,
+
+        scrip_code,
+
+        interval,
+
+        start_time,
+
+        end_time
+
+    ):
+
+        """
+        Fetch historical OHLC candles.
+
+        Example:
+
+            scrip_code = "NIDX_26000"
+            interval   = "5"
+            start_time = "2026-07-10T09:15:00"
+            end_time   = "2026-07-10T15:30:00"
+
+        Supported intervals (per INDStocks API):
+
+            1
+            3
+            5
+            10
+            15
+            30
+            60
+            D
+            W
+            M
+        """
+
+        url = (
+
+            f"{self.base_url}/market/historical/{interval}"
+
+        )
+
+        params = {
+
+        "scrip-codes": scrip_code,
+
+        "start_time": start_time,
+
+        "end_time": end_time
+
+        }
+
+        print()
+        print("=" * 70)
+        print("HISTORICAL DATA REQUEST")
+        print("=" * 70)
+        print("URL :", url)
+        print("Params :", params)
+
+        response = requests.get(
+
+            url,
+
+            headers=self.headers,
+
+            params=params,
+
+            timeout=30
+
+        )
+
+        print("Status :", response.status_code)
+
+        # ------------------------------------------------------
+        # HTTP Error
+        # ------------------------------------------------------
+
+        if response.status_code != 200:
+
+            print()
+            print("=" * 70)
+            print("ERROR RESPONSE")
+            print("=" * 70)
+            print(response.text)
+
+            return []
+
+        # ------------------------------------------------------
+        # Parse JSON
+        # ------------------------------------------------------
+
+        try:
+
+            data = response.json()
+
+        except Exception:
+
+            print()
+            print("=" * 70)
+            print("INVALID JSON")
+            print("=" * 70)
+            print(response.text)
+
+            return []
+        # ------------------------------------------------------
+        # Parse JSON
+        # ------------------------------------------------------
+
+        try:
+
+            data = response.json()
+
+        except Exception:
+
+            print()
+            print("=" * 70)
+            print("INVALID JSON")
+            print("=" * 70)
+            print(response.text)
+
+            return []
+
+        # ------------------------------------------------------
+        # Success Check
+        # ------------------------------------------------------
+
+        if not data.get("success", False):
+
+            print()
+            print("=" * 70)
+            print("API ERROR")
+            print("=" * 70)
+            print(data)
+
+            return []
+
+        # ------------------------------------------------------
+        # Validate Response
+        # ------------------------------------------------------
+
+        if "data" not in data:
+
+            return []
+
+        if scrip_code not in data["data"]:
+
+            return []
+
+        if "candles" not in data["data"][scrip_code]:
+
+            return []
+
+        candles = data["data"][scrip_code]["candles"]
+
+        print()
+        print("Candles Returned :", len(candles))
+
+        return candles
+    # ==========================================================
+    # OPTION CHAIN
+    # ==========================================================
+
+    def get_option_chain(self, *args, **kwargs):
+        """
+        Not required.
+
+        QuantNifty builds the option chain through
+        OptionChainManager using get_quotes().
+        """
+        raise NotImplementedError(
+            "Use OptionChainManager.get_live_option_chain()"
+        )
+
+    # ==========================================================
+    # PLACE ORDER
+    # ==========================================================
+
+    def place_order(self, *args, **kwargs):
+
+        raise NotImplementedError(
+            "Order placement will be implemented in Sprint 38."
+        )

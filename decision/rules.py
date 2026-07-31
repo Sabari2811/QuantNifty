@@ -1,0 +1,15 @@
+class DecisionRules:
+
+    BUY_THRESHOLD = 70
+
+    SELL_THRESHOLD = -70
+
+    DEALER_WEIGHT = 30
+
+    GAMMA_WEIGHT = 20
+
+    PCR_WEIGHT = 15
+
+    INSTITUTION_WEIGHT = 20
+
+    PROBABILITY_WEIGHT = 15

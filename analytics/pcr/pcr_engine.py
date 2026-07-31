@@ -1,0 +1,95 @@
+import pandas as pd
+
+
+class PCREngine:
+    """
+    Put Call Ratio (PCR) Engine
+
+    Calculates:
+        - OI PCR
+        - Volume PCR
+        - Market Sentiment
+        - Dashboard Bias
+    """
+
+    def calculate(self, option_chain: pd.DataFrame):
+
+        if option_chain is None or option_chain.empty:
+
+            return {
+                "oi_pcr": 0,
+                "volume_pcr": 0,
+                "call_oi": 0,
+                "put_oi": 0,
+                "call_volume": 0,
+                "put_volume": 0,
+                "sentiment": "UNKNOWN",
+                "bias": "UNKNOWN"
+            }
+
+        call_oi = option_chain["CE_OI"].sum()
+        put_oi = option_chain["PE_OI"].sum()
+
+        call_volume = option_chain["CE_VOLUME"].sum()
+        put_volume = option_chain["PE_VOLUME"].sum()
+
+        oi_pcr = (
+            put_oi / call_oi
+            if call_oi > 0
+            else 0
+        )
+
+        volume_pcr = (
+            put_volume / call_volume
+            if call_volume > 0
+            else 0
+        )
+
+        # ----------------------------------
+        # Sentiment
+        # ----------------------------------
+
+        if oi_pcr > 1.30:
+
+            sentiment = "STRONGLY BULLISH"
+            bias = "BULLISH"
+
+        elif oi_pcr > 1.05:
+
+            sentiment = "BULLISH"
+            bias = "BULLISH"
+
+        elif oi_pcr >= 0.85:
+
+            sentiment = "NEUTRAL"
+            bias = "NEUTRAL"
+
+        elif oi_pcr >= 0.60:
+
+            sentiment = "BEARISH"
+            bias = "BEARISH"
+
+        else:
+
+            sentiment = "STRONGLY BEARISH"
+            bias = "BEARISH"
+
+        return {
+
+            "oi_pcr": round(oi_pcr, 2),
+
+            "volume_pcr": round(volume_pcr, 2),
+
+            "call_oi": int(call_oi),
+
+            "put_oi": int(put_oi),
+
+            "call_volume": int(call_volume),
+
+            "put_volume": int(put_volume),
+
+            "sentiment": sentiment,
+
+            "bias": bias
+
+        }

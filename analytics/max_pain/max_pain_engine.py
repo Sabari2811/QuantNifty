@@ -1,0 +1,61 @@
+import pandas as pd
+
+
+class MaxPainEngine:
+    """
+    Max Pain Calculator
+
+    Simplified version.
+
+    Uses total Open Interest.
+
+    Highest combined OI
+    usually acts as Max Pain.
+    """
+
+    def calculate(
+        self,
+        option_chain: pd.DataFrame
+    ):
+
+        if option_chain.empty:
+
+            return {
+
+                "max_pain": None,
+
+                "call_oi": 0,
+
+                "put_oi": 0
+
+            }
+
+        df = option_chain.copy()
+
+        df["TOTAL_OI"] = (
+
+            df["CE_OI"]
+
+            +
+
+            df["PE_OI"]
+
+        )
+
+        row = df.loc[
+
+            df["TOTAL_OI"].idxmax()
+
+        ]
+
+        return {
+
+            "max_pain": row["Strike"],
+
+            "call_oi": int(row["CE_OI"]),
+
+            "put_oi": int(row["PE_OI"]),
+
+            "total_oi": int(row["TOTAL_OI"])
+
+        }

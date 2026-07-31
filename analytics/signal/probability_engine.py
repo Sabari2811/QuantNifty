@@ -2,95 +2,229 @@ class ProbabilityEngine:
     """
     Institutional Probability Engine
 
-    Combines multiple analytics to produce
-    probability scores.
+    Combines
 
-    Current Version:
-        Rule-based scoring
+    - Dealer Position
+    - Market Structure
+    - PCR
+    - IV Skew
+    - Technical Analysis
 
-    Future:
-        Machine Learning model
+    Produces
+
+        Bullish Probability
+        Bearish Probability
+        Confidence
     """
 
     def __init__(self):
         pass
 
     def calculate(
+
         self,
+
         dealer,
+
+        market_structure,
+
+        pcr,
+
         iv_skew,
-        iv_smile
+
+        technical
+
     ):
 
-        score = 50
+        bullish = 50
+        bearish = 50
 
         reasons = []
 
-        # -----------------------------------
+        # ==================================================
         # Dealer Gamma
-        # -----------------------------------
+        # ==================================================
 
-        if dealer["dealer_gamma"] == "LONG":
+        if dealer.get("dealer_gamma") == "LONG":
 
-            score += 20
-            reasons.append("Dealers are Long Gamma")
+            bullish += 20
+            bearish -= 20
 
-        else:
+            reasons.append("Dealers Long Gamma")
 
-            score -= 20
-            reasons.append("Dealers are Short Gamma")
+        elif dealer.get("dealer_gamma") == "SHORT":
 
-        # -----------------------------------
+            bullish -= 20
+            bearish += 20
+
+            reasons.append("Dealers Short Gamma")
+
+        # ==================================================
         # Market Mode
-        # -----------------------------------
+        # ==================================================
 
-        if dealer["market_mode"] == "PINNED":
+        mode = dealer.get("market_mode", "UNKNOWN")
 
-            score += 10
+        if mode == "PINNED":
+
+            bullish += 5
+            bearish -= 5
+
             reasons.append("Pinned Market")
 
-        elif dealer["market_mode"] == "TRENDING":
+        elif mode == "TRENDING":
 
-            score -= 10
+            bullish -= 5
+            bearish += 5
+
             reasons.append("Trending Market")
 
-        # -----------------------------------
+        # ==================================================
+        # PCR
+        # ==================================================
+
+        sentiment = pcr.get("sentiment", "NEUTRAL")
+
+        if sentiment == "BULLISH":
+
+            bullish += 10
+            bearish -= 10
+
+            reasons.append("Bullish PCR")
+
+        elif sentiment == "BEARISH":
+
+            bullish -= 10
+            bearish += 10
+
+            reasons.append("Bearish PCR")
+
+        # ==================================================
         # IV Skew
-        # -----------------------------------
+        # ==================================================
 
-        if iv_skew["bias"] == "CALLS":
+        bias = iv_skew.get("iv_bias", "UNKNOWN")
 
-            score += 10
-            reasons.append("Call IV Premium")
+        if bias == "CALLS_EXPENSIVE":
 
-        elif iv_skew["bias"] == "PUTS":
+            bullish += 5
+            bearish -= 5
 
-            score -= 10
-            reasons.append("Put IV Premium")
+            reasons.append("Call IV Expensive")
 
-        # -----------------------------------
-        # IV Smile
-        # -----------------------------------
+        elif bias == "PUTS_EXPENSIVE":
 
-        if iv_smile["shape"] == "NORMAL":
+            bullish -= 5
+            bearish += 5
 
-            score += 5
-            reasons.append("Healthy IV Smile")
+            reasons.append("Put IV Expensive")
 
-        else:
+        # ==================================================
+        # Technical Analysis
+        # ==================================================
 
-            score -= 5
-            reasons.append("Abnormal IV Smile")
+        ema = technical.get("ema", {})
+        rsi = technical.get("rsi", {})
+        vwap = technical.get("vwap", {})
+        adx = technical.get("adx", {})
 
-        score = max(0, min(score, 100))
+        # EMA Trend
+
+        trend = ema.get("trend", "UNKNOWN")
+
+        if trend in ("BULLISH", "STRONG_BULLISH"):
+
+            bullish += 10
+            bearish -= 10
+
+            reasons.append("EMA Bullish")
+
+        elif trend in ("BEARISH", "STRONG_BEARISH"):
+
+            bullish -= 10
+            bearish += 10
+
+            reasons.append("EMA Bearish")
+
+        # RSI
+
+        state = rsi.get("state", "UNKNOWN")
+
+        if state == "BULLISH":
+
+            bullish += 5
+            bearish -= 5
+
+            reasons.append("RSI Bullish")
+
+        elif state == "BEARISH":
+
+            bullish -= 5
+            bearish += 5
+
+            reasons.append("RSI Bearish")
+
+        elif state == "OVERBOUGHT":
+
+            bearish += 5
+
+            reasons.append("RSI Overbought")
+
+        elif state == "OVERSOLD":
+
+            bullish += 5
+
+            reasons.append("RSI Oversold")
+
+        # VWAP
+
+        position = vwap.get("position", "UNKNOWN")
+
+        if position == "ABOVE":
+
+            bullish += 5
+            bearish -= 5
+
+            reasons.append("Above VWAP")
+
+        elif position == "BELOW":
+
+            bullish -= 5
+            bearish += 5
+
+            reasons.append("Below VWAP")
+
+        # ADX
+
+        strength = adx.get("strength", "UNKNOWN")
+
+        if strength in ("STRONG", "VERY_STRONG"):
+
+            bullish += 5
+
+            reasons.append("Strong Trend")
+
+        # ==================================================
+        # Clamp
+        # ==================================================
+
+        bullish = max(0, min(100, bullish))
+        bearish = max(0, min(100, bearish))
+
+        confidence = abs(bullish - bearish)
+
+        # ==================================================
+        # Result
+        # ==================================================
 
         return {
 
-            "bullish_probability": score,
+            "bullish_probability": bullish,
 
-            "bearish_probability": 100-score,
+            "bearish_probability": bearish,
 
-            "confidence": abs(score-50)*2,
+            "confidence": confidence,
 
             "reasons": reasons
+
         }

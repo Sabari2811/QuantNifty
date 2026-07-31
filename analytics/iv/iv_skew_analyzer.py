@@ -2,63 +2,63 @@ import pandas as pd
 
 
 class IVSkewAnalyzer:
-
     """
-    Institutional IV Analyzer
+    Institutional IV Skew Analyzer
 
-    Calculates
-
-    • Average Call IV
-    • Average Put IV
-    • IV Skew
-    • Market Bias
-    • Volatility Regime
+    Safe against missing option quotes.
     """
 
     def analyze(self, df: pd.DataFrame):
 
-        if df.empty:
+        if df is None or df.empty:
 
-            return {
-                "average_call_iv": 0,
-                "average_put_iv": 0,
-                "iv_skew": 0,
-                "iv_bias": "UNKNOWN",
-                "market_sentiment": "UNKNOWN",
-                "volatility": "UNKNOWN"
-            }
+            return self._unknown()
 
-        call_iv = df["CE_IV"].mean()
+        df = df.copy()
 
-        put_iv = df["PE_IV"].mean()
+        for col in ["CE_IV", "PE_IV"]:
+
+            if col not in df.columns:
+                df[col] = pd.NA
+
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="coerce"
+            )
+
+        call_iv = df["CE_IV"].mean(skipna=True)
+        put_iv = df["PE_IV"].mean(skipna=True)
+
+        if pd.isna(call_iv):
+            call_iv = 0
+
+        if pd.isna(put_iv):
+            put_iv = 0
 
         skew = call_iv - put_iv
 
-        # ------------------------------------
-        # Skew Bias
-        # ------------------------------------
+        # ---------------------------------------
+        # Bias
+        # ---------------------------------------
 
         if skew > 0.02:
 
             bias = "CALLS_EXPENSIVE"
-
             sentiment = "BULLISH"
 
         elif skew < -0.02:
 
             bias = "PUTS_EXPENSIVE"
-
             sentiment = "BEARISH"
 
         else:
 
             bias = "BALANCED"
-
             sentiment = "NEUTRAL"
 
-        # ------------------------------------
-        # Volatility Regime
-        # ------------------------------------
+        # ---------------------------------------
+        # Volatility
+        # ---------------------------------------
 
         highest_iv = max(call_iv, put_iv)
 
@@ -91,5 +91,23 @@ class IVSkewAnalyzer:
             "market_sentiment": sentiment,
 
             "volatility": volatility
+
+        }
+
+    def _unknown(self):
+
+        return {
+
+            "average_call_iv": 0,
+
+            "average_put_iv": 0,
+
+            "iv_skew": 0,
+
+            "iv_bias": "UNKNOWN",
+
+            "market_sentiment": "UNKNOWN",
+
+            "volatility": "UNKNOWN"
 
         }

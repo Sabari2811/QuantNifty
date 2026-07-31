@@ -146,10 +146,30 @@ class InstrumentManager:
 
         return df[
             df.astype(str)
-            .apply(lambda c: c.str.upper().str.contains(keyword, na=False))
+            .apply(
+                lambda c: c.str.upper().str.contains(
+                    keyword,
+                    na=False
+                )
+            )
             .any(axis=1)
         ]
+    
+    # ======================================================
+    # SCRIP CODE
+    # ======================================================
 
+    def get_scrip_code(
+        self,
+        exchange,
+        security_id
+    ):
+
+        exchange = str(exchange).upper()
+        security_id = int(security_id)
+
+        return f"{exchange}_{security_id}"
+    
     # ======================================================
     # OPTIONS
     # ======================================================
@@ -173,12 +193,12 @@ class InstrumentManager:
     # ======================================================
     # EXPIRY
     # ======================================================
-
+    
     def get_expiry_dates(self, symbol: str) -> List[str]:
 
         df = self.get_options(symbol)
 
-        expiry = (
+        return (
             df["EXPIRY_DATE"]
             .dropna()
             .drop_duplicates()
@@ -186,25 +206,49 @@ class InstrumentManager:
             .tolist()
         )
 
-        return expiry
-
     def get_nearest_weekly_expiry(self, symbol: str):
+        """
+        Returns the nearest FUTURE weekly expiry.
+        Expired weekly expiries are ignored.
+        """
 
         df = self.get_options(symbol)
 
-        weekly = df[df["EXPIRY_FLAG"] == "W"]
+        weekly = df[
+            df["EXPIRY_FLAG"].astype(str).str.upper() == "W"
+        ].copy()
+
+        if weekly.empty:
+            return None
+
+        weekly["EXPIRY_DATE"] = pd.to_datetime(
+            weekly["EXPIRY_DATE"],
+            errors="coerce"
+        )
+
+        weekly = weekly.dropna(
+            subset=["EXPIRY_DATE"]
+        )
+
+        now = pd.Timestamp.now()
+
+        weekly = weekly[
+            weekly["EXPIRY_DATE"] > now
+        ]
+
+        if weekly.empty:
+            return None
 
         expiry = (
             weekly["EXPIRY_DATE"]
             .drop_duplicates()
             .sort_values()
-            .tolist()
+            .iloc[0]
         )
 
-        if not expiry:
-            return None
-
-        return expiry[0]
+        return expiry.strftime(
+            "%m/%d/%Y %H:%M"
+        )
 
     def get_monthly_expiry(self, symbol: str):
 
@@ -219,10 +263,7 @@ class InstrumentManager:
             .tolist()
         )
 
-        if not expiry:
-            return None
-
-        return expiry[0]
+        return expiry[0] if expiry else None
 
     # ======================================================
     # OPTION LOOKUP
@@ -239,8 +280,10 @@ class InstrumentManager:
         df = self.get_options(symbol)
 
         result = df[
-            (df["EXPIRY_DATE"] == expiry) &
-            (df["STRIKE_PRICE"] == float(strike)) &
+            (df["EXPIRY_DATE"] == expiry)
+            &
+            (df["STRIKE_PRICE"] == float(strike))
+            &
             (df["OPTION_TYPE"] == option_type.upper())
         ]
 
@@ -285,30 +328,94 @@ class InstrumentManager:
             return None
 
         return int(df.iloc[0]["LOT_UNITS"])
+
     # ======================================================
     # INDEX SECURITY ID
     # ======================================================
 
     def get_index_security_id(self, index_name: str):
         """
-        Returns SECURITY_ID for an index.
+        Returns SECURITY_ID for supported indices.
 
-        Example:
+        Supports aliases:
+
+            NIFTY
             NIFTY 50
-            NIFTY BANK
-            India VIX
+
+            BANKNIFTY
+            BANK NIFTY
+
+            FINNIFTY
+            NIFTY FIN SERVICE
+
+            MIDCPNIFTY
+            NIFTY MID SELECT
         """
+
+        aliases = {
+
+            "NIFTY": "NIFTY 50",
+            "NIFTY50": "NIFTY 50",
+
+            "BANKNIFTY": "BANK NIFTY",
+            "NIFTY BANK": "BANK NIFTY",
+
+            "FINNIFTY": "NIFTY FINANCIAL",
+            "NIFTY FIN SERVICE": "NIFTY FINANCIAL",
+
+            "MIDCPNIFTY": "NIFTY MIDCAP SEL",
+            "NIFTY MID SELECT": "NIFTY MIDCAP SEL"
+
+        }
+
+        lookup = aliases.get(
+            index_name.upper(),
+            index_name
+        )
 
         df = self.load_index()
 
-        result = df[
+        segment = (
             df["SEGMENT"]
             .astype(str)
             .str.upper()
-            == index_name.upper()
+            .str.strip()
+        )
+
+        # ------------------------------------------
+        # Exact Match
+        # ------------------------------------------
+
+        result = df[
+            segment == lookup.upper()
         ]
 
-        if result.empty:
-            return None
+        if not result.empty:
 
-        return int(result.iloc[0]["SECURITY_ID"])
+            return int(
+                result.iloc[0]["SECURITY_ID"]
+            )
+
+        # ------------------------------------------
+        # Partial Match
+        # ------------------------------------------
+
+        result = df[
+            segment.str.contains(
+                lookup.upper(),
+                regex=False,
+                na=False
+            )
+        ]
+
+        if not result.empty:
+
+            return int(
+                result.iloc[0]["SECURITY_ID"]
+            )
+
+        print(
+            f"Index not found : {index_name}"
+        )
+
+        return None

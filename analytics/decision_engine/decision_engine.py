@@ -1,0 +1,70 @@
+class DecisionEngine:
+    """
+    Makes the final trading decision
+    based on engineered features.
+    """
+
+    def __init__(self):
+        pass
+
+    def decide(self, features):
+
+        decision = {
+
+            "action": "WAIT",
+
+            "score": 0,
+
+            "reasons": []
+
+        }
+
+        probability = features.get("probability", {})
+
+        bullish = probability.get(
+
+            "bullish_probability",
+
+            50
+
+        )
+
+        signal = features.get(
+
+            "signal",
+
+            {}
+
+        ).get(
+
+            "signal",
+
+            "WAIT"
+
+        )
+
+        if bullish >= 70:
+
+            decision["score"] += 40
+
+            decision["reasons"].append(
+
+                "High Bullish Probability"
+
+            )
+
+        if signal == "BUY":
+
+            decision["score"] += 40
+
+            decision["reasons"].append(
+
+                "Signal Engine BUY"
+
+            )
+
+        if decision["score"] >= 60:
+
+            decision["action"] = "BUY"
+
+        return decision
