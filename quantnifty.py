@@ -1,6 +1,7 @@
 import streamlit as st
 
 from app.theme.styles import CARD_STYLE
+from app.pages.replay import show as replay
 
 
 # =====================================================
@@ -54,8 +55,10 @@ page = st.sidebar.radio(
 
         "Institutional",
 
-        "Strategy",
+        "Replay",
 
+        "Strategy",
+        
         "Runtime"
 
     ]
@@ -77,6 +80,10 @@ elif page == "Option Chain":
 elif page == "Institutional":
 
     institutional()
+
+elif page == "Replay":
+
+    replay()
 
 elif page == "Strategy":
 

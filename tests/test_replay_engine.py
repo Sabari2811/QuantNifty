@@ -1,48 +1,70 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from backtesting.models import MarketCandle
-from backtesting.replay_engine import ReplayEngine
+from simulation.replay_state import ReplayState
 
-candles = []
 
-start = datetime(2026, 1, 1, 9, 15)
+def test_default_values():
+    state = ReplayState()
 
-price = 24000
+    assert state.current_cycle == 0
+    assert state.total_cycles == 0
+    assert state.speed == 1
+    assert state.is_playing is False
+    assert state.paused is False
+    assert state.finished is False
+    assert state.current_timestamp is None
 
-for i in range(5):
 
-    candles.append(
+def test_progress():
+    state = ReplayState(total_cycles=100)
 
-        MarketCandle(
+    state.current_cycle = 25
 
-            timestamp=start + timedelta(minutes=5 * i),
+    assert state.progress == 25.0
 
-            open=price,
 
-            high=price + 15,
+def test_progress_zero_cycles():
+    state = ReplayState()
 
-            low=price - 10,
+    assert state.progress == 0.0
 
-            close=price + 5,
 
-            volume=1000 + i * 100,
-
-        )
-
+def test_reset():
+    state = ReplayState(
+        current_cycle=80,
+        total_cycles=100,
+        speed=4,
+        is_playing=True,
+        paused=True,
+        finished=True,
+        current_timestamp=datetime.now(),
     )
 
-    price += 20
+    state.reset()
 
-engine = ReplayEngine(candles)
+    assert state.current_cycle == 0
+    assert state.speed == 1
+    assert state.is_playing is False
+    assert state.paused is False
+    assert state.finished is False
+    assert state.current_timestamp is None
 
-while engine.has_next():
 
-    candle = engine.next()
+def test_update():
+    state = ReplayState(total_cycles=100)
 
-    print(candle)
+    ts = datetime.now()
 
-print("\nReplay Completed")
+    state.update(cycle=10, timestamp=ts)
 
-engine.reset()
+    assert state.current_cycle == 10
+    assert state.current_timestamp == ts
+    assert state.finished is False
 
-print("\nReset Successful:", engine.has_next())
+
+def test_finished():
+    state = ReplayState(total_cycles=100)
+
+    state.update(cycle=100)
+
+    assert state.finished is True

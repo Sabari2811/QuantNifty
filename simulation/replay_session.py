@@ -94,3 +94,30 @@ class ReplaySession(ReplaySource):
             return 0.0
 
         return ((self._index + 1) / self.total) * 100
+
+    # =====================================================
+    # Random Access
+    # =====================================================
+
+    def seek(self, index: int) -> ReplaySnapshot:
+        """
+        Move directly to a replay position.
+
+        Parameters
+        ----------
+        index:
+            Snapshot index.
+
+        Returns
+        -------
+        ReplaySnapshot
+        """
+
+        if not self._folders:
+            raise RuntimeError("Replay session is empty.")
+
+        index = max(0, min(index, self.total - 1))
+
+        self._index = index
+
+        return self.current()
