@@ -4,25 +4,66 @@ from pathlib import Path
 
 from simulation.replay_loader import ReplayLoader
 from simulation.replay_snapshot import ReplaySnapshot
-
 from simulation.replay_source import ReplaySource
-
 
 
 class ReplaySession(ReplaySource):
     """
     Maintains navigation through a sequence of recorded snapshots.
 
-    Responsibilities:
-        - Track current position
-        - Move forward/backward
-        - Reset session
-        - Return ReplaySnapshot objects
+    Supports BOTH:
+
+        Legacy:
+            snapshot_folders = [
+                .../000001
+                .../000002
+            ]
+
+        Session:
+            snapshot_folders = [
+                .../04-Aug-2026
+            ]
     """
 
-    def __init__(self, snapshot_folders: list[str | Path]):
+    def __init__(
+        self,
+        snapshot_folders: list[str | Path]
+    ):
 
-        self._folders = [Path(f) for f in snapshot_folders]
+        self._folders = []
+
+        #
+        # Expand session folders into snapshot folders
+        #
+        for folder in snapshot_folders:
+
+            folder = Path(folder)
+
+            #
+            # New session recording
+            #
+            if (folder / "session.json").exists():
+
+                snapshots = sorted(
+
+                    p
+                    for p in folder.iterdir()
+                    if (
+                        p.is_dir()
+                        and
+                        (p / "manifest.json").exists()
+                    )
+
+                )
+
+                self._folders.extend(snapshots)
+
+            #
+            # Legacy recording
+            #
+            else:
+
+                self._folders.append(folder)
 
         self._loader = ReplayLoader()
 
@@ -32,26 +73,13 @@ class ReplaySession(ReplaySource):
     # Navigation
     # =====================================================
 
-    def has_next(self) -> bool:
-
-        return self._index < len(self._folders)
-
-    def has_previous(self) -> bool:
-
-        return self._index > 0
-
-    def reset(self):
-
-        self._index = 0
-
-    # =====================================================
-    # Snapshot Access
-    # =====================================================
-
     def current(self) -> ReplaySnapshot:
 
         if not self._folders:
-            raise RuntimeError("Replay session is empty.")
+
+            raise RuntimeError(
+                "Replay session is empty."
+            )
 
         return self._loader.load(
             self._folders[self._index]
@@ -59,19 +87,57 @@ class ReplaySession(ReplaySource):
 
     def next(self) -> ReplaySnapshot:
 
-        snapshot = self.current()
+        if self.has_next():
 
-        if self._index < len(self._folders) - 1:
             self._index += 1
 
-        return snapshot
+        return self.current()
 
     def previous(self) -> ReplaySnapshot:
 
-        if self._index > 0:
+        if self.has_previous():
+
             self._index -= 1
 
         return self.current()
+
+    def seek(
+        self,
+        index: int
+    ) -> ReplaySnapshot:
+
+        if not self._folders:
+
+            raise RuntimeError(
+                "Replay session is empty."
+            )
+
+        index = max(0, min(index, self.total - 1))
+
+        self._index = index
+
+        return self.current()
+
+    def reset(self):
+
+        self._index = 0
+
+    # =====================================================
+    # Status
+    # =====================================================
+
+    def has_next(self):
+
+        return self._index < self.total - 1
+
+    def has_previous(self):
+
+        return self._index > 0
+
+    @property
+    def finished(self):
+
+        return not self.has_next()
 
     # =====================================================
     # Properties
@@ -91,33 +157,13 @@ class ReplaySession(ReplaySource):
     def progress(self):
 
         if self.total == 0:
+
             return 0.0
 
-        return ((self._index + 1) / self.total) * 100
+        return round(
 
-    # =====================================================
-    # Random Access
-    # =====================================================
+            ((self._index + 1) / self.total) * 100,
 
-    def seek(self, index: int) -> ReplaySnapshot:
-        """
-        Move directly to a replay position.
+            2
 
-        Parameters
-        ----------
-        index:
-            Snapshot index.
-
-        Returns
-        -------
-        ReplaySnapshot
-        """
-
-        if not self._folders:
-            raise RuntimeError("Replay session is empty.")
-
-        index = max(0, min(index, self.total - 1))
-
-        self._index = index
-
-        return self.current()
+        )

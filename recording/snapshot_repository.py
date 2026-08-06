@@ -8,17 +8,15 @@ from recording.replay_recording import ReplayRecording
 
 class SnapshotRepository:
     """
-    Repository for recorded QuantNifty snapshots.
+    Repository for recorded QuantNifty replay sessions.
 
-    Responsibilities
-    ----------------
-    • Discover recordings
-    • Read metadata
-    • Build ReplayRecording objects
+    Each trading day is represented by one session folder
+    containing:
 
-    Never loads analytics.
-    Never loads option chain.
-    Never loads greeks.
+        session.json
+        000001_...
+        000002_...
+        ...
     """
 
     def __init__(self, root="data/snapshots"):
@@ -26,7 +24,7 @@ class SnapshotRepository:
         self.root = Path(root)
 
     # =====================================================
-    # Public
+    # PUBLIC
     # =====================================================
 
     def list_recordings(self) -> list[ReplayRecording]:
@@ -37,58 +35,82 @@ class SnapshotRepository:
             return recordings
 
         #
-        # Every folder = Trading Date
+        # Every date folder represents one replay session
         #
-
-        for date_folder in sorted(self.root.iterdir(), reverse=True):
+        for date_folder in sorted(
+            self.root.iterdir(),
+            reverse=True
+        ):
 
             if not date_folder.is_dir():
                 continue
 
-            for session_folder in sorted(date_folder.iterdir()):
+            #
+            # Only session-based recordings are supported
+            #
+            session_json = date_folder / "session.json"
 
-                if not session_folder.is_dir():
-                    continue
+            if not session_json.exists():
+                continue
 
-                recordings.append(
-
-                    self._build_recording(
-
-                        date_folder.name,
-
-                        session_folder
-
-                    )
-
+            recordings.append(
+                self._build_session_recording(
+                    date_folder
                 )
+            )
 
         return recordings
 
     # =====================================================
-    # Private
+    # SESSION RECORDING
     # =====================================================
 
-    def _build_recording(
+    def _build_session_recording(
 
         self,
 
-        date,
-
-        folder
+        folder: Path
 
     ) -> ReplayRecording:
 
-        runtime_file = folder / "runtime.json"
+        snapshots = sorted(
+
+            p
+
+            for p in folder.iterdir()
+
+            if p.is_dir()
+
+        )
 
         timestamp = ""
 
         cycle = 0
 
-        if runtime_file.exists():
+        #
+        # Use latest snapshot runtime
+        #
+        if snapshots:
 
-            with open(runtime_file, encoding="utf-8") as fp:
+            runtime_file = (
 
-                runtime = json.load(fp)
+                snapshots[-1]
+
+                / "runtime.json"
+
+            )
+
+            if runtime_file.exists():
+
+                with open(
+
+                    runtime_file,
+
+                    encoding="utf-8"
+
+                ) as fp:
+
+                    runtime = json.load(fp)
 
                 timestamp = runtime.get(
 
@@ -108,7 +130,7 @@ class SnapshotRepository:
 
         return ReplayRecording(
 
-            date=date,
+            date=folder.name,
 
             session_name=folder.name,
 
@@ -118,18 +140,18 @@ class SnapshotRepository:
 
             cycle=cycle,
 
-            runtime=runtime_file.exists(),
+            runtime=True,
 
-            analytics=(folder / "analytics.json").exists(),
+            analytics=True,
 
-            decision=(folder / "decision.json").exists(),
+            decision=True,
 
-            explanation=(folder / "explanation.json").exists(),
+            explanation=True,
 
-            greeks=(folder / "greeks.parquet").exists(),
+            greeks=True,
 
-            option_chain=(folder / "option_chain.parquet").exists(),
+            option_chain=True,
 
-            manifest=(folder / "manifest.json").exists()
+            manifest=True
 
         )

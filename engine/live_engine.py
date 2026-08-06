@@ -23,7 +23,9 @@ from decision.decision_engine import DecisionEngine
 
 from ui.console_dashboard import ConsoleDashboard
 from execution.trade_execution_pipeline import TradeExecutionPipeline
-from recording.snapshot_recorder import SnapshotRecorder
+from recording.recording_manager import RecordingManager
+from providers.simulation_provider import SimulationProvider
+from runtime.runtime_mode import RuntimeMode
 
 
 class LiveEngine:
@@ -118,7 +120,7 @@ class LiveEngine:
 
         )
 
-        self.snapshot_recorder = SnapshotRecorder()
+        self.recording_manager = RecordingManager()
 
         # ------------------------------------------------------
         # Console Dashboard
@@ -154,6 +156,45 @@ class LiveEngine:
         print()
 
         print(self.ctx.greeks_df.head())
+
+    # ==========================================================
+    # Runtime Helpers
+    # ==========================================================
+
+    def _is_replay(self):
+
+        return isinstance(
+            self.provider,
+            SimulationProvider
+        )
+
+
+    def _is_replay_fast(self):
+
+        return (
+
+            self._is_replay()
+
+            and
+
+            self.provider.runtime_mode
+            == RuntimeMode.REPLAY_FAST
+
+        )
+
+
+    def _is_replay_recompute(self):
+
+        return (
+
+            self._is_replay()
+
+            and
+
+            self.provider.runtime_mode
+            == RuntimeMode.REPLAY_RECOMPUTE
+
+        )
 
 
     # ==========================================================
@@ -276,17 +317,28 @@ class LiveEngine:
             # Analytics
             # --------------------------------------------------
 
-            self._calculate_greeks()
+            if self._is_replay_fast():
 
-            self._run_analytics()
+                #
+                # Snapshot already contains analytics.
+                #
+                pass
+
+            else:
+
+                self._calculate_greeks()
+
+                self._run_analytics()
 
             # --------------------------------------------------
-            # Record Snapshot
+            # Snapshot Recording
             # --------------------------------------------------
 
-            self.snapshot_recorder.save(self.ctx)
+            if not self._is_replay():
 
-            return self.ctx
+                self.recording_manager.record(self.ctx)
+
+                return self.ctx
 
         except Exception as e:
 

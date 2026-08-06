@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from dataclasses import asdict, is_dataclass
 
 import pandas as pd
 
@@ -43,9 +44,11 @@ class SnapshotRecorder:
     # PUBLIC
     # ==========================================================
 
-    def save(self, ctx):
+    def save(self, ctx, folder=None):
 
-        folder = self._snapshot_folder(ctx)
+        if folder is None:
+
+            folder = self._snapshot_folder(ctx)
 
         folder.mkdir(
             parents=True,
@@ -71,11 +74,62 @@ class SnapshotRecorder:
         )
 
         #
-        # Decision
+        # ------------------------------------------------------
+        # Decision (DEBUG)
+        # ------------------------------------------------------
         #
+        decision = getattr(ctx, "decision", None)
+
+        print("\n================ DECISION DEBUG ================")
+
+        if decision is None:
+
+            print("Decision : None")
+
+        else:
+
+            print("Decision Type      :", type(decision))
+            print("Decision Dataclass :", is_dataclass(decision))
+
+            try:
+                print("Signal Type        :", type(decision.signal))
+                print("Signal Dataclass   :", is_dataclass(decision.signal))
+            except Exception as e:
+                print("Signal ERROR :", e)
+
+            try:
+                print("Trade Type         :", type(decision.trade))
+                print("Trade Dataclass    :", is_dataclass(decision.trade))
+            except Exception as e:
+                print("Trade ERROR :", e)
+
+            try:
+                print("Market Type        :", type(decision.market))
+                print("Market Dataclass   :", is_dataclass(decision.market))
+            except Exception as e:
+                print("Market ERROR :", e)
+
+            try:
+                print("Validation Type    :", type(decision.validation))
+                print("Validation Dataclass :", is_dataclass(decision.validation))
+            except Exception as e:
+                print("Validation ERROR :", e)
+
+            print("\nASDICT OUTPUT\n")
+
+            try:
+
+                print(asdict(decision))
+
+            except Exception as e:
+
+                print("ASDICT FAILED :", e)
+
+        print("===============================================\n")
+
         self._save_json(
             folder / self.manifest.decision,
-            getattr(ctx, "decision", None)
+            decision
         )
 
         #
@@ -186,11 +240,22 @@ class SnapshotRecorder:
         if obj is None:
             return
 
-        #
-        # Dataclass
-        #
-        if hasattr(obj, "__dict__"):
-            obj = obj.__dict__
+        print("\n================ SAVE JSON ================")
+        print("PATH :", path)
+        print("TYPE :", type(obj))
+        print("IS DATACLASS :", is_dataclass(obj))
+
+        if is_dataclass(obj):
+
+            print(">>> USING ASDICT() <<<")
+
+            obj = asdict(obj)
+
+        else:
+
+            print(">>> NOT A DATACLASS <<<")
+
+        print("FINAL TYPE :", type(obj))
 
         with open(
             path,
@@ -204,6 +269,8 @@ class SnapshotRecorder:
                 indent=4,
                 default=str
             )
+
+        print("=========================================\n")
 
     def _save_dataframe(self, path, df):
 

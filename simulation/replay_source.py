@@ -9,19 +9,44 @@ class ReplaySource(ABC):
     """
     Base interface for replay data sources.
 
-    Implementations:
-        - ReplaySession
-        - CSVReplaySource (future)
-        - DatabaseReplaySource (future)
-        - MonteCarloReplaySource (future)
+    Navigation is owned by ReplaySession.
+    SimulationProvider only reads the current snapshot.
     """
+
+    @abstractmethod
+    def current(self) -> ReplaySnapshot:
+        """
+        Return current snapshot without changing position.
+        """
+        pass
+
+    @abstractmethod
+    def next(self) -> ReplaySnapshot:
+        """
+        Advance one snapshot.
+        """
+        pass
+
+    @abstractmethod
+    def previous(self) -> ReplaySnapshot:
+        """
+        Move back one snapshot.
+        """
+        pass
+
+    @abstractmethod
+    def seek(self, index: int) -> ReplaySnapshot:
+        """
+        Jump to snapshot index.
+        """
+        pass
 
     @abstractmethod
     def has_next(self) -> bool:
         pass
 
     @abstractmethod
-    def next(self) -> ReplaySnapshot:
+    def has_previous(self) -> bool:
         pass
 
     @abstractmethod
