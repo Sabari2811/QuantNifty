@@ -1,0 +1,931 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\providers\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\providers\base_provider.py
+==================================================
+from abc import ABC, abstractmethod
+
+from runtime.runtime_mode import RuntimeMode
+
+
+class BaseProvider(ABC):
+    """
+    Base interface for all market data providers.
+    """
+
+    # ==========================================================
+    # Runtime Mode
+    # ==========================================================
+
+    @property
+    def runtime_mode(self):
+
+        return RuntimeMode.LIVE
+
+    # ==========================================================
+    # Required
+    # ==========================================================
+
+    @abstractmethod
+    def connect(self):
+        pass
+
+    @abstractmethod
+    def get_spot_price(self, symbol):
+        pass
+
+    @abstractmethod
+    def get_historical_data(self, *args, **kwargs):
+        pass
+
+    @abstractmethod
+    def get_option_chain(self, *args, **kwargs):
+        pass
+
+    # ==========================================================
+    # Optional
+    # ==========================================================
+
+    def get_profile(self):
+        raise NotImplementedError
+
+    def place_order(self, *args, **kwargs):
+        raise NotImplementedError
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\providers\icici_provider.py
+==================================================
+from abc import ABC, abstractmethod
+
+
+class BaseProvider(ABC):
+
+    @abstractmethod
+    def connect(self):
+        pass
+
+    @abstractmethod
+    def get_profile(self):
+        pass
+
+    @abstractmethod
+    def get_spot_price(self):
+        pass
+
+    @abstractmethod
+    def get_option_chain(self):
+        pass
+
+    @abstractmethod
+    def place_order(self):
+        pass
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\providers\indmoney_provider.py
+==================================================
+import os
+import requests
+from dotenv import load_dotenv
+
+from providers.base_provider import BaseProvider
+
+load_dotenv()
+
+
+class INDMoneyProvider(BaseProvider):
+
+    def __init__(self):
+
+        self.base_url = "https://api.indstocks.com"
+
+        self.token = os.getenv("INDSTOCKS_API_TOKEN")
+
+        if not self.token:
+            raise Exception("INDSTOCKS_API_TOKEN not found in .env")
+
+        self.headers = {
+            "Authorization": self.token,
+            "Content-Type": "application/json"
+        }
+
+    # ==========================================================
+    # CONNECTION
+    # ==========================================================
+
+    def connect(self):
+
+        print("=" * 60)
+        print("CONNECTING TO INDMONEY")
+        print("=" * 60)
+
+        print("âœ“ API Token Loaded")
+
+        return True
+
+    # ==========================================================
+    # USER PROFILE
+    # ==========================================================
+
+    def get_profile(self):
+
+        url = f"{self.base_url}/user/profile"
+
+        response = requests.get(
+            url,
+            headers=self.headers,
+            timeout=30
+        )
+
+        print(f"Status Code : {response.status_code}")
+
+        try:
+            return response.json()
+        except Exception:
+            return response.text
+
+    # ==========================================================
+    # SINGLE OPTION QUOTE
+    # ==========================================================
+
+    def get_quote(self, security_id):
+
+        security_id = int(security_id)
+
+        url = (
+            f"{self.base_url}/market/quotes/full"
+            f"?scrip-codes=NFO_{security_id}"
+        )
+
+        response = requests.get(
+            url,
+            headers=self.headers,
+            timeout=30
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        if data.get("status") != "success":
+            return None
+
+        return data["data"].get(f"NFO_{security_id}")
+
+    # ==========================================================
+    # MULTIPLE OPTION QUOTES
+    # ==========================================================
+
+    def get_quotes(self, security_ids):
+
+        if not security_ids:
+            return {}
+
+        ids = []
+
+        for sid in security_ids:
+
+            if sid is None:
+                continue
+
+            sid = int(sid)
+
+            if sid not in ids:
+                ids.append(sid)
+
+        print()
+        print("=" * 70)
+        print("OPTION QUOTE REQUEST")
+        print("=" * 70)
+
+        print("Security IDs")
+        print(ids)
+
+        quotes = {}
+
+        batch_size = 10
+
+        for start in range(0, len(ids), batch_size):
+
+            batch = ids[start:start + batch_size]
+
+            scrip_codes = ",".join(
+                f"NFO_{sid}"
+                for sid in batch
+            )
+
+            url = (
+                f"{self.base_url}/market/quotes/full"
+                f"?scrip-codes={scrip_codes}"
+            )
+
+            print()
+            print("--------------------------------------------")
+            print("Request")
+            print(url)
+
+            response = requests.get(
+                url,
+                headers=self.headers,
+                timeout=30
+            )
+
+            print("Status :", response.status_code)
+
+            if response.status_code != 200:
+
+                print("Batch Failed")
+                print(response.text)
+
+                continue
+
+            data = response.json()
+
+            if data.get("status") != "success":
+                continue
+
+            quotes.update(data["data"])
+
+        print()
+        print("Quotes Received :", len(quotes))
+
+        return quotes
+
+    # ==========================================================
+    # INDEX QUOTE BY SECURITY ID
+    # ==========================================================
+
+    def get_index_quote_by_id(self, security_id):
+
+        security_id = int(security_id)
+
+        url = (
+            f"{self.base_url}/market/quotes/full"
+            f"?scrip-codes=NIDX_{security_id}"
+        )
+
+        response = requests.get(
+            url,
+            headers=self.headers,
+            timeout=30
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        if data.get("status") != "success":
+            return None
+
+        return data["data"].get(
+            f"NIDX_{security_id}"
+        )
+
+    # ==========================================================
+    # INDEX QUOTE
+    # ==========================================================
+
+    def get_index_quote(self, index_name):
+
+        from engine.instrument_manager import InstrumentManager
+
+        instrument = InstrumentManager()
+
+        security_id = instrument.get_index_security_id(
+            index_name
+        )
+
+        if security_id is None:
+
+            raise ValueError(
+                f"Index not found : {index_name}"
+            )
+
+        return self.get_index_quote_by_id(
+            security_id
+        )
+
+    # ==========================================================
+    # EXTRACT PRICE
+    # ==========================================================
+
+    def _extract_price(self, quote):
+
+        if quote is None:
+            return None
+
+        for key in (
+
+            "live_price",
+
+            "ltp",
+
+            "LTP",
+
+            "last_price",
+
+            "lastPrice",
+
+            "close"
+
+        ):
+
+            value = quote.get(key)
+
+            if value is not None:
+
+                return float(value)
+
+        return None
+
+    # ==========================================================
+    # LIVE SPOT PRICE
+    # ==========================================================
+
+    def get_spot_price(self, symbol):
+
+        symbol = symbol.upper()
+
+        mapping = {
+
+            "NIFTY": "NIFTY 50",
+
+            "BANKNIFTY": "NIFTY BANK",
+
+            "FINNIFTY": "NIFTY FIN SERVICE",
+
+            "MIDCPNIFTY": "NIFTY MID SELECT"
+
+        }
+
+        if symbol not in mapping:
+
+            raise ValueError(
+                f"Unsupported Symbol : {symbol}"
+            )
+
+        quote = self.get_index_quote(
+            mapping[symbol]
+        )
+
+        price = self._extract_price(
+            quote
+        )
+
+        if price is None:
+
+            raise Exception(
+
+                f"Unable to extract spot price.\nResponse : {quote}"
+
+            )
+
+        return price
+    # ==========================================================
+    # HISTORICAL DATA
+    # ==========================================================
+
+    def get_historical_data(
+
+        self,
+
+        scrip_code,
+
+        interval,
+
+        start_time,
+
+        end_time
+
+    ):
+
+        """
+        Fetch historical OHLC candles.
+
+        Example:
+
+            scrip_code = "NIDX_26000"
+            interval   = "5"
+            start_time = "2026-07-10T09:15:00"
+            end_time   = "2026-07-10T15:30:00"
+
+        Supported intervals (per INDStocks API):
+
+            1
+            3
+            5
+            10
+            15
+            30
+            60
+            D
+            W
+            M
+        """
+
+        url = (
+
+            f"{self.base_url}/market/historical/{interval}"
+
+        )
+
+        params = {
+
+        "scrip-codes": scrip_code,
+
+        "start_time": start_time,
+
+        "end_time": end_time
+
+        }
+
+        print()
+        print("=" * 70)
+        print("HISTORICAL DATA REQUEST")
+        print("=" * 70)
+        print("URL :", url)
+        print("Params :", params)
+
+        response = requests.get(
+
+            url,
+
+            headers=self.headers,
+
+            params=params,
+
+            timeout=30
+
+        )
+
+        print("Status :", response.status_code)
+
+        # ------------------------------------------------------
+        # HTTP Error
+        # ------------------------------------------------------
+
+        if response.status_code != 200:
+
+            print()
+            print("=" * 70)
+            print("ERROR RESPONSE")
+            print("=" * 70)
+            print(response.text)
+
+            return []
+
+        # ------------------------------------------------------
+        # Parse JSON
+        # ------------------------------------------------------
+
+        try:
+
+            data = response.json()
+
+        except Exception:
+
+            print()
+            print("=" * 70)
+            print("INVALID JSON")
+            print("=" * 70)
+            print(response.text)
+
+            return []
+        # ------------------------------------------------------
+        # Parse JSON
+        # ------------------------------------------------------
+
+        try:
+
+            data = response.json()
+
+        except Exception:
+
+            print()
+            print("=" * 70)
+            print("INVALID JSON")
+            print("=" * 70)
+            print(response.text)
+
+            return []
+
+        # ------------------------------------------------------
+        # Success Check
+        # ------------------------------------------------------
+
+        if not data.get("success", False):
+
+            print()
+            print("=" * 70)
+            print("API ERROR")
+            print("=" * 70)
+            print(data)
+
+            return []
+
+        # ------------------------------------------------------
+        # Validate Response
+        # ------------------------------------------------------
+
+        if "data" not in data:
+
+            return []
+
+        if scrip_code not in data["data"]:
+
+            return []
+
+        if "candles" not in data["data"][scrip_code]:
+
+            return []
+
+        candles = data["data"][scrip_code]["candles"]
+
+        print()
+        print("Candles Returned :", len(candles))
+
+        return candles
+    # ==========================================================
+    # OPTION CHAIN
+    # ==========================================================
+
+    def get_option_chain(self, *args, **kwargs):
+        """
+        Not required.
+
+        QuantNifty builds the option chain through
+        OptionChainManager using get_quotes().
+        """
+        raise NotImplementedError(
+            "Use OptionChainManager.get_live_option_chain()"
+        )
+
+    # ==========================================================
+    # PLACE ORDER
+    # ==========================================================
+
+    def place_order(self, *args, **kwargs):
+
+        raise NotImplementedError(
+            "Order placement will be implemented in Sprint 38."
+        )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\providers\mock_provider.py
+==================================================
+import random
+
+from providers.base_provider import BaseProvider
+
+
+class MockProvider(BaseProvider):
+    """
+    Mock Provider
+
+    Used for development/testing without
+    connecting to any broker.
+    """
+
+    def __init__(self):
+
+        self.connected = False
+
+    # ======================================================
+    # CONNECTION
+    # ======================================================
+
+    def connect(self):
+
+        self.connected = True
+
+        print("=" * 50)
+        print("      CONNECTING TO MOCK PROVIDER")
+        print("=" * 50)
+        print("âœ“ Mock Provider Ready")
+
+        return True
+
+    # ======================================================
+    # PROFILE
+    # ======================================================
+
+    def get_profile(self):
+
+        return {
+
+            "status": "success",
+
+            "data": {
+
+                "broker": "Mock",
+
+                "user": "QuantNifty"
+
+            }
+
+        }
+
+    # ======================================================
+    # INDEX QUOTE
+    # ======================================================
+
+    def get_index_quote(self, index_name):
+
+        return {
+
+            "live_price": 24050.25,
+
+            "day_change": 102.50,
+
+            "day_change_percentage": 0.42,
+
+            "day_low": 23920,
+
+            "day_high": 24120,
+
+            "day_open": 23980,
+
+            "prev_close": 23947.75
+
+        }
+
+    # ======================================================
+    # SPOT PRICE
+    # ======================================================
+
+    def get_spot_price(self):
+
+        return 24050.25
+
+    # ======================================================
+    # SINGLE QUOTE
+    # ======================================================
+
+    def get_quote(self, security_id):
+
+        return {
+
+            "live_price": round(
+                random.uniform(40, 300),
+                2
+            ),
+
+            "open_interest": random.randint(
+                10000,
+                300000
+            ),
+
+            "volume": random.randint(
+                1000,
+                100000
+            )
+
+        }
+
+    # ======================================================
+    # MULTIPLE QUOTES
+    # ======================================================
+
+    def get_quotes(self, security_ids):
+
+        quotes = {}
+
+        for sid in security_ids:
+
+            quotes[f"NFO_{sid}"] = self.get_quote(sid)
+
+        return quotes
+
+    # ======================================================
+    # OPTION CHAIN
+    # ======================================================
+
+    def get_option_chain(self):
+
+        return {}
+
+    # ======================================================
+    # PLACE ORDER
+    # ======================================================
+
+    def place_order(self):
+
+        print("Mock Order Placed")
+
+        return {
+
+            "status": "success",
+
+            "order_id": "MOCK123456"
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\providers\provider_factory.py
+==================================================
+from config.settings import PROVIDER
+
+from providers.indmoney_provider import INDMoneyProvider
+from providers.mock_provider import MockProvider
+
+
+class ProviderFactory:
+
+    @staticmethod
+    def create(provider_name=None):
+
+        if provider_name is None:
+            provider_name = PROVIDER
+
+        provider_name = provider_name.lower()
+
+        if provider_name == "indmoney":
+
+            provider = INDMoneyProvider()
+
+        elif provider_name == "mock":
+
+            provider = MockProvider()
+
+        else:
+
+            raise ValueError(
+                f"Unsupported Provider : {provider_name}"
+            )
+
+        provider.connect()
+
+        return provider
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\providers\provider_manager.py
+==================================================
+from config.settings import PROVIDER
+
+from providers.mock_provider import MockProvider
+from providers.indmoney_provider import INDMoneyProvider
+
+
+class ProviderManager:
+    """
+    Chooses the active market data provider.
+    """
+
+    def __init__(self):
+
+        provider = PROVIDER.lower()
+
+        if provider == "mock":
+
+            print("=" * 60)
+            print(" USING MOCK PROVIDER ")
+            print("=" * 60)
+
+            self.provider = MockProvider()
+
+        elif provider == "indmoney":
+
+            print("=" * 60)
+            print(" USING INDMONEY PROVIDER ")
+            print("=" * 60)
+
+            self.provider = INDMoneyProvider()
+
+        else:
+
+            raise ValueError(
+                f"Unknown provider : {PROVIDER}"
+            )
+
+        self.provider.connect()
+
+    def get_provider(self):
+
+        return self.provider
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\providers\simulation_provider.py
+==================================================
+from __future__ import annotations
+
+from providers.base_provider import BaseProvider
+from runtime.runtime_mode import RuntimeMode
+from simulation.replay_source import ReplaySource
+
+
+class SimulationProvider(BaseProvider):
+    """
+    Market data provider backed by recorded snapshots.
+
+    Unlike the live provider, this provider NEVER changes
+    replay position.
+
+    Navigation belongs exclusively to ReplaySession /
+    ReplayController.
+    """
+
+    def __init__(
+        self,
+        replay_source: ReplaySource,
+        runtime_mode: RuntimeMode = RuntimeMode.REPLAY_FAST
+    ):
+
+        self.source = replay_source
+
+        self._runtime_mode = runtime_mode
+
+    # ==========================================================
+    # Runtime
+    # ==========================================================
+
+    @property
+    def runtime_mode(self):
+
+        return self._runtime_mode
+
+    # ==========================================================
+    # Provider
+    # ==========================================================
+
+    def connect(self):
+
+        return True
+
+    # ==========================================================
+    # Snapshot
+    # ==========================================================
+
+    def current_snapshot(self):
+
+        return self.source.current()
+
+    # ==========================================================
+    # Live Provider Interface
+    # ==========================================================
+
+    def get_spot_price(self, symbol=None):
+
+        return self.current_snapshot().spot
+
+    def get_option_chain(self, *args, **kwargs):
+
+        return self.current_snapshot().option_chain.copy()
+
+    def get_historical_data(self, *args, **kwargs):
+
+        raise NotImplementedError(
+            "Historical data unavailable in replay."
+        )
+
+    # ==========================================================
+    # Snapshot Accessors
+    # ==========================================================
+
+    def get_runtime(self):
+
+        return self.current_snapshot().runtime
+
+    def get_greeks(self):
+
+        return self.current_snapshot().greeks.copy()
+
+    def get_analytics(self):
+
+        return self.current_snapshot().analytics
+
+    def get_decision(self):
+
+        return self.current_snapshot().decision
+
+    def get_explanation(self):
+
+        return self.current_snapshot().explanation
+
+    # ==========================================================
+    # Convenience
+    # ==========================================================
+
+    @property
+    def timestamp(self):
+
+        return self.current_snapshot().timestamp
+
+    @property
+    def cycle_no(self):
+
+        return self.current_snapshot().cycle_no
+
+    @property
+    def symbol(self):
+
+        return self.current_snapshot().symbol
+
+

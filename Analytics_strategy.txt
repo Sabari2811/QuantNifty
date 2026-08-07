@@ -1,0 +1,10 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\strategy\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\strategy\strategy_engine.py
+==================================================
+
+

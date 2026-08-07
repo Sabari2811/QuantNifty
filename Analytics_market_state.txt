@@ -1,0 +1,10 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\market_state\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\market_state\state.py
+==================================================
+
+

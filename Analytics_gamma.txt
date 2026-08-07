@@ -1,0 +1,324 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\gamma\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\gamma\gamma_exposure.py
+==================================================
+import pandas as pd
+
+
+class GammaExposureEngine:
+    """
+    Gamma Exposure (GEX)
+
+    Computes
+
+        CE_GEX
+        PE_GEX
+        NET_GEX
+
+    Formula
+
+        GEX = Gamma Ã— OI Ã— Lot Size
+
+    NET_GEX = CE_GEX - PE_GEX
+    """
+
+    def __init__(self, lot_size=65):
+
+        self.lot_size = lot_size
+
+    # ======================================================
+    # Standard API
+    # ======================================================
+
+    def analyze(self, df: pd.DataFrame):
+
+        df = df.copy()
+
+        required = [
+
+            "CE_GAMMA",
+            "PE_GAMMA",
+            "CE_OI",
+            "PE_OI"
+
+        ]
+
+        for col in required:
+
+            if col not in df.columns:
+
+                df[col] = 0
+
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="coerce"
+            ).fillna(0)
+
+        df["CE_GEX"] = (
+
+            df["CE_GAMMA"]
+            *
+            df["CE_OI"]
+            *
+            self.lot_size
+
+        )
+
+        df["PE_GEX"] = (
+
+            df["PE_GAMMA"]
+            *
+            df["PE_OI"]
+            *
+            self.lot_size
+
+        )
+
+        df["NET_GEX"] = (
+
+            df["CE_GEX"]
+            -
+            df["PE_GEX"]
+
+        )
+
+        return df
+
+    # ======================================================
+    # Backward Compatibility
+    # ======================================================
+
+    def calculate(self, df):
+
+        return self.analyze(df)
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\gamma\gamma_flip.py
+==================================================
+import pandas as pd
+
+
+class GammaFlipDetector:
+
+    # ======================================================
+    # Standard API
+    # ======================================================
+
+    def analyze(self, df: pd.DataFrame):
+
+        if "NET_GEX" not in df.columns:
+            raise ValueError("NET_GEX column not found.")
+
+        previous_gamma = None
+        previous_row = None
+
+        for _, row in df.iterrows():
+
+            current_gamma = row["NET_GEX"]
+
+            if previous_gamma is None:
+
+                previous_gamma = current_gamma
+                previous_row = row
+                continue
+
+            if previous_gamma < 0 <= current_gamma:
+
+                return {
+
+                    "flip_found": True,
+
+                    "direction": "NEGATIVE_TO_POSITIVE",
+
+                    "lower_strike": previous_row["Strike"],
+
+                    "upper_strike": row["Strike"],
+
+                    "gamma_flip": row["Strike"]
+
+                }
+
+            if previous_gamma > 0 >= current_gamma:
+
+                return {
+
+                    "flip_found": True,
+
+                    "direction": "POSITIVE_TO_NEGATIVE",
+
+                    "lower_strike": previous_row["Strike"],
+
+                    "upper_strike": row["Strike"],
+
+                    "gamma_flip": row["Strike"]
+
+                }
+
+            previous_gamma = current_gamma
+            previous_row = row
+
+        return {
+
+            "flip_found": False,
+
+            "direction": None,
+
+            "lower_strike": None,
+
+            "upper_strike": None,
+
+            "gamma_flip": None
+
+        }
+
+    # ======================================================
+    # Backward Compatibility
+    # ======================================================
+
+    def detect(self, df):
+
+        return self.analyze(df)
+
+    def find_flip(self, df):
+
+        return self.analyze(df)
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\gamma\gamma_wall.py
+==================================================
+import pandas as pd
+
+
+class GammaWallDetector:
+    """
+    Detects Gamma Wall levels.
+
+    Gamma Wall:
+        Strike having the highest NET_GEX.
+
+    Positive Wall:
+        Strike with highest positive NET_GEX.
+
+    Negative Wall:
+        Strike with lowest (most negative) NET_GEX.
+    """
+
+    # ======================================================
+    # MAIN
+    # ======================================================
+
+    def analyze(self, df):
+
+        if df is None or df.empty:
+            return {
+                "gamma_wall": None,
+                "call_wall": None,
+                "put_wall": None,
+                "net_gex": None
+            }
+
+        if "NET_GEX" not in df.columns:
+            return {
+                "gamma_wall": None,
+                "call_wall": None,
+                "put_wall": None,
+                "net_gex": None
+            }
+
+        # ----------------------------
+        # Gamma Wall
+        # ----------------------------
+
+        idx = df["NET_GEX"].idxmax()
+
+        row = df.loc[idx]
+
+        gamma_wall = row["Strike"]
+        net_gex = row["NET_GEX"]
+
+        # ----------------------------
+        # Call Wall
+        # Highest Positive GEX
+        # ----------------------------
+
+        positive = df[df["NET_GEX"] > 0]
+
+        if positive.empty:
+            call_wall = None
+        else:
+            call_wall = positive.loc[
+                positive["NET_GEX"].idxmax(),
+                "Strike"
+            ]
+
+        # ----------------------------
+        # Put Wall
+        # Most Negative GEX
+        # ----------------------------
+
+        negative = df[df["NET_GEX"] < 0]
+
+        if negative.empty:
+            put_wall = None
+        else:
+            put_wall = negative.loc[
+                negative["NET_GEX"].idxmin(),
+                "Strike"
+            ]
+
+        return {
+
+            "gamma_wall": gamma_wall,
+
+            "call_wall": call_wall,
+
+            "put_wall": put_wall,
+
+            "net_gex": float(net_gex)
+
+        }
+
+    # ======================================================
+    # Helpers
+    # ======================================================
+
+    def top_walls(self, df, top_n=5):
+
+        if df is None or df.empty:
+            return pd.DataFrame()
+
+        return (
+
+            df.sort_values(
+
+                by="NET_GEX",
+
+                ascending=False
+
+            )
+
+            .head(top_n)
+
+            .reset_index(drop=True)
+
+        )
+
+    def summary(self, df):
+
+        return self.analyze(df)
+
+    # ======================================================
+    # Backward Compatibility
+    # ======================================================
+
+    def detect(self, df):
+
+        return self.analyze(df)
+
+

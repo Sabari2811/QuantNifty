@@ -1,0 +1,306 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\timeframe\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\timeframe\momentum_engine.py
+==================================================
+import pandas as pd
+
+
+class MomentumEngine:
+    """
+    Momentum Engine
+
+    Uses:
+
+        RSI
+        Momentum
+    """
+
+    def analyze(self, candles: pd.DataFrame):
+
+        if candles is None or candles.empty:
+
+            return {
+
+                "momentum": "UNKNOWN",
+
+                "strength": 0,
+
+                "rsi": None
+
+            }
+
+        df = candles.copy()
+
+        close = df["close"]
+
+        # ----------------------------------------
+        # RSI (14)
+        # ----------------------------------------
+
+        delta = close.diff()
+
+        gain = delta.clip(lower=0)
+
+        loss = -delta.clip(upper=0)
+
+        avg_gain = gain.rolling(14).mean()
+
+        avg_loss = loss.rolling(14).mean()
+
+        rs = avg_gain / avg_loss.replace(0, 1e-10)
+
+        rsi = 100 - (100 / (1 + rs))
+
+        latest_rsi = float(rsi.iloc[-1])
+
+        # ----------------------------------------
+        # Momentum
+        # ----------------------------------------
+
+        if latest_rsi >= 60:
+
+            momentum = "BULLISH"
+
+            strength = min(100, int(latest_rsi))
+
+        elif latest_rsi <= 40:
+
+            momentum = "BEARISH"
+
+            strength = min(100, int(100 - latest_rsi))
+
+        else:
+
+            momentum = "NEUTRAL"
+
+            strength = 50
+
+        return {
+
+            "momentum": momentum,
+
+            "strength": strength,
+
+            "rsi": round(latest_rsi, 2)
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\timeframe\timeframe_context.py
+==================================================
+{
+    "ltf_trend": "",
+    "htf_trend": "",
+    "alignment": 0,
+    "confidence": 0,
+    "entry_timeframe": "",
+    "market_phase": ""
+}
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\timeframe\timeframe_engine.py
+==================================================
+from analytics.timeframe.trend_engine import TrendEngine
+from analytics.timeframe.momentum_engine import MomentumEngine
+
+
+class TimeframeEngine:
+    """
+    Master Timeframe Engine
+
+    Combines:
+
+        Trend
+        Momentum
+
+    Returns a single timeframe decision.
+    """
+
+    def __init__(self):
+
+        self.trend = TrendEngine()
+
+        self.momentum = MomentumEngine()
+
+    def analyze(
+
+        self,
+
+        candles
+
+    ):
+
+        trend = self.trend.analyze(candles)
+
+        momentum = self.momentum.analyze(candles)
+
+        bullish = 0
+        bearish = 0
+
+        # ----------------------------------------
+        # Trend
+        # ----------------------------------------
+
+        if trend["trend"] == "BULLISH":
+
+            bullish += 1
+
+        elif trend["trend"] == "BEARISH":
+
+            bearish += 1
+
+        # ----------------------------------------
+        # Momentum
+        # ----------------------------------------
+
+        if momentum["momentum"] == "BULLISH":
+
+            bullish += 1
+
+        elif momentum["momentum"] == "BEARISH":
+
+            bearish += 1
+
+        # ----------------------------------------
+        # Final Decision
+        # ----------------------------------------
+
+        if bullish == 2:
+
+            direction = "BULLISH"
+
+            confidence = 100
+
+        elif bearish == 2:
+
+            direction = "BEARISH"
+
+            confidence = 100
+
+        elif bullish > bearish:
+
+            direction = "BULLISH"
+
+            confidence = 70
+
+        elif bearish > bullish:
+
+            direction = "BEARISH"
+
+            confidence = 70
+
+        else:
+
+            direction = "NEUTRAL"
+
+            confidence = 50
+
+        return {
+
+            "direction": direction,
+
+            "confidence": confidence,
+
+            "trend": trend,
+
+            "momentum": momentum
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\timeframe\trend_engine.py
+==================================================
+import pandas as pd
+
+
+class TrendEngine:
+    """
+    Trend Detection Engine
+
+    Determines trend using EMA alignment.
+    """
+
+    def analyze(self, candles: pd.DataFrame):
+
+        if candles is None or candles.empty:
+
+            return {
+
+                "trend": "UNKNOWN",
+
+                "strength": 0
+
+            }
+
+        df = candles.copy()
+
+        close = df["close"]
+
+        ema20 = close.ewm(span=20).mean().iloc[-1]
+        ema50 = close.ewm(span=50).mean().iloc[-1]
+        ema200 = close.ewm(span=200).mean().iloc[-1]
+
+        price = close.iloc[-1]
+
+        bullish = (
+
+            price > ema20 >
+
+            ema50 >
+
+            ema200
+
+        )
+
+        bearish = (
+
+            price < ema20 <
+
+            ema50 <
+
+            ema200
+
+        )
+
+        if bullish:
+
+            trend = "BULLISH"
+
+            strength = 100
+
+        elif bearish:
+
+            trend = "BEARISH"
+
+            strength = 100
+
+        else:
+
+            trend = "SIDEWAYS"
+
+            strength = 50
+
+        return {
+
+            "trend": trend,
+
+            "strength": strength,
+
+            "price": float(price),
+
+            "ema20": float(ema20),
+
+            "ema50": float(ema50),
+
+            "ema200": float(ema200)
+
+        }
+
+

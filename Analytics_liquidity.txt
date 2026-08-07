@@ -1,0 +1,435 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\liquidity\__init__.py
+==================================================
+"""
+Liquidity Analytics
+Sprint 42
+"""
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\liquidity\absorption_engine.py
+==================================================
+import pandas as pd
+
+
+class AbsorptionEngine:
+    """
+    Institutional Absorption Detector
+
+    Detects possible institutional absorption using
+    OI and Volume.
+
+    BUY Absorption
+        High Volume
+        Low OI
+
+    SELL Absorption
+        High OI
+        Low Volume
+    """
+
+    def analyze(self, greeks_df: pd.DataFrame):
+
+        df = greeks_df.copy()
+
+        avg_ce_oi = df["CE_OI"].mean()
+        avg_pe_oi = df["PE_OI"].mean()
+
+        avg_ce_vol = df["CE_VOLUME"].mean()
+        avg_pe_vol = df["PE_VOLUME"].mean()
+
+        absorption = []
+
+        for _, row in df.iterrows():
+
+            # -----------------------------
+            # CE
+            # -----------------------------
+
+            if (
+                row["CE_VOLUME"] > avg_ce_vol
+                and
+                row["CE_OI"] < avg_ce_oi
+            ):
+
+                absorption.append({
+
+                    "strike": float(row["Strike"]),
+
+                    "side": "CE",
+
+                    "type": "BUY_ABSORPTION"
+
+                })
+
+            elif (
+                row["CE_OI"] > avg_ce_oi
+                and
+                row["CE_VOLUME"] < avg_ce_vol
+            ):
+
+                absorption.append({
+
+                    "strike": float(row["Strike"]),
+
+                    "side": "CE",
+
+                    "type": "SELL_ABSORPTION"
+
+                })
+
+            # -----------------------------
+            # PE
+            # -----------------------------
+
+            if (
+                row["PE_VOLUME"] > avg_pe_vol
+                and
+                row["PE_OI"] < avg_pe_oi
+            ):
+
+                absorption.append({
+
+                    "strike": float(row["Strike"]),
+
+                    "side": "PE",
+
+                    "type": "BUY_ABSORPTION"
+
+                })
+
+            elif (
+                row["PE_OI"] > avg_pe_oi
+                and
+                row["PE_VOLUME"] < avg_pe_vol
+            ):
+
+                absorption.append({
+
+                    "strike": float(row["Strike"]),
+
+                    "side": "PE",
+
+                    "type": "SELL_ABSORPTION"
+
+                })
+
+        return {
+
+            "count": len(absorption),
+
+            "levels": absorption
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\liquidity\liquidity_engine.py
+==================================================
+from analytics.liquidity.liquidity_wall_engine import (
+    LiquidityWallEngine
+)
+
+from analytics.liquidity.liquidity_void_engine import (
+    LiquidityVoidEngine
+)
+
+from analytics.liquidity.absorption_engine import (
+    AbsorptionEngine
+)
+
+from analytics.liquidity.order_imbalance_engine import (
+    OrderImbalanceEngine
+)
+
+
+class LiquidityEngine:
+    """
+    Master Liquidity Engine
+
+    Combines
+
+        â€¢ Liquidity Walls
+        â€¢ Liquidity Voids
+        â€¢ Absorption
+        â€¢ Order Imbalance
+    """
+
+    def __init__(self):
+
+        self.wall = LiquidityWallEngine()
+
+        self.void = LiquidityVoidEngine()
+
+        self.absorption = AbsorptionEngine()
+
+        self.imbalance = OrderImbalanceEngine()
+
+    def analyze(self, greeks_df):
+
+        walls = self.wall.analyze(greeks_df)
+
+        voids = self.void.analyze(greeks_df)
+
+        absorption = self.absorption.analyze(greeks_df)
+
+        imbalance = self.imbalance.analyze(greeks_df)
+
+        return {
+
+            "support": walls["support"],
+
+            "resistance": walls["resistance"],
+
+            "call_wall": walls["call_wall"],
+
+            "put_wall": walls["put_wall"],
+
+            "top_call_walls": walls["top_call_walls"],
+
+            "top_put_walls": walls["top_put_walls"],
+
+            "voids": voids,
+
+            "absorption": absorption,
+
+            "order_imbalance": imbalance
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\liquidity\liquidity_void_engine.py
+==================================================
+import pandas as pd
+
+
+class LiquidityVoidEngine:
+    """
+    Liquidity Void Detector
+
+    Finds strikes having very low liquidity.
+
+    Criteria
+    --------
+    Low OI
+    Low Volume
+
+    These areas generally allow faster price movement.
+    """
+
+    def analyze(
+        self,
+        greeks_df: pd.DataFrame
+    ):
+
+        df = greeks_df.copy()
+
+        # -----------------------------------------
+        # Average Values
+        # -----------------------------------------
+
+        avg_ce_oi = df["CE_OI"].mean()
+        avg_pe_oi = df["PE_OI"].mean()
+
+        avg_ce_vol = df["CE_VOLUME"].mean()
+        avg_pe_vol = df["PE_VOLUME"].mean()
+
+        # -----------------------------------------
+        # Threshold
+        # -----------------------------------------
+
+        oi_threshold = 0.40
+        volume_threshold = 0.40
+
+        voids = []
+
+        for _, row in df.iterrows():
+
+            ce_void = (
+
+                row["CE_OI"] < avg_ce_oi * oi_threshold
+
+                and
+
+                row["CE_VOLUME"] < avg_ce_vol * volume_threshold
+
+            )
+
+            pe_void = (
+
+                row["PE_OI"] < avg_pe_oi * oi_threshold
+
+                and
+
+                row["PE_VOLUME"] < avg_pe_vol * volume_threshold
+
+            )
+
+            if ce_void or pe_void:
+
+                voids.append({
+
+                    "strike": float(row["Strike"]),
+
+                    "ce_void": ce_void,
+
+                    "pe_void": pe_void
+
+                })
+
+        return {
+
+            "void_count": len(voids),
+
+            "void_levels": voids
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\liquidity\liquidity_wall_engine.py
+==================================================
+import pandas as pd
+
+
+class LiquidityWallEngine:
+    """
+    Liquidity Wall Engine
+
+    Detects the strongest Call and Put OI walls.
+
+    Output:
+        - Call Wall
+        - Put Wall
+        - Support
+        - Resistance
+        - Top Call Walls
+        - Top Put Walls
+    """
+
+    def analyze(self, greeks_df: pd.DataFrame):
+
+        df = greeks_df.copy()
+
+        # -----------------------------------------
+        # Top Call Walls
+        # -----------------------------------------
+
+        call_df = (
+            df[["Strike", "CE_OI"]]
+            .sort_values(
+                "CE_OI",
+                ascending=False
+            )
+            .head(3)
+        )
+
+        # -----------------------------------------
+        # Top Put Walls
+        # -----------------------------------------
+
+        put_df = (
+            df[["Strike", "PE_OI"]]
+            .sort_values(
+                "PE_OI",
+                ascending=False
+            )
+            .head(3)
+        )
+
+        call_wall = float(call_df.iloc[0]["Strike"])
+
+        put_wall = float(put_df.iloc[0]["Strike"])
+
+        return {
+
+            "call_wall": call_wall,
+
+            "put_wall": put_wall,
+
+            "support": put_wall,
+
+            "resistance": call_wall,
+
+            "top_call_walls": call_df.to_dict(
+                orient="records"
+            ),
+
+            "top_put_walls": put_df.to_dict(
+                orient="records"
+            )
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\liquidity\order_imbalance_engine.py
+==================================================
+import pandas as pd
+
+
+class OrderImbalanceEngine:
+    """
+    Order Imbalance Engine
+
+    Uses live OI and Volume to estimate buying/selling pressure.
+    """
+
+    def analyze(self, greeks_df: pd.DataFrame):
+
+        call_oi = greeks_df["CE_OI"].sum()
+        put_oi = greeks_df["PE_OI"].sum()
+
+        call_volume = greeks_df["CE_VOLUME"].sum()
+        put_volume = greeks_df["PE_VOLUME"].sum()
+
+        oi_diff = put_oi - call_oi
+        volume_diff = put_volume - call_volume
+
+        if oi_diff > 0 and volume_diff > 0:
+
+            pressure = "BUY"
+
+        elif oi_diff < 0 and volume_diff < 0:
+
+            pressure = "SELL"
+
+        else:
+
+            pressure = "NEUTRAL"
+
+        oi_ratio = (
+            put_oi / call_oi
+            if call_oi > 0 else 0
+        )
+
+        volume_ratio = (
+            put_volume / call_volume
+            if call_volume > 0 else 0
+        )
+
+        return {
+
+            "buy_pressure": pressure == "BUY",
+
+            "sell_pressure": pressure == "SELL",
+
+            "pressure": pressure,
+
+            "oi_ratio": round(oi_ratio, 2),
+
+            "volume_ratio": round(volume_ratio, 2),
+
+            "call_oi": int(call_oi),
+
+            "put_oi": int(put_oi),
+
+            "call_volume": int(call_volume),
+
+            "put_volume": int(put_volume)
+
+        }
+
+

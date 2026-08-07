@@ -1,0 +1,686 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\signal\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\signal\probability_engine.py
+==================================================
+class ProbabilityEngine:
+    """
+    Institutional Probability Engine
+
+    Combines
+
+    - Dealer Position
+    - Market Structure
+    - PCR
+    - IV Skew
+    - Technical Analysis
+
+    Produces
+
+        Bullish Probability
+        Bearish Probability
+        Confidence
+    """
+
+    def __init__(self):
+        pass
+
+    def calculate(
+
+        self,
+
+        dealer,
+
+        market_structure,
+
+        pcr,
+
+        iv_skew,
+
+        technical
+
+    ):
+
+        bullish = 50
+        bearish = 50
+
+        reasons = []
+
+        # ==================================================
+        # Dealer Gamma
+        # ==================================================
+
+        if dealer.get("dealer_gamma") == "LONG":
+
+            bullish += 20
+            bearish -= 20
+
+            reasons.append("Dealers Long Gamma")
+
+        elif dealer.get("dealer_gamma") == "SHORT":
+
+            bullish -= 20
+            bearish += 20
+
+            reasons.append("Dealers Short Gamma")
+
+        # ==================================================
+        # Market Mode
+        # ==================================================
+
+        mode = dealer.get("market_mode", "UNKNOWN")
+
+        if mode == "PINNED":
+
+            bullish += 5
+            bearish -= 5
+
+            reasons.append("Pinned Market")
+
+        elif mode == "TRENDING":
+
+            bullish -= 5
+            bearish += 5
+
+            reasons.append("Trending Market")
+
+        # ==================================================
+        # PCR
+        # ==================================================
+
+        sentiment = pcr.get("sentiment", "NEUTRAL")
+
+        if sentiment == "BULLISH":
+
+            bullish += 10
+            bearish -= 10
+
+            reasons.append("Bullish PCR")
+
+        elif sentiment == "BEARISH":
+
+            bullish -= 10
+            bearish += 10
+
+            reasons.append("Bearish PCR")
+
+        # ==================================================
+        # IV Skew
+        # ==================================================
+
+        bias = iv_skew.get("iv_bias", "UNKNOWN")
+
+        if bias == "CALLS_EXPENSIVE":
+
+            bullish += 5
+            bearish -= 5
+
+            reasons.append("Call IV Expensive")
+
+        elif bias == "PUTS_EXPENSIVE":
+
+            bullish -= 5
+            bearish += 5
+
+            reasons.append("Put IV Expensive")
+
+        # ==================================================
+        # Technical Analysis
+        # ==================================================
+
+        ema = technical.get("ema", {})
+        rsi = technical.get("rsi", {})
+        vwap = technical.get("vwap", {})
+        adx = technical.get("adx", {})
+
+        # EMA Trend
+
+        trend = ema.get("trend", "UNKNOWN")
+
+        if trend in ("BULLISH", "STRONG_BULLISH"):
+
+            bullish += 10
+            bearish -= 10
+
+            reasons.append("EMA Bullish")
+
+        elif trend in ("BEARISH", "STRONG_BEARISH"):
+
+            bullish -= 10
+            bearish += 10
+
+            reasons.append("EMA Bearish")
+
+        # RSI
+
+        state = rsi.get("state", "UNKNOWN")
+
+        if state == "BULLISH":
+
+            bullish += 5
+            bearish -= 5
+
+            reasons.append("RSI Bullish")
+
+        elif state == "BEARISH":
+
+            bullish -= 5
+            bearish += 5
+
+            reasons.append("RSI Bearish")
+
+        elif state == "OVERBOUGHT":
+
+            bearish += 5
+
+            reasons.append("RSI Overbought")
+
+        elif state == "OVERSOLD":
+
+            bullish += 5
+
+            reasons.append("RSI Oversold")
+
+        # VWAP
+
+        position = vwap.get("position", "UNKNOWN")
+
+        if position == "ABOVE":
+
+            bullish += 5
+            bearish -= 5
+
+            reasons.append("Above VWAP")
+
+        elif position == "BELOW":
+
+            bullish -= 5
+            bearish += 5
+
+            reasons.append("Below VWAP")
+
+        # ADX
+
+        strength = adx.get("strength", "UNKNOWN")
+
+        if strength in ("STRONG", "VERY_STRONG"):
+
+            bullish += 5
+
+            reasons.append("Strong Trend")
+
+        # ==================================================
+        # Clamp
+        # ==================================================
+
+        bullish = max(0, min(100, bullish))
+        bearish = max(0, min(100, bearish))
+
+        confidence = abs(bullish - bearish)
+
+        # ==================================================
+        # Result
+        # ==================================================
+
+        return {
+
+            "bullish_probability": bullish,
+
+            "bearish_probability": bearish,
+
+            "confidence": confidence,
+
+            "reasons": reasons
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\signal\risk_engine.py
+==================================================
+class RiskEngine:
+    """
+    QuantNifty Risk Engine
+    """
+
+    # ======================================================
+    # Standard API
+    # ======================================================
+
+    def generate(
+
+        self,
+
+        trade_plan,
+
+        capital=500000,
+
+        risk_percent=1
+
+    ):
+
+        risk_amount = capital * risk_percent / 100
+
+        signal = trade_plan["signal"]
+
+        if signal == "WAIT":
+
+            return {
+
+                "capital": capital,
+
+                "risk_percent": risk_percent,
+
+                "risk_amount": risk_amount,
+
+                "points_risk": 0,
+
+                "points_reward": 0,
+
+                "risk_reward": "-",
+
+                "suggested_lots": 0
+
+            }
+
+        entry = trade_plan["entry"]
+
+        stop_loss = trade_plan["stop_loss"]
+
+        target = trade_plan["target2"]
+
+        points_risk = abs(entry - stop_loss)
+
+        points_reward = abs(target - entry)
+
+        rr = (
+
+            round(points_reward / points_risk, 2)
+
+            if points_risk
+
+            else 0
+
+        )
+
+        lot_size = 65
+
+        loss_per_lot = points_risk * lot_size
+
+        lots = (
+
+            max(
+
+                1,
+
+                int(risk_amount / loss_per_lot)
+
+            )
+
+            if loss_per_lot
+
+            else 0
+
+        )
+
+        return {
+
+            "capital": capital,
+
+            "risk_percent": risk_percent,
+
+            "risk_amount": risk_amount,
+
+            "points_risk": round(points_risk, 2),
+
+            "points_reward": round(points_reward, 2),
+
+            "risk_reward": f"1 : {rr}",
+
+            "suggested_lots": lots
+
+        }
+
+    # ======================================================
+    # Backward Compatibility
+    # ======================================================
+
+    def calculate(
+
+        self,
+
+        trade_plan,
+
+        capital=500000,
+
+        risk_percent=1
+
+    ):
+
+        return self.generate(
+
+            trade_plan,
+
+            capital,
+
+            risk_percent
+
+        )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\signal\signal_engine.py
+==================================================
+class SignalEngine:
+    """
+    QuantNifty Signal Engine
+    """
+
+    def generate(
+        self,
+        dealer,
+        probability,
+        spot
+    ):
+
+        bullish = probability["bullish_probability"]
+        bearish = probability["bearish_probability"]
+        confidence = probability["confidence"]
+
+        signal = "WAIT"
+        reasons = []
+
+        # ===========================================
+        # BUY CALL
+        # ===========================================
+
+        if (
+            dealer["dealer_gamma"] == "LONG"
+            and bullish >= 70
+        ):
+
+            signal = "BUY CALL"
+
+            reasons.append("Dealers Long Gamma")
+            reasons.append("Bullish Probability High")
+
+        # ===========================================
+        # BUY PUT
+        # ===========================================
+
+        elif (
+            dealer["dealer_gamma"] == "SHORT"
+            and bearish >= 70
+        ):
+
+            signal = "BUY PUT"
+
+            reasons.append("Dealers Short Gamma")
+            reasons.append("Bearish Probability High")
+
+        else:
+
+            signal = "WAIT"
+
+            reasons.append("No High Probability Setup")
+
+        return {
+
+            "signal": signal,
+
+            "confidence": confidence,
+
+            "spot": spot,
+
+            "reasons": reasons
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\signal\trade_plan_engine.py
+==================================================
+class TradePlanEngine:
+    """
+    QuantNifty Trade Plan Engine V4
+
+    Generates a complete trade plan using
+
+    â€¢ Signal
+    â€¢ Dealer Analytics
+    â€¢ ATR
+    â€¢ Smart Strike
+    """
+
+    def generate(
+
+        self,
+
+        signal,
+
+        dealer,
+
+        spot,
+
+        atr,
+
+        smart_strike
+
+    ):
+
+        atr_value = atr.get("atr", 50)
+
+        trade = {
+
+            "signal": signal["signal"],
+
+            "recommended_strike": smart_strike["strike"],
+
+            "option_type": smart_strike["option_type"],
+
+            "strike_score": smart_strike["score"],
+
+            "delta": smart_strike["delta"],
+
+            "iv": smart_strike["iv"],
+
+            "gex": smart_strike["gex"],
+
+            "entry": None,
+
+            "stop_loss": None,
+
+            "target1": None,
+
+            "target2": None,
+
+            "risk_reward": None,
+
+            "atr": atr_value,
+
+            "volatility": atr["volatility"],
+
+            "reasons": []
+
+        }
+
+        signal_name = signal["signal"]
+
+        # =====================================================
+        # BUY CALL
+        # =====================================================
+
+        if signal_name == "BUY CALL":
+
+            if dealer["gamma_flip"] is not None:
+
+                entry = dealer["gamma_flip"] + 5
+
+                trade["reasons"].append(
+                    "Entry above Gamma Flip"
+                )
+
+            else:
+
+                entry = spot + 5
+
+                trade["reasons"].append(
+                    "Entry above Spot"
+                )
+
+            trade["entry"] = round(entry, 2)
+
+            trade["stop_loss"] = round(
+                entry - atr_value,
+                2
+            )
+
+            trade["target1"] = round(
+                entry + (1.5 * atr_value),
+                2
+            )
+
+            trade["target2"] = round(
+                entry + (3 * atr_value),
+                2
+            )
+
+        # =====================================================
+        # BUY PUT
+        # =====================================================
+
+        elif signal_name == "BUY PUT":
+
+            if dealer["gamma_flip"] is not None:
+
+                entry = dealer["gamma_flip"] - 5
+
+                trade["reasons"].append(
+                    "Entry below Gamma Flip"
+                )
+
+            else:
+
+                entry = spot - 5
+
+                trade["reasons"].append(
+                    "Entry below Spot"
+                )
+
+            trade["entry"] = round(entry, 2)
+
+            trade["stop_loss"] = round(
+                entry + atr_value,
+                2
+            )
+
+            trade["target1"] = round(
+                entry - (1.5 * atr_value),
+                2
+            )
+
+            trade["target2"] = round(
+                entry - (3 * atr_value),
+                2
+            )
+
+        # =====================================================
+        # WAIT
+        # =====================================================
+
+        else:
+
+            trade["recommended_strike"] = "-"
+
+            trade["option_type"] = "-"
+
+            trade["strike_score"] = 0
+
+            trade["entry"] = "-"
+
+            trade["stop_loss"] = "-"
+
+            trade["target1"] = "-"
+
+            trade["target2"] = "-"
+
+            trade["risk_reward"] = "-"
+
+            trade["reasons"].append(
+                "No trade available"
+            )
+
+            return trade
+
+        # =====================================================
+        # Risk Reward
+        # =====================================================
+
+        risk = abs(
+
+            trade["entry"]
+
+            -
+
+            trade["stop_loss"]
+
+        )
+
+        reward = abs(
+
+            trade["target2"]
+
+            -
+
+            trade["entry"]
+
+        )
+
+        rr = round(
+
+            reward / risk,
+
+            2
+
+        ) if risk else 0
+
+        trade["risk_reward"] = f"1 : {rr}"
+
+        # =====================================================
+        # Smart Strike Reasons
+        # =====================================================
+
+        trade["reasons"].extend(
+
+            smart_strike["reasons"]
+
+        )
+
+        # =====================================================
+        # Dealer Context
+        # =====================================================
+
+        trade["reasons"].append(
+
+            f"Dealer : {dealer['dealer_gamma']}"
+
+        )
+
+        trade["reasons"].append(
+
+            f"Market : {dealer['market_mode']}"
+
+        )
+
+        trade["reasons"].append(
+
+            f"ATR : {atr['volatility']}"
+
+        )
+
+        return trade
+
+

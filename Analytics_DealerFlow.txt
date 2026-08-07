@@ -1,0 +1,471 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\dealer_flow\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\dealer_flow\charm_engine.py
+==================================================
+import pandas as pd
+
+
+class CharmEngine:
+    """
+    Dealer Charm Exposure
+
+    Approximation:
+
+        CHARM = Theta / Spot
+
+    Exposure:
+
+        CHARM Ã— OI Ã— Lot Size
+    """
+
+    def calculate(
+        self,
+        greeks_df: pd.DataFrame,
+        spot: float
+    ):
+
+        df = greeks_df.copy()
+
+        if "LOT_SIZE" in df.columns:
+            lot = df["LOT_SIZE"]
+        else:
+            lot = 65
+
+        # ---------------------------------------
+        # CE
+        # ---------------------------------------
+
+        df["CE_CHARM"] = (
+
+            df["CE_THETA"]
+
+            / spot
+
+            * df["CE_OI"]
+
+            * lot
+
+        )
+
+        # ---------------------------------------
+        # PE
+        # ---------------------------------------
+
+        df["PE_CHARM"] = (
+
+            df["PE_THETA"]
+
+            / spot
+
+            * df["PE_OI"]
+
+            * lot
+
+        )
+
+        # ---------------------------------------
+        # Net
+        # ---------------------------------------
+
+        df["NET_CHARM"] = (
+
+            df["CE_CHARM"]
+
+            +
+
+            df["PE_CHARM"]
+
+        )
+
+        summary = {
+
+            "total_charm": float(
+                df["NET_CHARM"].sum()
+            ),
+
+            "positive_charm": float(
+                df.loc[
+                    df["NET_CHARM"] > 0,
+                    "NET_CHARM"
+                ].sum()
+            ),
+
+            "negative_charm": float(
+                df.loc[
+                    df["NET_CHARM"] < 0,
+                    "NET_CHARM"
+                ].sum()
+            )
+
+        }
+
+        return df, summary
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\dealer_flow\dealer_flow_engine.py
+==================================================
+class DealerFlowEngine:
+    """
+    Dealer Flow Analytics
+
+    Combines
+
+        Delta Exposure
+        Vanna Exposure
+        Charm Exposure
+
+    Returns dealer positioning.
+    """
+
+    def analyze(
+
+        self,
+
+        delta_summary,
+
+        vanna_summary,
+
+        charm_summary
+
+    ):
+
+        total_dex = delta_summary["total_dex"]
+
+        total_vanna = vanna_summary["total_vanna"]
+
+        total_charm = charm_summary["total_charm"]
+
+        # ----------------------------------------
+        # Dealer Direction
+        # ----------------------------------------
+
+        dealer_delta = (
+
+            "LONG"
+
+            if total_dex >= 0
+
+            else "SHORT"
+
+        )
+
+        dealer_vanna = (
+
+            "POSITIVE"
+
+            if total_vanna >= 0
+
+            else "NEGATIVE"
+
+        )
+
+        dealer_charm = (
+
+            "POSITIVE"
+
+            if total_charm >= 0
+
+            else "NEGATIVE"
+
+        )
+
+        # ----------------------------------------
+        # Dealer Pressure
+        # ----------------------------------------
+
+        score = 0
+
+        if total_dex > 0:
+            score += 1
+        else:
+            score -= 1
+
+        if total_vanna > 0:
+            score += 1
+        else:
+            score -= 1
+
+        if total_charm > 0:
+            score += 1
+        else:
+            score -= 1
+
+        if score >= 2:
+
+            pressure = "BUY"
+
+            hedge = "BUY DIPS"
+
+        elif score <= -2:
+
+            pressure = "SELL"
+
+            hedge = "SELL RALLIES"
+
+        else:
+
+            pressure = "NEUTRAL"
+
+            hedge = "DELTA HEDGE"
+
+        # ----------------------------------------
+        # Flip Probability
+        # ----------------------------------------
+
+        flip_probability = min(
+
+            100,
+
+            int(abs(score) * 33)
+
+        )
+
+        return {
+
+            "dealer_delta": dealer_delta,
+
+            "dealer_vanna": dealer_vanna,
+
+            "dealer_charm": dealer_charm,
+
+            "dealer_pressure": pressure,
+
+            "dealer_hedging": hedge,
+
+            "flip_probability": flip_probability,
+
+            "total_dex": total_dex,
+
+            "total_vanna": total_vanna,
+
+            "total_charm": total_charm
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\dealer_flow\delta_exposure_engine.py
+==================================================
+import pandas as pd
+
+
+class DeltaExposureEngine:
+    """
+    Dealer Delta Exposure
+
+    DEX = Delta Ã— OI Ã— Lot Size
+
+    Adds
+
+        CE_DEX
+        PE_DEX
+        NET_DEX
+
+    Returns summary statistics.
+    """
+
+    def calculate(self, greeks_df: pd.DataFrame):
+
+        df = greeks_df.copy()
+
+        # ---------------------------------------------
+        # Lot Size
+        # ---------------------------------------------
+
+        if "LOT_SIZE" in df.columns:
+
+            lot = df["LOT_SIZE"]
+
+        else:
+
+            lot = 65
+
+        # ---------------------------------------------
+        # CE Exposure
+        # ---------------------------------------------
+
+        df["CE_DEX"] = (
+
+            df["CE_DELTA"]
+
+            *
+
+            df["CE_OI"]
+
+            *
+
+            lot
+
+        )
+
+        # ---------------------------------------------
+        # PE Exposure
+        # ---------------------------------------------
+
+        df["PE_DEX"] = (
+
+            df["PE_DELTA"]
+
+            *
+
+            df["PE_OI"]
+
+            *
+
+            lot
+
+        )
+
+        # ---------------------------------------------
+        # Net Exposure
+        # ---------------------------------------------
+
+        df["NET_DEX"] = (
+
+            df["CE_DEX"]
+
+            +
+
+            df["PE_DEX"]
+
+        )
+
+        summary = {
+
+            "total_dex": float(df["NET_DEX"].sum()),
+
+            "positive_dex": float(
+
+                df.loc[
+
+                    df["NET_DEX"] > 0,
+
+                    "NET_DEX"
+
+                ].sum()
+
+            ),
+
+            "negative_dex": float(
+
+                df.loc[
+
+                    df["NET_DEX"] < 0,
+
+                    "NET_DEX"
+
+                ].sum()
+
+            )
+
+        }
+
+        return df, summary
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\dealer_flow\vanna_engine.py
+==================================================
+import pandas as pd
+
+
+class VannaEngine:
+    """
+    Dealer Vanna Exposure
+
+    Approximation:
+
+        VANNA = VEGA / SPOT
+
+    Exposure:
+
+        VANNA Ã— OI Ã— LOT_SIZE
+    """
+
+    def calculate(
+        self,
+        greeks_df: pd.DataFrame,
+        spot: float
+    ):
+
+        df = greeks_df.copy()
+
+        if "LOT_SIZE" in df.columns:
+            lot = df["LOT_SIZE"]
+        else:
+            lot = 65
+
+        # ---------------------------------
+        # CE
+        # ---------------------------------
+
+        df["CE_VANNA"] = (
+
+            df["CE_VEGA"]
+
+            / spot
+
+            * df["CE_OI"]
+
+            * lot
+
+        )
+
+        # ---------------------------------
+        # PE
+        # ---------------------------------
+
+        df["PE_VANNA"] = (
+
+            df["PE_VEGA"]
+
+            / spot
+
+            * df["PE_OI"]
+
+            * lot
+
+        )
+
+        # ---------------------------------
+        # Net
+        # ---------------------------------
+
+        df["NET_VANNA"] = (
+
+            df["CE_VANNA"]
+
+            +
+
+            df["PE_VANNA"]
+
+        )
+
+        summary = {
+
+            "total_vanna": float(df["NET_VANNA"].sum()),
+
+            "positive_vanna": float(
+                df.loc[
+                    df["NET_VANNA"] > 0,
+                    "NET_VANNA"
+                ].sum()
+            ),
+
+            "negative_vanna": float(
+                df.loc[
+                    df["NET_VANNA"] < 0,
+                    "NET_VANNA"
+                ].sum()
+            )
+
+        }
+
+        return df, summary
+
+

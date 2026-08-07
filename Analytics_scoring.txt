@@ -1,0 +1,816 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\scoring\__init__.py
+==================================================
+from .score_engine import ScoreEngine
+from .dealer_score import DealerScore
+from .gamma_score import GammaScore
+from .liquidity_score import LiquidityScore
+from .structure_score import StructureScore
+from .volatility_score import VolatilityScore
+from .institutional_score import InstitutionalScore
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\scoring\dealer_score.py
+==================================================
+class DealerScore:
+    """
+    Dealer Score
+
+    Maximum Score : 20
+
+    Direction Aware
+    """
+
+    MAX_SCORE = 20
+
+    def calculate(
+
+        self,
+
+        dealer,
+
+        dealer_flow,
+
+        signal
+
+    ):
+
+        score = 0
+
+        reasons = []
+
+        trade = signal.get("signal", "NO TRADE")
+
+        # ====================================================
+        # BUY CALL
+        # ====================================================
+
+        if trade == "BUY CALL":
+
+            if dealer["dealer_gamma"] == "LONG":
+                score += 6
+                reasons.append("Dealers Long Gamma")
+
+            if dealer["market_mode"] == "TRENDING":
+                score += 4
+                reasons.append("Trending Market")
+
+            if dealer_flow["dealer_delta"] == "LONG":
+                score += 5
+                reasons.append("Positive Delta")
+
+            if dealer_flow["dealer_vanna"] == "POSITIVE":
+                score += 5
+                reasons.append("Positive Vanna")
+
+        # ====================================================
+        # BUY PUT
+        # ====================================================
+
+        elif trade == "BUY PUT":
+
+            if dealer["dealer_gamma"] == "SHORT":
+                score += 6
+                reasons.append("Dealers Short Gamma")
+
+            if dealer["market_mode"] == "TRENDING":
+                score += 4
+                reasons.append("Trending Market")
+
+            if dealer_flow["dealer_delta"] == "LONG":
+                score += 5
+                reasons.append("Dealers Hedging")
+
+            if dealer_flow["dealer_charm"] == "NEGATIVE":
+                score += 5
+                reasons.append("Negative Charm")
+
+        # ====================================================
+        # NO TRADE
+        # ====================================================
+
+        else:
+
+            if dealer["dealer_gamma"] == "LONG":
+                score += 3
+
+            if dealer["market_mode"] == "TRENDING":
+                score += 2
+
+        score = min(score, self.MAX_SCORE)
+
+        return {
+
+            "score": score,
+
+            "max_score": self.MAX_SCORE,
+
+            "reasons": reasons
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\scoring\gamma_score.py
+==================================================
+class GammaScore:
+    """
+    Gamma Score
+
+    Maximum Score : 15
+
+    Direction Aware
+    """
+
+    MAX_SCORE = 15
+
+    def calculate(
+
+        self,
+
+        dealer,
+
+        signal
+
+    ):
+
+        score = 0
+
+        reasons = []
+
+        trade = signal.get("signal", "NO TRADE")
+
+        # ======================================
+        # BUY CALL
+        # ======================================
+
+        if trade == "BUY CALL":
+
+            if dealer["dealer_gamma"] == "LONG":
+
+                score += 8
+                reasons.append("Dealers Long Gamma")
+
+            if dealer["gamma_flip"] is not None:
+
+                score += 4
+                reasons.append("Gamma Flip")
+
+            if dealer["total_gex"] > 0:
+
+                score += 3
+                reasons.append("Positive GEX")
+
+        # ======================================
+        # BUY PUT
+        # ======================================
+
+        elif trade == "BUY PUT":
+
+            if dealer["dealer_gamma"] == "SHORT":
+
+                score += 8
+                reasons.append("Dealers Short Gamma")
+
+            if dealer["gamma_flip"] is not None:
+
+                score += 4
+                reasons.append("Gamma Flip")
+
+            if dealer["total_gex"] < 0:
+
+                score += 3
+                reasons.append("Negative GEX")
+
+        # ======================================
+        # Default
+        # ======================================
+
+        else:
+
+            if dealer["gamma_flip"] is not None:
+
+                score += 3
+
+        score = min(score, self.MAX_SCORE)
+
+        return {
+
+            "score": score,
+
+            "max_score": self.MAX_SCORE,
+
+            "reasons": reasons
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\scoring\institutional_score.py
+==================================================
+class InstitutionalScore:
+    """
+    Combines all scoring engines.
+
+    Maximum Score : 100
+    """
+
+    MAX_SCORE = 100
+
+    def calculate(
+
+        self,
+
+        dealer_score,
+
+        liquidity_score,
+
+        gamma_score,
+
+        structure_score,
+
+        volatility_score
+
+    ):
+
+        total = (
+
+            dealer_score["score"]
+
+            + liquidity_score["score"]
+
+            + gamma_score["score"]
+
+            + structure_score["score"]
+
+            + volatility_score["score"]
+
+        )
+
+        # ==========================================
+        # Grade
+        # ==========================================
+
+        if total >= 90:
+
+            grade = "A+"
+            strength = "VERY STRONG"
+            signal = "BUY CALL"
+
+        elif total >= 80:
+
+            grade = "A"
+            strength = "STRONG"
+            signal = "BUY CALL"
+
+        elif total >= 70:
+
+            grade = "B+"
+            strength = "GOOD"
+            signal = "BUY"
+
+        elif total >= 60:
+
+            grade = "B"
+            strength = "MODERATE"
+            signal = "WATCH"
+
+        elif total >= 50:
+
+            grade = "C"
+            strength = "WEAK"
+            signal = "WAIT"
+
+        else:
+
+            grade = "D"
+            strength = "AVOID"
+            signal = "NO TRADE"
+
+        confidence = min(100, total)
+
+        reasons = (
+
+            dealer_score["reasons"]
+
+            + liquidity_score["reasons"]
+
+            + gamma_score["reasons"]
+
+            + structure_score["reasons"]
+
+            + volatility_score["reasons"]
+
+        )
+
+        return {
+
+            "score": total,
+
+            "max_score": self.MAX_SCORE,
+
+            "grade": grade,
+
+            "strength": strength,
+
+            "signal": signal,
+
+            "confidence": confidence,
+
+            "reasons": reasons
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\scoring\liquidity_score.py
+==================================================
+class LiquidityScore:
+    """
+    Liquidity Score
+
+    Maximum Score : 15
+
+    Direction Aware
+    """
+
+    MAX_SCORE = 15
+
+    def calculate(
+
+        self,
+
+        liquidity,
+
+        signal,
+
+        spot
+
+    ):
+
+        score = 0
+
+        reasons = []
+
+        trade = signal.get("signal", "NO TRADE")
+
+        support = liquidity["support"]
+
+        resistance = liquidity["resistance"]
+
+        absorption = liquidity["absorption"]
+
+        # =====================================================
+        # BUY CALL
+        # =====================================================
+
+        if trade == "BUY CALL":
+
+            if support is not None and spot > support:
+
+                score += 5
+                reasons.append("Above Support")
+
+            if absorption["count"] > 0:
+
+                score += 5
+                reasons.append("Institutional Absorption")
+
+            if liquidity["order_imbalance"]["buy_pressure"]:
+
+                score += 5
+                reasons.append("Buy Pressure")
+
+        # =====================================================
+        # BUY PUT
+        # =====================================================
+
+        elif trade == "BUY PUT":
+
+            if resistance is not None and spot < resistance:
+
+                score += 5
+                reasons.append("Below Resistance")
+
+            if absorption["count"] > 0:
+
+                score += 5
+                reasons.append("Institutional Absorption")
+
+            if liquidity["order_imbalance"]["sell_pressure"]:
+
+                score += 5
+                reasons.append("Sell Pressure")
+
+        # =====================================================
+        # Default
+        # =====================================================
+
+        else:
+
+            if absorption["count"] > 0:
+
+                score += 3
+
+        score = min(score, self.MAX_SCORE)
+
+        return {
+
+            "score": score,
+
+            "max_score": self.MAX_SCORE,
+
+            "reasons": reasons
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\scoring\score_engine.py
+==================================================
+from analytics.scoring.dealer_score import DealerScore
+from analytics.scoring.liquidity_score import LiquidityScore
+from analytics.scoring.gamma_score import GammaScore
+from analytics.scoring.structure_score import StructureScore
+from analytics.scoring.volatility_score import VolatilityScore
+from analytics.scoring.institutional_score import InstitutionalScore
+
+
+class ScoreEngine:
+    """
+    Master Institutional Scoring Engine
+    """
+
+    def __init__(self):
+
+        self.dealer = DealerScore()
+        self.liquidity = LiquidityScore()
+        self.gamma = GammaScore()
+        self.structure = StructureScore()
+        self.volatility = VolatilityScore()
+        self.institutional = InstitutionalScore()
+
+    def calculate(
+
+        self,
+
+        dealer,
+
+        dealer_flow,
+
+        liquidity,
+
+        market_structure,
+
+        pcr,
+
+        expected_move,
+
+        iv_skew,
+
+        iv_smile,
+
+        atr,
+
+        spot,
+
+        signal=None
+
+    ):
+
+        # -----------------------------------------
+        # Backward Compatibility
+        # -----------------------------------------
+
+        if signal is None:
+
+            signal = {
+
+                "signal": "NO TRADE"
+
+            }
+
+        # -----------------------------------------
+        # Dealer
+        # -----------------------------------------
+
+        dealer_score = self.dealer.calculate(
+
+            dealer,
+
+            dealer_flow,
+
+            signal
+
+        )
+
+        # -----------------------------------------
+        # Liquidity
+        # -----------------------------------------
+
+        liquidity_score = self.liquidity.calculate(
+
+            liquidity,
+
+            signal,
+
+            spot
+
+        )
+
+        # -----------------------------------------
+        # Gamma
+        # -----------------------------------------
+
+        gamma_score = self.gamma.calculate(
+
+            dealer,
+
+            signal
+
+        )
+
+        # -----------------------------------------
+        # Structure
+        # -----------------------------------------
+
+        structure_score = self.structure.calculate(
+
+            market_structure,
+
+            pcr,
+
+            expected_move,
+
+            signal,
+
+            spot
+
+        )
+
+        # -----------------------------------------
+        # Volatility
+        # -----------------------------------------
+
+        volatility_score = self.volatility.calculate(
+
+            dealer,
+
+            iv_skew,
+
+            iv_smile,
+
+            atr,
+
+            signal
+
+        )
+
+        # -----------------------------------------
+        # Institutional Score
+        # -----------------------------------------
+
+        institutional = self.institutional.calculate(
+
+            dealer_score,
+
+            liquidity_score,
+
+            gamma_score,
+
+            structure_score,
+
+            volatility_score
+
+        )
+
+        return {
+
+            "institutional": institutional,
+
+            "dealer_score": dealer_score,
+
+            "liquidity_score": liquidity_score,
+
+            "gamma_score": gamma_score,
+
+            "structure_score": structure_score,
+
+            "volatility_score": volatility_score
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\scoring\structure_score.py
+==================================================
+class StructureScore:
+    """
+    Structure Score
+
+    Maximum Score : 10
+
+    Direction Aware
+    """
+
+    MAX_SCORE = 10
+
+    def calculate(
+
+        self,
+
+        market_structure,
+
+        pcr,
+
+        expected_move,
+
+        signal,
+
+        spot
+
+    ):
+
+        score = 0
+
+        reasons = []
+
+        trade = signal.get("signal", "NO TRADE")
+
+        # ==================================================
+        # BUY CALL
+        # ==================================================
+
+        if trade == "BUY CALL":
+
+            if market_structure["bias"] == "BULLISH":
+
+                score += 4
+                reasons.append("Bullish Structure")
+
+            if pcr["oi_pcr"] > 1:
+
+                score += 3
+                reasons.append("Bullish PCR")
+
+            if spot < expected_move["upper"]:
+
+                score += 3
+                reasons.append("Inside Expected Move")
+
+        # ==================================================
+        # BUY PUT
+        # ==================================================
+
+        elif trade == "BUY PUT":
+
+            if market_structure["bias"] == "BEARISH":
+
+                score += 4
+                reasons.append("Bearish Structure")
+
+            if pcr["oi_pcr"] < 1:
+
+                score += 3
+                reasons.append("Bearish PCR")
+
+            if spot > expected_move["lower"]:
+
+                score += 3
+                reasons.append("Inside Expected Move")
+
+        # ==================================================
+        # Default
+        # ==================================================
+
+        else:
+
+            if market_structure["structure"] == "RANGING":
+
+                score += 2
+
+        score = min(score, self.MAX_SCORE)
+
+        return {
+
+            "score": score,
+
+            "max_score": self.MAX_SCORE,
+
+            "reasons": reasons
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\scoring\volatility_score.py
+==================================================
+class VolatilityScore:
+    """
+    Volatility Score
+
+    Maximum Score : 10
+
+    Direction Aware
+    """
+
+    MAX_SCORE = 10
+
+    def calculate(
+
+        self,
+
+        dealer,
+
+        iv_skew,
+
+        iv_smile,
+
+        atr,
+
+        signal
+
+    ):
+
+        score = 0
+
+        reasons = []
+
+        trade = signal.get("signal", "NO TRADE")
+
+        # ==========================================
+        # BUY CALL
+        # ==========================================
+
+        if trade == "BUY CALL":
+
+            if dealer["expected_volatility"] == "LOW":
+
+                score += 3
+                reasons.append("Low Expected Volatility")
+
+            elif dealer["expected_volatility"] == "NORMAL":
+
+                score += 2
+                reasons.append("Normal Expected Volatility")
+
+            if iv_skew["market_sentiment"] == "BULLISH":
+
+                score += 4
+                reasons.append("Bullish IV Skew")
+
+            if atr["volatility"] == "NORMAL":
+
+                score += 3
+                reasons.append("Normal ATR")
+
+        # ==========================================
+        # BUY PUT
+        # ==========================================
+
+        elif trade == "BUY PUT":
+
+            if dealer["expected_volatility"] == "HIGH":
+
+                score += 3
+                reasons.append("High Expected Volatility")
+
+            elif dealer["expected_volatility"] == "NORMAL":
+
+                score += 2
+                reasons.append("Normal Expected Volatility")
+
+            if iv_skew["market_sentiment"] == "BEARISH":
+
+                score += 4
+                reasons.append("Bearish IV Skew")
+
+            if atr["volatility"] == "NORMAL":
+
+                score += 3
+                reasons.append("Normal ATR")
+
+        # ==========================================
+        # Default
+        # ==========================================
+
+        else:
+
+            if atr["volatility"] == "NORMAL":
+
+                score += 2
+
+        score = min(score, self.MAX_SCORE)
+
+        return {
+
+            "score": score,
+
+            "max_score": self.MAX_SCORE,
+
+            "reasons": reasons
+
+        }
+
+

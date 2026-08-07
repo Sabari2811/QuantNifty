@@ -1,0 +1,104 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\prediction_engine\prediction_engine.py
+==================================================
+class PredictionEngine:
+    """
+    Predicts the probability of
+    a significant move occurring soon.
+
+    Output:
+        VERY_LOW
+        LOW
+        MEDIUM
+        HIGH
+        VERY_HIGH
+    """
+
+    def __init__(self):
+        pass
+
+    def predict(
+        self,
+        analytics
+    ):
+
+        score = 0
+
+        reasons = []
+
+        dealer = analytics["dealer"]
+
+        probability = analytics["probability"]
+
+        regime = analytics["market_regime"]
+
+        institutional = analytics["institutional_score"]["institutional"]
+
+        if dealer.get("dealer_gamma") == "SHORT":
+
+            score += 25
+            reasons.append("Short Gamma")
+
+        if regime.get("regime") in (
+
+            "TRENDING_UP",
+            "TRENDING_DOWN"
+
+        ):
+
+            score += 20
+            reasons.append("Trending Regime")
+
+        if probability.get(
+
+            "confidence",
+
+            0
+
+        ) >= 70:
+
+            score += 20
+            reasons.append("High Probability")
+
+        if institutional.get(
+
+            "score",
+
+            0
+
+        ) >= 70:
+
+            score += 35
+            reasons.append("Institutional Alignment")
+
+        if score >= 80:
+
+            level = "VERY_HIGH"
+
+        elif score >= 60:
+
+            level = "HIGH"
+
+        elif score >= 40:
+
+            level = "MEDIUM"
+
+        elif score >= 20:
+
+            level = "LOW"
+
+        else:
+
+            level = "VERY_LOW"
+
+        return {
+
+            "prediction_score": score,
+
+            "move_probability": level,
+
+            "reasons": reasons
+
+        }
+
+

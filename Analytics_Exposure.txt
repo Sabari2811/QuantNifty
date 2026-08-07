@@ -1,0 +1,198 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\base_exposure.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\charm_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\charm_exposure.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\delta_exposure.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\delta_exposure_engine.py
+==================================================
+import pandas as pd
+
+
+class DeltaExposureEngine:
+    """
+    Delta Exposure (DEX)
+
+    DEX = Delta Ã— OI Ã— Spot Ã— Lot Size
+
+    Positive DEX
+        Dealers long delta
+
+    Negative DEX
+        Dealers short delta
+    """
+
+    def __init__(self, lot_size=75):
+        self.lot_size = lot_size
+
+    def calculate(self, df: pd.DataFrame, spot_price: float):
+
+        df = df.copy()
+
+        # -----------------------
+        # Call DEX
+        # -----------------------
+
+        df["CALL_DEX"] = (
+            df["CE_DELTA"]
+            * df["CE_OI"]
+            * spot_price
+            * self.lot_size
+        )
+
+        # -----------------------
+        # Put DEX
+        # -----------------------
+
+        df["PUT_DEX"] = (
+            df["PE_DELTA"]
+            * df["PE_OI"]
+            * spot_price
+            * self.lot_size
+        )
+
+        # -----------------------
+        # Net
+        # -----------------------
+
+        df["NET_DEX"] = (
+            df["CALL_DEX"]
+            +
+            df["PUT_DEX"]
+        )
+
+        return df
+
+    def total_dex(self, df):
+
+        return df["NET_DEX"].sum()
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\exposure_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\exposure_utils.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\gamma_exposure.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\gamma_exposure_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\vanna_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\vanna_exposure.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure\vanna_exposure_engine.py
+==================================================
+import pandas as pd
+
+
+class VannaExposureEngine:
+
+    """
+    Vanna Exposure Engine
+
+    Calculates:
+
+        Vanna Exposure (VEX)
+
+    Formula
+
+        VEX = Vanna Ã— OI Ã— Lot Size
+
+    """
+
+    def __init__(self, lot_size=75):
+
+        self.lot_size = lot_size
+
+    def calculate(self, df: pd.DataFrame):
+
+        data = df.copy()
+
+        # ------------------------
+        # Estimate Vanna
+        #
+        # Approximation
+        #
+        # Vanna â‰ˆ Gamma Ã— Vega
+        # ------------------------
+
+        data["CE_VANNA"] = (
+            data["CE_GAMMA"]
+            * data["CE_VEGA"]
+        )
+
+        data["PE_VANNA"] = (
+            data["PE_GAMMA"]
+            * data["PE_VEGA"]
+        )
+
+        # ------------------------
+
+        data["CE_VEX"] = (
+            data["CE_VANNA"]
+            * data["CE_OI"]
+            * self.lot_size
+        )
+
+        data["PE_VEX"] = (
+            data["PE_VANNA"]
+            * data["PE_OI"]
+            * self.lot_size
+        )
+
+        data["NET_VEX"] = (
+
+            data["CE_VEX"]
+
+            -
+
+            data["PE_VEX"]
+
+        )
+
+        return data
+
+    def total_vex(self, df):
+
+        return df["NET_VEX"].sum()
+
+

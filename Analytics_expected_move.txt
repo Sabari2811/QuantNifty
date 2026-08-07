@@ -1,0 +1,82 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\expected_move\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\expected_move\expected_move_engine.py
+==================================================
+import math
+
+
+class ExpectedMoveEngine:
+    """
+    Calculates Expected Move using the ATM straddle.
+
+    Method 1 (preferred):
+        Expected Move = ATM Call + ATM Put
+
+    Method 2 (fallback):
+        Spot Ã— IV Ã— sqrt(T)
+
+    """
+
+    def calculate(
+        self,
+        option_chain,
+        spot_price,
+        days_to_expiry=7
+    ):
+
+        if option_chain.empty:
+
+            return {
+
+                "expected_move": 0,
+
+                "upper": spot_price,
+
+                "lower": spot_price,
+
+                "method": "NONE"
+
+            }
+
+        # ---------------------------------------
+        # ATM Strike
+        # ---------------------------------------
+
+        atm = option_chain.iloc[
+            (
+                option_chain["Strike"]
+                - spot_price
+            ).abs().idxmin()
+        ]
+
+        call_price = float(atm["CE_LTP"])
+
+        put_price = float(atm["PE_LTP"])
+
+        expected_move = call_price + put_price
+
+        upper = spot_price + expected_move
+
+        lower = spot_price - expected_move
+
+        return {
+
+            "spot": round(spot_price, 2),
+
+            "atm_strike": atm["Strike"],
+
+            "expected_move": round(expected_move, 2),
+
+            "upper": round(upper, 2),
+
+            "lower": round(lower, 2),
+
+            "method": "ATM_STRADDLE"
+
+        }
+
+

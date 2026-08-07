@@ -1,0 +1,1375 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\adx_engine.py
+==================================================
+import pandas as pd
+import numpy as np
+
+
+class ADXEngine:
+    """
+    Average Directional Index (ADX)
+
+    Returns:
+        ADX
+        Trend Strength
+    """
+
+    def calculate(
+        self,
+        candles: pd.DataFrame,
+        period: int = 14
+    ):
+
+        if candles is None or len(candles) < period + 1:
+            return self._empty()
+
+        df = candles.copy()
+
+        df["up_move"] = df["high"].diff()
+        df["down_move"] = -df["low"].diff()
+
+        df["+DM"] = np.where(
+            (df["up_move"] > df["down_move"]) &
+            (df["up_move"] > 0),
+            df["up_move"],
+            0
+        )
+
+        df["-DM"] = np.where(
+            (df["down_move"] > df["up_move"]) &
+            (df["down_move"] > 0),
+            df["down_move"],
+            0
+        )
+
+        prev_close = df["close"].shift(1)
+
+        tr = pd.concat(
+            [
+                df["high"] - df["low"],
+                (df["high"] - prev_close).abs(),
+                (df["low"] - prev_close).abs()
+            ],
+            axis=1
+        ).max(axis=1)
+
+        atr = tr.rolling(period).mean()
+
+        plus_di = (
+            100 *
+            (df["+DM"].rolling(period).mean() / atr)
+        )
+
+        minus_di = (
+            100 *
+            (df["-DM"].rolling(period).mean() / atr)
+        )
+
+        dx = (
+            (
+                (plus_di - minus_di).abs()
+            ) /
+            (
+                plus_di + minus_di
+            )
+        ) * 100
+
+        adx = dx.rolling(period).mean()
+
+        value = float(adx.iloc[-1])
+
+        if value < 20:
+
+            strength = "WEAK"
+
+        elif value < 40:
+
+            strength = "NORMAL"
+
+        elif value < 60:
+
+            strength = "STRONG"
+
+        else:
+
+            strength = "VERY_STRONG"
+
+        return {
+
+            "adx": round(value, 2),
+
+            "strength": strength
+
+        }
+
+    def _empty(self):
+
+        return {
+
+            "adx": 0,
+
+            "strength": "UNKNOWN"
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\analytics_pipeline.py
+==================================================
+from models.market_context import MarketContext
+
+from analytics.expected_move.expected_move_engine import ExpectedMoveEngine
+
+from analytics.signal.signal_engine import SignalEngine
+from analytics.signal.trade_plan_engine import TradePlanEngine
+from analytics.signal.risk_engine import RiskEngine
+from analytics.dealer.dealer_position_engine import DealerPositionEngine
+from analytics.dealer_flow.dealer_flow_engine import DealerFlowEngine
+from analytics.dealer_flow.delta_exposure_engine import DeltaExposureEngine
+from analytics.dealer_flow.vanna_engine import VannaEngine
+from analytics.dealer_flow.charm_engine import CharmEngine
+from analytics.scoring.score_engine import ScoreEngine
+from analytics.technical_analysis_engine import TechnicalAnalysisEngine
+from analytics.market_map_engine import MarketMapEngine
+
+from analytics.max_pain.max_pain_engine import MaxPainEngine
+from analytics.pcr.pcr_engine import PCREngine
+
+from analytics.market_structure.market_structure_engine import (
+    MarketStructureEngine
+)
+
+from analytics.gamma.gamma_exposure import GammaExposureEngine
+from analytics.gamma.gamma_flip import GammaFlipDetector
+from analytics.gamma.gamma_wall import GammaWallDetector
+
+
+from analytics.oi.oi_flow_engine import OIFlowEngine
+
+from analytics.iv.iv_skew_analyzer import IVSkewAnalyzer
+from analytics.iv.iv_smile_analyzer import IVSmileAnalyzer
+
+from analytics.volatility.atr_engine import ATREngine
+from analytics.volatility.volatility_engine import VolatilityEngine
+from analytics.strike.smart_strike_engine import SmartStrikeEngine
+
+from analytics.signal.probability_engine import ProbabilityEngine
+
+from analytics.liquidity.liquidity_engine import LiquidityEngine
+from analytics.liquidity.liquidity_wall_engine import LiquidityWallEngine
+from analytics.liquidity.liquidity_void_engine import LiquidityVoidEngine
+from analytics.liquidity.absorption_engine import AbsorptionEngine
+from analytics.liquidity.order_imbalance_engine import OrderImbalanceEngine
+
+
+class AnalyticsPipeline:
+
+    def __init__(self):
+
+        # =====================================================
+        # Gamma
+        # =====================================================
+
+        self.gamma_exposure = GammaExposureEngine()
+        self.gamma_flip = GammaFlipDetector()
+        self.gamma_wall = GammaWallDetector()
+        self.score_engine = ScoreEngine()
+        self.technical = TechnicalAnalysisEngine()
+        self.market_map = MarketMapEngine()
+
+        # =====================================================
+        # Dealer
+        # =====================================================
+
+        self.dealer = DealerPositionEngine()
+        self.dealer_flow = DealerFlowEngine()
+
+        # =====================================================
+        # Exposure Engines
+        # =====================================================
+
+        self.delta = DeltaExposureEngine()
+
+        self.vanna = VannaEngine()
+
+        self.charm = CharmEngine()
+
+        # =====================================================
+        # Liquidity
+        # =====================================================
+
+        self.liquidity = LiquidityEngine()
+
+        # =====================================================
+        # OI
+        # =====================================================
+
+        self.oi = OIFlowEngine()
+
+        # =====================================================
+        # IV
+        # =====================================================
+
+        self.iv_skew = IVSkewAnalyzer()
+        self.iv_smile = IVSmileAnalyzer()
+
+        # =====================================================
+        # Expected Move
+        # =====================================================
+
+        self.expected_move = ExpectedMoveEngine()
+
+        self.max_pain = MaxPainEngine()
+
+        self.pcr = PCREngine()
+
+        self.market_structure = MarketStructureEngine()
+
+        # =====================================================
+        # ATR
+        # =====================================================
+
+        self.atr = ATREngine()
+
+        self.volatility = VolatilityEngine()
+
+        # =====================================================
+        # Probability
+        # =====================================================
+
+        self.probability = ProbabilityEngine()
+
+        # =====================================================
+        # Signal
+        # =====================================================
+
+        self.signal_engine = SignalEngine()
+
+        # =====================================================
+        # Strike Selection
+        # =====================================================
+
+        self.smart_strike = SmartStrikeEngine()
+
+        # =====================================================
+        # Trade Plan
+        # =====================================================
+
+        self.trade_plan = TradePlanEngine()
+
+        # =====================================================
+        # Risk
+        # =====================================================
+
+        self.risk = RiskEngine()
+
+    # ==========================================================
+    # MAIN PIPELINE
+    # ==========================================================
+    def run(
+
+        self,
+
+        greeks_engine,
+
+        greeks_df,
+
+        spot_price,
+    
+        candles=None
+
+    ):
+
+        # =====================================================
+        # Gamma
+        # =====================================================
+
+        greeks_df = self.gamma_exposure.calculate(
+            greeks_df
+        )
+
+        flip = self.gamma_flip.detect(
+            greeks_df
+        )
+
+        wall = self.gamma_wall.detect(
+            greeks_df
+        )
+
+        # =====================================================
+        # Dealer
+        # =====================================================
+
+        dealer = self.dealer.analyze(
+            greeks_engine,
+            greeks_df,
+            flip,
+            wall,
+            spot_price
+        )
+
+        # =====================================================
+        # Dealer Flow Inputs
+        # =====================================================
+
+        greeks_df, delta_summary = self.delta.calculate(
+            greeks_df
+        )
+
+        greeks_df, vanna_summary = self.vanna.calculate(
+            greeks_df,
+        spot_price
+        )
+
+        greeks_df, charm_summary = self.charm.calculate(
+            greeks_df,
+        spot_price
+        )
+
+        dealer_flow = self.dealer_flow.analyze(
+
+        delta_summary,
+
+        vanna_summary,
+
+        charm_summary
+
+        )
+
+        # =====================================================
+        # Liquidity
+        # =====================================================
+
+        liquidity = self.liquidity.analyze(
+            greeks_df
+        )
+        # =====================================================
+        # OI
+        # =====================================================
+
+        oi_result = self.oi.analyze(
+            greeks_df
+        )
+
+        print("\n========== OI RESULT ==========")
+        print(oi_result["summary"])
+        print("\nColumns:")
+        print(oi_result["table"].columns.tolist())
+        print("===============================\n")
+
+        # Updated greeks dataframe (contains CE_FLOW / PE_FLOW)
+        greeks_df = oi_result["table"]
+
+        # OI analytics (summary + table)
+        oi = oi_result
+
+        # =====================================================
+        # IV
+        # =====================================================
+
+        skew = self.iv_skew.analyze(
+            greeks_df
+        )
+
+        smile = self.iv_smile.analyze(
+            greeks_df
+        )
+
+        # =====================================================
+        # Expected Move
+        # =====================================================
+
+        expected_move = self.expected_move.calculate(
+            greeks_df,
+            spot_price
+        )
+
+        max_pain = self.max_pain.calculate(
+            greeks_df
+        )
+
+        pcr = self.pcr.calculate(
+            greeks_df
+        )
+
+       
+
+        # ATR
+
+        atr = self.atr.analyze(
+        greeks_df
+        )
+
+        volatility = self.volatility.analyze(
+            iv_skew=skew,
+            iv_smile=smile,
+            expected_move=expected_move,
+            atr=atr,
+            spot=spot_price,
+        )
+
+        market_structure = self.market_structure.analyze(
+        greeks_df,
+        dealer,
+        pcr,
+        expected_move
+        )
+
+        # =====================================================
+        # Technical Analysis
+        # =====================================================
+
+        if candles is not None:
+
+            technical = self.technical.analyze(
+                candles
+            )
+
+        else:
+
+            technical = {
+
+                "atr": {},
+
+                "ema": {},
+
+                "rsi": {},
+
+                "vwap": {},
+
+                "adx": {}
+
+            }
+
+        # =====================================================
+        # Probability
+        # =====================================================
+
+        probability = self.probability.calculate(
+
+            dealer,
+
+            market_structure,
+
+            pcr,
+
+            skew,
+
+            technical
+
+            )
+
+        # =====================================================
+        # Signal
+        # =====================================================
+
+        signal = self.signal_engine.generate(
+            dealer,
+            probability,
+            spot_price
+        )
+
+        # =====================================================
+        # Institutional Score
+        # =====================================================
+
+        institutional_score = self.score_engine.calculate(
+
+        dealer=dealer,
+
+        dealer_flow=dealer_flow,
+
+        liquidity=liquidity,
+
+        market_structure=market_structure,
+
+        pcr=pcr,
+
+        expected_move=expected_move,
+
+        iv_skew=skew,
+
+        iv_smile=smile,
+
+        atr=atr,
+
+        signal=signal,
+
+        spot=spot_price
+
+        )   
+
+        # =====================================================
+        # Smart Strike
+        # =====================================================
+
+        smart_strike = self.smart_strike.analyze(
+            greeks_df=greeks_df,
+            signal=signal,
+            dealer=dealer,
+            probability=probability,
+            atr=atr,
+            spot=spot_price
+        )
+
+        # =====================================================
+        # Trade Plan
+        # =====================================================
+
+        trade_plan = self.trade_plan.generate(
+            signal=signal,
+            dealer=dealer,
+            spot=spot_price,
+            atr=atr,
+            smart_strike=smart_strike
+        )
+
+        # =====================================================
+        # Risk
+        # =====================================================
+
+        risk = self.risk.generate(
+            trade_plan
+        )
+
+        # =====================================================
+        # Context
+        # =====================================================
+
+        context = MarketContext()
+
+        context.spot = spot_price
+        context.greeks = greeks_df
+
+        context.dealer = dealer
+        context.dealer_flow = dealer_flow
+
+        context.liquidity = liquidity
+
+        context.gamma_flip = flip
+        context.gamma_wall = wall
+
+        context.oi_flow = oi
+
+        context.iv_skew = skew
+        context.iv_smile = smile
+
+        context.expected_move = expected_move
+        context.max_pain = max_pain
+        context.pcr = pcr
+        context.market_structure = market_structure
+
+        context.atr = atr
+
+        context.volatility = volatility
+
+        context.probability = probability
+
+        context.signal = signal
+
+        context.smart_strike = smart_strike
+
+        context.trade_plan = trade_plan
+        context.institutional_score = institutional_score
+
+        context.risk = risk
+
+        # =====================================================
+        # Output
+        # =====================================================
+        market_map = self.market_map.build(
+
+            analytics={
+
+                "dealer": dealer,
+
+                "gamma_levels": {
+
+                    "gamma_flip": flip.get(
+                        "gamma_flip",
+                        "-"
+                    ),
+
+                    "gamma_wall": wall.get(
+                        "gamma_wall",
+                        "-"
+                    ),
+
+                    "call_wall": wall.get(
+                        "call_wall",
+                        "-"
+                    ),
+
+                    "put_wall": wall.get(
+                        "put_wall",
+                        "-"
+                    )
+
+                },
+
+                "expected_move": expected_move,
+
+                "max_pain": max_pain
+
+            },
+
+            spot=spot_price
+
+        )
+                
+        return {
+
+            "context": context,
+
+            "dealer": dealer,
+
+            "dealer_flow": dealer_flow,
+
+            "liquidity": liquidity,
+
+            "gamma_flip": flip,
+
+            "gamma_wall": wall,
+
+            "oi_flow": oi,
+
+            "iv_skew": skew,
+
+            "iv_smile": smile,
+
+            "expected_move": expected_move,
+
+            "max_pain": max_pain,
+
+            "pcr": pcr,
+
+            "market_structure": market_structure,
+
+            "atr": atr,
+
+            "volatility": volatility,
+
+            "probability": probability,
+
+            "signal": signal,
+
+            "smart_strike": smart_strike,
+
+            "trade_plan": trade_plan,
+
+            "risk": risk,
+
+            "institutional_score": institutional_score,
+
+            "technical": technical,
+
+            "market_map": market_map,
+
+            "greeks": greeks_df
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\atr_engine.py
+==================================================
+import pandas as pd
+
+
+class ATREngine:
+    """
+    Average True Range (ATR)
+
+    Measures market volatility.
+
+    Returns
+
+        ATR Value
+        Volatility State
+    """
+
+    def calculate(
+
+        self,
+
+        candles: pd.DataFrame,
+
+        period: int = 14
+
+    ):
+
+        if candles is None:
+
+            return self._empty()
+
+        if len(candles) < period + 1:
+
+            return self._empty()
+
+        df = candles.copy()
+
+        previous_close = df["close"].shift(1)
+
+        tr1 = df["high"] - df["low"]
+
+        tr2 = (df["high"] - previous_close).abs()
+
+        tr3 = (df["low"] - previous_close).abs()
+
+        df["TR"] = pd.concat(
+
+            [tr1, tr2, tr3],
+
+            axis=1
+
+        ).max(axis=1)
+
+        df["ATR"] = (
+
+            df["TR"]
+
+            .rolling(period)
+
+            .mean()
+
+        )
+
+        atr = float(df["ATR"].iloc[-1])
+
+        if atr < 50:
+
+            volatility = "LOW"
+
+        elif atr < 100:
+
+            volatility = "NORMAL"
+
+        elif atr < 200:
+
+            volatility = "HIGH"
+
+        else:
+
+            volatility = "EXTREME"
+
+        return {
+
+            "atr": round(atr, 2),
+
+            "volatility": volatility
+
+        }
+
+    def _empty(self):
+
+        return {
+
+            "atr": 0,
+
+            "volatility": "UNKNOWN"
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\decision_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\ema_engine.py
+==================================================
+import pandas as pd
+
+
+class EMAEngine:
+    """
+    EMA Engine
+
+    Calculates:
+        EMA9
+        EMA20
+        EMA50
+        EMA200
+
+    Determines trend and EMA20 status.
+    """
+
+    def calculate(self, candles: pd.DataFrame):
+
+        if candles is None or candles.empty:
+            return self._empty()
+
+        df = candles.copy()
+
+        df["EMA9"] = df["close"].ewm(span=9, adjust=False).mean()
+        df["EMA20"] = df["close"].ewm(span=20, adjust=False).mean()
+        df["EMA50"] = df["close"].ewm(span=50, adjust=False).mean()
+        df["EMA200"] = df["close"].ewm(span=200, adjust=False).mean()
+
+        price = float(df["close"].iloc[-1])
+
+        ema9 = float(df["EMA9"].iloc[-1])
+        ema20 = float(df["EMA20"].iloc[-1])
+        ema50 = float(df["EMA50"].iloc[-1])
+        ema200 = float(df["EMA200"].iloc[-1])
+
+        # ----------------------------------
+        # Trend
+        # ----------------------------------
+
+        if price > ema20 > ema50 > ema200:
+            trend = "STRONG_BULLISH"
+        elif price < ema20 < ema50 < ema200:
+            trend = "STRONG_BEARISH"
+        elif price > ema200:
+            trend = "BULLISH"
+        elif price < ema200:
+            trend = "BEARISH"
+        else:
+            trend = "SIDEWAYS"
+
+        # ----------------------------------
+        # EMA20 Status
+        # ----------------------------------
+
+        if price > ema20:
+            status = "ABOVE"
+        elif price < ema20:
+            status = "BELOW"
+        else:
+            status = "AT_EMA"
+
+        return {
+
+            "ema9": round(ema9, 2),
+
+            "ema20": round(ema20, 2),
+
+            "ema50": round(ema50, 2),
+
+            "ema200": round(ema200, 2),
+
+            "trend": trend,
+
+            "status": status
+
+        }
+
+    def _empty(self):
+
+        return {
+
+            "ema9": 0,
+
+            "ema20": 0,
+
+            "ema50": 0,
+
+            "ema200": 0,
+
+            "trend": "UNKNOWN",
+
+            "status": "UNKNOWN"
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure_engine.py
+==================================================
+import pandas as pd
+
+
+class ExposureEngine:
+
+    def calculate(self, greeks_df: pd.DataFrame):
+
+        df = greeks_df.copy()
+
+        # -------------------------------------
+        # Call Gamma Exposure
+        # -------------------------------------
+
+        df["CE_GEX"] = (
+            df["CE_GAMMA"].fillna(0)
+            * df["CE_OI"].fillna(0)
+        )
+
+        # -------------------------------------
+        # Put Gamma Exposure
+        # -------------------------------------
+
+        df["PE_GEX"] = (
+            df["PE_GAMMA"].fillna(0)
+            * df["PE_OI"].fillna(0)
+        )
+
+        # -------------------------------------
+        # Net Gamma
+        # -------------------------------------
+
+        df["NET_GEX"] = (
+            df["CE_GEX"]
+            - df["PE_GEX"]
+        )
+
+        return df
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\exposure_utils.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\institutional_bias.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\iv_skew.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\market_bias.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\market_map_engine.py
+==================================================
+class MarketMapEngine:
+
+    """
+    Produces the important market levels
+    required by the QuantNifty Terminal.
+    """
+
+    def build(
+
+        self,
+
+        analytics,
+
+        spot
+
+    ):
+
+        dealer = analytics.get(
+            "dealer",
+            {}
+        )
+
+        gamma = analytics.get(
+            "gamma_levels",
+            {}
+        )
+
+        expected = analytics.get(
+            "expected_move",
+            {}
+        )
+
+        max_pain = analytics.get(
+            "max_pain",
+            {}
+        )
+
+        return {
+
+            "spot": round(spot, 2),
+
+            "dealer_gamma": dealer.get(
+                "dealer_gamma",
+                "-"
+            ),
+
+            "gamma_flip": gamma.get(
+                "gamma_flip",
+                "-"
+            ),
+
+            "gamma_wall": gamma.get(
+                "gamma_wall",
+                "-"
+            ),
+
+            "call_wall": gamma.get(
+                "call_wall",
+                "-"
+            ),
+
+            "put_wall": gamma.get(
+                "put_wall",
+                "-"
+            ),
+
+            "max_pain": max_pain.get(
+                "max_pain",
+                "-"
+            ),
+
+            "expected_move": expected.get(
+                "expected_move",
+                "-"
+            )
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\market_pressure.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\market_structure_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\oi_analysis.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\oi_analyzer.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\oi_change_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\rsi_engine.py
+==================================================
+import pandas as pd
+
+
+class RSIEngine:
+    """
+    Relative Strength Index (RSI)
+
+    Returns:
+        RSI value
+        Market state
+    """
+
+    def calculate(
+        self,
+        candles: pd.DataFrame,
+        period: int = 14
+    ):
+
+        if candles is None or len(candles) < period + 1:
+            return self._empty()
+
+        df = candles.copy()
+
+        delta = df["close"].diff()
+
+        gain = delta.where(delta > 0, 0.0)
+
+        loss = (-delta).where(delta < 0, 0.0)
+
+        avg_gain = gain.rolling(period).mean()
+
+        avg_loss = loss.rolling(period).mean()
+
+        rs = avg_gain / avg_loss
+
+        rsi = 100 - (100 / (1 + rs))
+
+        value = float(rsi.iloc[-1])
+
+        if value >= 70:
+            state = "OVERBOUGHT"
+
+        elif value <= 30:
+            state = "OVERSOLD"
+
+        elif value >= 55:
+            state = "BULLISH"
+
+        elif value <= 45:
+            state = "BEARISH"
+
+        else:
+            state = "NEUTRAL"
+
+        return {
+
+            "rsi": round(value, 2),
+
+            "state": state
+
+        }
+
+    def _empty(self):
+
+        return {
+
+            "rsi": 0,
+
+            "state": "UNKNOWN"
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\signal_engine.py
+==================================================
+class SignalEngine:
+    """
+    QuantNifty Signal Engine v1
+    """
+
+    def generate(
+
+        self,
+
+        dealer,
+
+        probability,
+
+        spot
+
+    ):
+
+        bullish = probability["bullish_probability"]
+
+        bearish = probability["bearish_probability"]
+
+        confidence = probability["confidence"]
+
+        signal = "WAIT"
+
+        reasons = []
+
+        # ===========================================
+        # BUY CALL
+        # ===========================================
+
+        if (
+
+            dealer.dealer_gamma == "LONG"
+
+            and
+
+            bullish >= 70
+
+        ):
+
+            signal = "BUY CALL"
+
+            reasons.append("Dealers Long Gamma")
+
+            reasons.append("Bullish Probability High")
+
+        # ===========================================
+        # BUY PUT
+        # ===========================================
+
+        elif (
+
+            dealer.dealer_gamma == "SHORT"
+
+            and
+
+            bearish >= 70
+
+        ):
+
+            signal = "BUY PUT"
+
+            reasons.append("Dealers Short Gamma")
+
+            reasons.append("Bearish Probability High")
+
+        # ===========================================
+        # WAIT
+        # ===========================================
+
+        else:
+
+            signal = "WAIT"
+
+            reasons.append("No High Probability Setup")
+
+        return {
+
+            "signal": signal,
+
+            "confidence": confidence,
+
+            "spot": spot,
+
+            "reasons": reasons
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\technical_analysis_engine.py
+==================================================
+from analytics.atr_engine import ATREngine
+from analytics.ema_engine import EMAEngine
+from analytics.rsi_engine import RSIEngine
+from analytics.vwap_engine import VWAPEngine
+from analytics.adx_engine import ADXEngine
+
+
+class TechnicalAnalysisEngine:
+    """
+    Aggregates all technical indicators into one snapshot.
+    """
+
+    def __init__(self):
+
+        self.atr = ATREngine()
+        self.ema = EMAEngine()
+        self.rsi = RSIEngine()
+        self.vwap = VWAPEngine()
+        self.adx = ADXEngine()
+
+    def analyze(self, candles):
+
+        atr = self.atr.calculate(candles)
+
+        ema = self.ema.calculate(candles)
+
+        rsi = self.rsi.calculate(candles)
+
+        vwap = self.vwap.calculate(candles)
+
+        adx = self.adx.calculate(candles)
+
+        return {
+
+            "atr": atr,
+
+            "ema": ema,
+
+            "rsi": rsi,
+
+            "vwap": vwap,
+
+            "adx": adx
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\vwap_engine.py
+==================================================
+import pandas as pd
+
+
+class VWAPEngine:
+    """
+    VWAP Engine
+
+    Calculates
+
+        VWAP
+        Price Position
+
+    """
+
+    def calculate(self, candles: pd.DataFrame):
+
+        if candles is None or candles.empty:
+            return self._empty()
+
+        df = candles.copy()
+
+        typical_price = (
+
+            df["high"]
+
+            + df["low"]
+
+            + df["close"]
+
+        ) / 3
+
+        cumulative_tp_volume = (
+
+            typical_price
+
+            * df["volume"]
+
+        ).cumsum()
+
+        cumulative_volume = (
+
+            df["volume"]
+
+        ).cumsum()
+
+        df["VWAP"] = (
+
+            cumulative_tp_volume
+
+            / cumulative_volume
+
+        )
+
+        price = float(df["close"].iloc[-1])
+
+        vwap = float(df["VWAP"].iloc[-1])
+
+        distance = price - vwap
+
+        if distance > 20:
+
+            position = "ABOVE"
+
+        elif distance < -20:
+
+            position = "BELOW"
+
+        else:
+
+            position = "AT_VWAP"
+
+        return {
+
+            "vwap": round(vwap, 2),
+
+            "price": round(price, 2),
+
+            "distance": round(distance, 2),
+
+            "position": position,
+
+            "status": position
+
+        }
+
+    def _empty(self):
+
+        return {
+
+            "vwap": 0,
+
+            "price": 0,
+
+            "distance": 0,
+
+            "position": "UNKNOWN",
+
+            "status": "UNKNOWN"
+
+        }
+
+

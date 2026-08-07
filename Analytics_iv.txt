@@ -1,0 +1,288 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\iv\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\iv\iv_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\iv\iv_percentile_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\iv\iv_rank_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\iv\iv_skew_analyzer.py
+==================================================
+import pandas as pd
+
+
+class IVSkewAnalyzer:
+    """
+    Institutional IV Skew Analyzer
+
+    Safe against missing option quotes.
+    """
+
+    def analyze(self, df: pd.DataFrame):
+
+        if df is None or df.empty:
+
+            return self._unknown()
+
+        df = df.copy()
+
+        for col in ["CE_IV", "PE_IV"]:
+
+            if col not in df.columns:
+                df[col] = pd.NA
+
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="coerce"
+            )
+
+        call_iv = df["CE_IV"].mean(skipna=True)
+        put_iv = df["PE_IV"].mean(skipna=True)
+
+        if pd.isna(call_iv):
+            call_iv = 0
+
+        if pd.isna(put_iv):
+            put_iv = 0
+
+        skew = call_iv - put_iv
+
+        # ---------------------------------------
+        # Bias
+        # ---------------------------------------
+
+        if skew > 0.02:
+
+            bias = "CALLS_EXPENSIVE"
+            sentiment = "BULLISH"
+
+        elif skew < -0.02:
+
+            bias = "PUTS_EXPENSIVE"
+            sentiment = "BEARISH"
+
+        else:
+
+            bias = "BALANCED"
+            sentiment = "NEUTRAL"
+
+        # ---------------------------------------
+        # Volatility
+        # ---------------------------------------
+
+        highest_iv = max(call_iv, put_iv)
+
+        if highest_iv > 0.30:
+
+            volatility = "VERY_HIGH"
+
+        elif highest_iv > 0.20:
+
+            volatility = "HIGH"
+
+        elif highest_iv > 0.10:
+
+            volatility = "NORMAL"
+
+        else:
+
+            volatility = "LOW"
+
+        return {
+
+            "average_call_iv": round(call_iv, 4),
+
+            "average_put_iv": round(put_iv, 4),
+
+            "iv_skew": round(skew, 4),
+
+            "iv_bias": bias,
+
+            "market_sentiment": sentiment,
+
+            "volatility": volatility
+
+        }
+
+    def _unknown(self):
+
+        return {
+
+            "average_call_iv": 0,
+
+            "average_put_iv": 0,
+
+            "iv_skew": 0,
+
+            "iv_bias": "UNKNOWN",
+
+            "market_sentiment": "UNKNOWN",
+
+            "volatility": "UNKNOWN"
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\iv\iv_smile_analyzer.py
+==================================================
+import pandas as pd
+
+
+class IVSmileAnalyzer:
+    """
+    IV Smile Analyzer
+
+    Measures IV distribution across strikes.
+
+    Handles missing IV gracefully.
+    """
+
+    def analyze(self, df: pd.DataFrame):
+
+        if df is None or df.empty:
+
+            return self._unknown()
+
+        df = df.copy()
+
+        # ---------------------------------------
+        # Ensure columns exist
+        # ---------------------------------------
+
+        for col in ["CE_IV", "PE_IV"]:
+
+            if col not in df.columns:
+                df[col] = pd.NA
+
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="coerce"
+            )
+
+        # ---------------------------------------
+        # No IV available
+        # ---------------------------------------
+
+        if df["CE_IV"].dropna().empty and df["PE_IV"].dropna().empty:
+            return self._unknown()
+
+        result = {}
+
+        # ---------------------------------------
+        # CALL IV
+        # ---------------------------------------
+
+        if df["CE_IV"].dropna().empty:
+
+            result["ce_peak_iv"] = 0
+            result["ce_peak_strike"] = None
+            result["ce_avg_iv"] = 0
+            result["ce_min_iv"] = 0
+            result["ce_smile_width"] = 0
+
+        else:
+
+            result["ce_peak_iv"] = float(df["CE_IV"].max())
+
+            result["ce_peak_strike"] = df.loc[
+                df["CE_IV"].idxmax(),
+                "Strike"
+            ]
+
+            result["ce_avg_iv"] = float(df["CE_IV"].mean())
+
+            result["ce_min_iv"] = float(df["CE_IV"].min())
+
+            result["ce_smile_width"] = (
+                result["ce_peak_iv"]
+                -
+                result["ce_min_iv"]
+            )
+
+        # ---------------------------------------
+        # PUT IV
+        # ---------------------------------------
+
+        if df["PE_IV"].dropna().empty:
+
+            result["pe_peak_iv"] = 0
+            result["pe_peak_strike"] = None
+            result["pe_avg_iv"] = 0
+            result["pe_min_iv"] = 0
+            result["pe_smile_width"] = 0
+
+        else:
+
+            result["pe_peak_iv"] = float(df["PE_IV"].max())
+
+            result["pe_peak_strike"] = df.loc[
+                df["PE_IV"].idxmax(),
+                "Strike"
+            ]
+
+            result["pe_avg_iv"] = float(df["PE_IV"].mean())
+
+            result["pe_min_iv"] = float(df["PE_IV"].min())
+
+            result["pe_smile_width"] = (
+                result["pe_peak_iv"]
+                -
+                result["pe_min_iv"]
+            )
+
+        # ---------------------------------------
+        # Dominant Side
+        # ---------------------------------------
+
+        if result["ce_smile_width"] > result["pe_smile_width"]:
+
+            result["dominant_side"] = "CALL"
+
+        elif result["pe_smile_width"] > result["ce_smile_width"]:
+
+            result["dominant_side"] = "PUT"
+
+        else:
+
+            result["dominant_side"] = "BALANCED"
+
+        return result
+
+    def _unknown(self):
+
+        return {
+
+            "ce_peak_iv": 0,
+            "pe_peak_iv": 0,
+
+            "ce_peak_strike": None,
+            "pe_peak_strike": None,
+
+            "ce_avg_iv": 0,
+            "pe_avg_iv": 0,
+
+            "ce_min_iv": 0,
+            "pe_min_iv": 0,
+
+            "ce_smile_width": 0,
+            "pe_smile_width": 0,
+
+            "dominant_side": "UNKNOWN"
+
+        }
+
+

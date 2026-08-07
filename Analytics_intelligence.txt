@@ -1,0 +1,1264 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\evidence\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\evidence\evidence_engine.py
+==================================================
+from __future__ import annotations
+
+from analytics.intelligence.evidence.models import HistoricalEvidence
+from analytics.intelligence.memory_engine import MarketMemory
+from analytics.intelligence.models import TradeIntelligenceRecord
+from analytics.intelligence.similarity.similarity_engine import SimilarityEngine
+
+
+class EvidenceEngine:
+    """
+    Converts historical market memory into actionable evidence.
+
+    Responsibilities
+    ----------------
+    - Search historical memory
+    - Aggregate historical statistics
+    - Produce explainable evidence
+
+    Notes
+    -----
+    This class owns NO dependencies.
+    All dependencies are injected.
+    """
+
+    def __init__(
+        self,
+        similarity_engine: SimilarityEngine,
+    ):
+
+        self._similarity_engine = similarity_engine
+
+    def analyze(
+        self,
+        current: TradeIntelligenceRecord,
+        memory: MarketMemory,
+    ) -> HistoricalEvidence:
+
+        evidence = HistoricalEvidence()
+
+        matches = self._similarity_engine.search(
+            current=current,
+            history=memory.records,
+            top_n=100,
+        )
+
+        if not matches:
+            return evidence
+
+        scores = [score for score, _ in matches]
+        records = [record for _, record in matches]
+
+        evidence.matches = records
+        evidence.similar_markets = len(records)
+        evidence.average_similarity = sum(scores) / len(scores)
+        evidence.best_similarity = max(scores)
+
+        wins = [
+            record
+            for record in records
+            if record.outcome == "WIN"
+        ]
+
+        losses = [
+            record
+            for record in records
+            if record.outcome == "LOSS"
+        ]
+
+        breakevens = [
+            record
+            for record in records
+            if record.outcome == "BREAKEVEN"
+        ]
+
+        evidence.win_rate = (
+            len(wins) / len(records)
+        ) * 100
+
+        evidence.average_pnl = (
+            sum(r.pnl for r in records)
+            / len(records)
+        )
+
+        evidence.average_holding_minutes = (
+            sum(r.holding_minutes for r in records)
+            / len(records)
+        )
+
+        evidence.target_probability = (
+            len(wins)
+            / len(records)
+        ) * 100
+
+        evidence.stoploss_probability = (
+            len(losses)
+            / len(records)
+        ) * 100
+
+        evidence.breakeven_probability = (
+            len(breakevens)
+            / len(records)
+        ) * 100
+
+        #
+        # Confidence Adjustment
+        #
+
+        if evidence.win_rate >= 70:
+
+            evidence.recommendation = "BUY"
+            evidence.confidence_adjustment = 5.0
+
+        elif evidence.win_rate >= 55:
+
+            evidence.recommendation = "BUY"
+            evidence.confidence_adjustment = 2.0
+
+        elif evidence.win_rate >= 45:
+
+            evidence.recommendation = "WAIT"
+            evidence.confidence_adjustment = 0.0
+
+        else:
+
+            evidence.recommendation = "WAIT"
+            evidence.confidence_adjustment = -5.0
+
+        evidence.confidence_after_validation = (
+            evidence.confidence_adjustment
+        )
+
+        evidence.explanation = (
+            f"Found {evidence.similar_markets} similar historical "
+            f"markets with {evidence.win_rate:.1f}% win rate."
+        )
+
+        return evidence
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\evidence\models.py
+==================================================
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from analytics.intelligence.models import TradeIntelligenceRecord
+
+
+@dataclass(slots=True)
+class HistoricalEvidence:
+    """
+    Historical evidence produced after comparing the
+    current market against historical memory.
+    """
+
+    #
+    # Search Statistics
+    #
+
+    similar_markets: int = 0
+
+    average_similarity: float = 0.0
+
+    best_similarity: float = 0.0
+
+    #
+    # Trading Statistics
+    #
+
+    win_rate: float = 0.0
+
+    average_pnl: float = 0.0
+
+    average_holding_minutes: float = 0.0
+
+    #
+    # Exit Statistics
+    #
+
+    target_probability: float = 0.0
+
+    stoploss_probability: float = 0.0
+
+    breakeven_probability: float = 0.0
+
+    #
+    # Recommendation
+    #
+
+    recommendation: str = ""
+
+    confidence_adjustment: float = 0.0
+
+    confidence_after_validation: float = 0.0
+
+    #
+    # Explainability
+    #
+
+    explanation: str = ""
+
+    #
+    # Similar Markets
+    #
+
+    matches: list[TradeIntelligenceRecord] = field(
+        default_factory=list
+    )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\extractors\base_extractor.py
+==================================================
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+
+
+class BaseExtractor(ABC):
+    """
+    Base class for all Trade Intelligence extractors.
+
+    Responsibilities
+    ----------------
+    - Read RuntimeContext
+    - Populate a portion of TradeIntelligenceRecord
+
+    Each extractor owns ONE domain only.
+    """
+
+    @abstractmethod
+    def extract(
+        self,
+        ctx,
+        record,
+    ) -> None:
+        """
+        Populate part of the TradeIntelligenceRecord.
+
+        Parameters
+        ----------
+        ctx
+            RuntimeContext
+
+        record
+            TradeIntelligenceRecord
+
+        Returns
+        -------
+        None
+        """
+        raise NotImplementedError
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\extractors\dealer.py
+==================================================
+from __future__ import annotations
+
+from analytics.intelligence.extractors.base_extractor import BaseExtractor
+
+
+class DealerExtractor(BaseExtractor):
+    """
+    Extracts dealer positioning and exposure information
+    from RuntimeContext.
+    """
+
+    def extract(
+        self,
+        ctx,
+        record,
+    ):
+
+        dealer = getattr(ctx, "dealer", None)
+
+        if dealer is None:
+            return
+
+        record.dealer_gamma = getattr(
+            dealer,
+            "gamma_position",
+            "",
+        )
+
+        record.dealer_delta = getattr(
+            dealer,
+            "delta_position",
+            "",
+        )
+
+        record.gamma_exposure = getattr(
+            dealer,
+            "gamma_exposure",
+            0.0,
+        )
+
+        record.delta_exposure = getattr(
+            dealer,
+            "delta_exposure",
+            0.0,
+        )
+
+        record.gamma_wall = getattr(
+            dealer,
+            "gamma_wall",
+            0.0,
+        )
+
+        record.gamma_flip = getattr(
+            dealer,
+            "gamma_flip",
+            0.0,
+        )
+
+        record.zero_gamma = getattr(
+            dealer,
+            "zero_gamma",
+            0.0,
+        )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\extractors\decision.py
+==================================================
+from __future__ import annotations
+
+from analytics.intelligence.extractors.base_extractor import BaseExtractor
+
+
+class DecisionExtractor(BaseExtractor):
+    """
+    Extracts TradingDecision information.
+    """
+
+    def extract(
+        self,
+        ctx,
+        record,
+    ):
+
+        decision = getattr(
+            ctx,
+            "decision",
+            None,
+        )
+
+        if decision is None:
+            return
+
+        signal = getattr(
+            decision,
+            "signal",
+            None,
+        )
+
+        if signal is not None:
+
+            record.signal = getattr(
+                signal,
+                "name",
+                "",
+            )
+
+        record.confidence = getattr(
+            decision,
+            "confidence",
+            0.0,
+        )
+
+        record.trade_quality = getattr(
+            decision,
+            "trade_quality",
+            0.0,
+        )
+
+        record.strategy_name = getattr(
+            decision,
+            "strategy_name",
+            "",
+        )
+
+        record.execution_plan = getattr(
+            decision,
+            "execution_plan",
+            "",
+        )
+
+        record.reasons = list(
+            getattr(
+                decision,
+                "reasons",
+                [],
+            )
+        )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\extractors\trade.py
+==================================================
+from __future__ import annotations
+
+from analytics.intelligence.extractors.base_extractor import BaseExtractor
+
+
+class TradeExtractor(BaseExtractor):
+    """
+    Extracts trade information from TradingDecision.
+    """
+
+    def extract(
+        self,
+        ctx,
+        record,
+    ):
+
+        decision = getattr(
+            ctx,
+            "decision",
+            None,
+        )
+
+        if decision is None:
+            return
+
+        trade = getattr(
+            decision,
+            "trade",
+            None,
+        )
+
+        if trade is None:
+            return
+
+        record.strike = getattr(
+            trade,
+            "strike",
+            0.0,
+        )
+
+        record.option_type = getattr(
+            trade,
+            "option_type",
+            "",
+        )
+
+        record.entry_price = getattr(
+            trade,
+            "entry",
+            0.0,
+        )
+
+        record.stop_loss = getattr(
+            trade,
+            "stop_loss",
+            0.0,
+        )
+
+        record.target1 = getattr(
+            trade,
+            "target1",
+            0.0,
+        )
+
+        record.target2 = getattr(
+            trade,
+            "target2",
+            0.0,
+        )
+
+        record.risk_reward = getattr(
+            trade,
+            "risk_reward",
+            0.0,
+        )
+
+        execution = getattr(
+            trade,
+            "execution",
+            None,
+        )
+
+        if execution is not None:
+
+            record.quantity = (
+                getattr(execution, "lot_size", 0)
+                * getattr(execution, "lots", 0)
+            )
+
+            record.lots = getattr(
+                execution,
+                "lots",
+                0,
+            )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\feature_extractor.py
+==================================================
+from __future__ import annotations
+
+from analytics.intelligence.models import TradeIntelligenceRecord
+
+from analytics.intelligence.extractors.market import MarketExtractor
+from analytics.intelligence.extractors.greeks import GreeksExtractor
+from analytics.intelligence.extractors.dealer import DealerExtractor
+from analytics.intelligence.extractors.decision import DecisionExtractor
+from analytics.intelligence.extractors.trade import TradeExtractor
+
+
+class FeatureExtractor:
+    """
+    Builds a TradeIntelligenceRecord from RuntimeContext.
+
+    Each extractor owns one domain only.
+    """
+
+    def __init__(self):
+
+        self.extractors = [
+
+            MarketExtractor(),
+
+            GreeksExtractor(),
+
+            DealerExtractor(),
+
+            DecisionExtractor(),
+
+            TradeExtractor(),
+
+        ]
+
+    def extract(
+        self,
+        ctx,
+    ) -> TradeIntelligenceRecord:
+
+        record = TradeIntelligenceRecord()
+
+        for extractor in self.extractors:
+
+            extractor.extract(
+                ctx,
+                record,
+            )
+
+        return record
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\intelligence_service.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\memory_engine.py
+==================================================
+from __future__ import annotations
+
+from collections import defaultdict
+
+from analytics.intelligence.models import TradeIntelligenceRecord
+
+
+class MarketMemory:
+    """
+    Stores historical Trade Intelligence records.
+
+    Responsibilities
+    ----------------
+    - Store records
+    - Query records
+    - Retrieve statistics
+    - Support similarity search
+    - Provide datasets for ML
+
+    This class deliberately performs
+    NO feature extraction.
+    """
+
+    def __init__(self):
+
+        self._records: list[TradeIntelligenceRecord] = []
+
+        self._index_by_signal = defaultdict(list)
+
+        self._index_by_outcome = defaultdict(list)
+
+    # ====================================================
+    # Storage
+    # ====================================================
+
+    def add(
+        self,
+        record: TradeIntelligenceRecord,
+    ):
+
+        self._records.append(record)
+
+        self._index_by_signal[
+            record.signal
+        ].append(record)
+
+        self._index_by_outcome[
+            record.outcome
+        ].append(record)
+
+    # ====================================================
+    # Access
+    # ====================================================
+
+    @property
+    def records(self):
+
+        return self._records
+
+    @property
+    def size(self):
+
+        return len(self._records)
+
+    # ====================================================
+    # Queries
+    # ====================================================
+
+    def by_signal(
+        self,
+        signal,
+    ):
+
+        return self._index_by_signal.get(
+            signal,
+            [],
+        )
+
+    def by_outcome(
+        self,
+        outcome,
+    ):
+
+        return self._index_by_outcome.get(
+            outcome,
+            [],
+        )
+
+    # ====================================================
+    # Statistics
+    # ====================================================
+
+    def summary(self):
+
+        return {
+
+            "records": self.size,
+
+            "buy": len(
+                self.by_signal("BUY")
+            ),
+
+            "sell": len(
+                self.by_signal("SELL")
+            ),
+
+            "wait": len(
+                self.by_signal("WAIT")
+            ),
+
+            "wins": len(
+                self.by_outcome("WIN")
+            ),
+
+            "losses": len(
+                self.by_outcome("LOSS")
+            ),
+
+        }
+
+    # ====================================================
+    # Export
+    # ====================================================
+
+    def clear(self):
+
+        self._records.clear()
+
+        self._index_by_signal.clear()
+
+        self._index_by_outcome.clear()
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\models.py
+==================================================
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import List
+
+
+# ============================================================
+# Trade Intelligence Record
+# ============================================================
+
+@dataclass(slots=True)
+class TradeIntelligenceRecord:
+    """
+    Complete market fingerprint captured for every
+    trading decision.
+
+    This object is designed for:
+
+    â€¢ Historical validation
+    â€¢ Similarity search
+    â€¢ AI datasets
+    â€¢ Strategy optimization
+    â€¢ Performance analytics
+    """
+
+    # =====================================================
+    # Metadata
+    # =====================================================
+
+    timestamp: datetime | None = None
+
+    trading_day: str = ""
+
+    expiry: str = ""
+
+    session: str = ""
+
+    # =====================================================
+    # Market
+    # =====================================================
+
+    spot_price: float = 0.0
+
+    atm_strike: float = 0.0
+
+    futures_price: float = 0.0
+
+    india_vix: float = 0.0
+
+    # =====================================================
+    # Option Chain
+    # =====================================================
+
+    strike: float = 0.0
+
+    option_type: str = ""
+
+    premium: float = 0.0
+
+    implied_volatility: float = 0.0
+
+    iv_rank: float = 0.0
+
+    iv_percentile: float = 0.0
+
+    open_interest: float = 0.0
+
+    change_in_oi: float = 0.0
+
+    volume: float = 0.0
+
+    # =====================================================
+    # Greeks
+    # =====================================================
+
+    delta: float = 0.0
+
+    gamma: float = 0.0
+
+    theta: float = 0.0
+
+    vega: float = 0.0
+
+    rho: float = 0.0
+
+    # =====================================================
+    # Dealer Positioning
+    # =====================================================
+
+    dealer_gamma: str = ""
+
+    dealer_delta: str = ""
+
+    gamma_exposure: float = 0.0
+
+    delta_exposure: float = 0.0
+
+    gamma_wall: float = 0.0
+
+    gamma_flip: float = 0.0
+
+    zero_gamma: float = 0.0
+
+    # =====================================================
+    # Market Structure
+    # =====================================================
+
+    trend: str = ""
+
+    market_structure: str = ""
+
+    institutional_bias: str = ""
+
+    conviction: str = ""
+
+    probability: float = 0.0
+
+    # =====================================================
+    # Technicals
+    # =====================================================
+
+    ad_ratio: float = 0.0
+
+    pcr: float = 0.0
+
+    rsi: float = 0.0
+
+    atr: float = 0.0
+
+    adx: float = 0.0
+
+    vwap_distance: float = 0.0
+
+    # =====================================================
+    # Decision
+    # =====================================================
+
+    signal: str = ""
+
+    confidence: float = 0.0
+
+    trade_quality: float = 0.0
+
+    strategy_name: str = ""
+
+    execution_plan: str = ""
+
+    reasons: List[str] = field(default_factory=list)
+
+    # =====================================================
+    # Trade
+    # =====================================================
+
+    entry_price: float = 0.0
+
+    stop_loss: float = 0.0
+
+    target1: float = 0.0
+
+    target2: float = 0.0
+
+    quantity: int = 0
+
+    lots: int = 0
+
+    risk_reward: float = 0.0
+
+    # =====================================================
+    # Exit
+    # =====================================================
+
+    exit_price: float = 0.0
+
+    pnl: float = 0.0
+
+    holding_minutes: float = 0.0
+
+    exit_reason: str = ""
+
+    outcome: str = ""
+
+    # =====================================================
+    # AI
+    # =====================================================
+
+    similarity_score: float = 0.0
+
+    historical_win_rate: float = 0.0
+
+    expected_move: float = 0.0
+
+    expected_holding: float = 0.0
+
+    expected_probability: float = 0.0
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\result.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\similarity\candidate_filter.py
+==================================================
+from __future__ import annotations
+
+
+class CandidateFilter:
+    """
+    Narrows the search space before similarity scoring.
+    """
+
+    def filter(
+        self,
+        current,
+        records,
+    ):
+
+        candidates = []
+
+        for record in records:
+
+            #
+            # Same option side
+            #
+            if record.option_type != current.option_type:
+                continue
+
+            #
+            # Same signal
+            #
+            if record.signal != current.signal:
+                continue
+
+            candidates.append(record)
+
+        return candidates
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\similarity\scorer.py
+==================================================
+from __future__ import annotations
+
+
+class SimilarityScorer:
+    """
+    Computes weighted similarity score between
+    two TradeIntelligenceRecords.
+    """
+
+    WEIGHTS = {
+
+        "dealer_gamma":20,
+
+        "dealer_delta":15,
+
+        "trend":15,
+
+        "market_structure":10,
+
+        "gamma_exposure":10,
+
+        "delta_exposure":10,
+
+        "iv_rank":5,
+
+        "pcr":5,
+
+        "adx":5,
+
+        "confidence":5,
+
+    }
+
+    def score(
+        self,
+        current,
+        historical,
+    ):
+
+        score = 0
+
+        #
+        # Dealer Gamma
+        #
+
+        if current.dealer_gamma == historical.dealer_gamma:
+
+            score += self.WEIGHTS["dealer_gamma"]
+
+        #
+        # Dealer Delta
+        #
+
+        if current.dealer_delta == historical.dealer_delta:
+
+            score += self.WEIGHTS["dealer_delta"]
+
+        #
+        # Trend
+        #
+
+        if current.trend == historical.trend:
+
+            score += self.WEIGHTS["trend"]
+
+        #
+        # Structure
+        #
+
+        if current.market_structure == historical.market_structure:
+
+            score += self.WEIGHTS["market_structure"]
+
+        #
+        # Numeric Similarity
+        #
+
+        score += self._numeric(
+
+            current.gamma_exposure,
+
+            historical.gamma_exposure,
+
+            self.WEIGHTS["gamma_exposure"]
+
+        )
+
+        score += self._numeric(
+
+            current.delta_exposure,
+
+            historical.delta_exposure,
+
+            self.WEIGHTS["delta_exposure"]
+
+        )
+
+        score += self._numeric(
+
+            current.iv_rank,
+
+            historical.iv_rank,
+
+            self.WEIGHTS["iv_rank"]
+
+        )
+
+        score += self._numeric(
+
+            current.pcr,
+
+            historical.pcr,
+
+            self.WEIGHTS["pcr"]
+
+        )
+
+        score += self._numeric(
+
+            current.adx,
+
+            historical.adx,
+
+            self.WEIGHTS["adx"]
+
+        )
+
+        score += self._numeric(
+
+            current.confidence,
+
+            historical.confidence,
+
+            self.WEIGHTS["confidence"]
+
+        )
+
+        return round(score,2)
+
+    def _numeric(
+        self,
+        a,
+        b,
+        weight,
+    ):
+
+        if a == b:
+
+            return weight
+
+        diff = abs(a-b)
+
+        pct = max(
+
+            0,
+
+            1-(diff/max(abs(a),abs(b),1))
+
+        )
+
+        return weight*pct
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\similarity\similarity_engine.py
+==================================================
+from __future__ import annotations
+
+from analytics.intelligence.similarity.candidate_filter import CandidateFilter
+from analytics.intelligence.similarity.scorer import SimilarityScorer
+
+
+class SimilarityEngine:
+
+    def __init__(self):
+
+        self.filter = CandidateFilter()
+
+        self.scorer = SimilarityScorer()
+
+    def search(
+        self,
+        current,
+        history,
+        top_n=20,
+    ):
+
+        candidates = self.filter.filter(
+
+            current,
+
+            history,
+
+        )
+
+        scored = []
+
+        for record in candidates:
+
+            similarity = self.scorer.score(
+
+                current,
+
+                record,
+
+            )
+
+            scored.append(
+
+                (
+
+                    similarity,
+
+                    record,
+
+                )
+
+            )
+
+        scored.sort(
+
+            reverse=True,
+
+            key=lambda x:x[0]
+
+        )
+
+        return scored[:top_n]
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\similarity_engine.py
+==================================================
+from __future__ import annotations
+
+
+class SimilarityEngine:
+    """
+    Finds historically similar
+    Trade Intelligence records.
+    """
+
+    def search(
+        self,
+        current,
+        history,
+    ):
+
+        raise NotImplementedError(
+            "Similarity algorithm coming next."
+        )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\validation\historical_validation.py
+==================================================
+class HistoricalValidationEngine:
+
+    def __init__(self):
+
+        self.similarity = SimilarityEngine()
+
+    def validate(
+        self,
+        current,
+        memory,
+    ):
+
+        matches = self.similarity.search(
+
+            current,
+
+            memory.records,
+
+            top_n=100,
+
+        )
+
+        #
+        # Aggregate statistics
+        #
+
+        return HistoricalValidation(...)
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\intelligence\validation\models.py
+==================================================
+from dataclasses import dataclass
+
+
+@dataclass(slots=True)
+class HistoricalValidation:
+
+    similar_markets: int = 0
+
+    average_similarity: float = 0.0
+
+    win_rate: float = 0.0
+
+    average_pnl: float = 0.0
+
+    average_holding_minutes: float = 0.0
+
+    target1_probability: float = 0.0
+
+    stoploss_probability: float = 0.0
+
+    recommendation: str = ""
+
+    confidence_adjustment: float = 0.0
+
+

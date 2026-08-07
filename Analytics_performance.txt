@@ -1,0 +1,711 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\performance\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\performance\drawdown.py
+==================================================
+class Drawdown:
+
+    def calculate(self, trades):
+
+        equity = 0
+
+        peak = 0
+
+        max_dd = 0
+
+        for trade in trades:
+
+            equity += trade.pnl
+
+            peak = max(
+                peak,
+                equity
+            )
+
+            dd = peak - equity
+
+            max_dd = max(
+                max_dd,
+                dd
+            )
+
+        return round(
+            max_dd,
+            2
+        )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\performance\equity_curve.py
+==================================================
+class EquityCurve:
+
+    def build(self, trades):
+
+        equity = []
+
+        total = 0
+
+        for trade in trades:
+
+            total += trade.pnl
+
+            equity.append(total)
+
+        return equity
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\performance\expectancy.py
+==================================================
+class Expectancy:
+    """
+    Calculates trading expectancy.
+
+    Formula:
+
+        (Win Rate Ã— Average Win)
+        -
+        (Loss Rate Ã— Average Loss)
+    """
+
+    def calculate(
+
+        self,
+
+        win_rate,
+
+        loss_rate,
+
+        average_win,
+
+        average_loss
+
+    ):
+
+        expectancy = (
+
+            (win_rate / 100) * average_win
+
+            -
+
+            (loss_rate / 100) * average_loss
+
+        )
+
+        return round(
+
+            expectancy,
+
+            2
+
+        )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\performance\performance_engine.py
+==================================================
+from analytics.performance.statistics import PerformanceStatistics
+from analytics.performance.trade_analytics import TradeAnalytics
+from analytics.performance.risk_analytics import RiskAnalytics
+from analytics.performance.portfolio_analytics import PortfolioAnalytics
+
+
+class PerformanceEngine:
+    """
+    Orchestrates all performance analytics.
+
+    Pipeline:
+
+        Trades
+           â”‚
+           â–¼
+    TradeAnalytics
+           â”‚
+    RiskAnalytics
+           â”‚
+    PortfolioAnalytics
+           â”‚
+           â–¼
+    PerformanceStatistics
+    """
+
+    def __init__(self):
+
+        self.trade_analytics = TradeAnalytics()
+
+        self.risk_analytics = RiskAnalytics()
+
+        self.portfolio_analytics = PortfolioAnalytics()
+
+    def analyze(self, trades):
+
+        stats = PerformanceStatistics()
+
+        trade_metrics = self.trade_analytics.analyze(trades)
+
+        risk_metrics = self.risk_analytics.analyze(trades)
+
+        portfolio_metrics = self.portfolio_analytics.analyze(trades)
+
+        # ----------------------------
+        # Trade Metrics
+        # ----------------------------
+
+        stats.total_trades = trade_metrics["total_trades"]
+
+        stats.winning_trades = trade_metrics["winning_trades"]
+
+        stats.losing_trades = trade_metrics["losing_trades"]
+
+        stats.win_rate = trade_metrics["win_rate"]
+
+        stats.loss_rate = trade_metrics["loss_rate"]
+
+        stats.average_win = trade_metrics["average_win"]
+
+        stats.average_loss = trade_metrics["average_loss"]
+
+        stats.largest_win = trade_metrics["largest_win"]
+
+        stats.largest_loss = trade_metrics["largest_loss"]
+
+        # ----------------------------
+        # Risk Metrics
+        # ----------------------------
+
+        stats.gross_profit = risk_metrics["gross_profit"]
+
+        stats.gross_loss = risk_metrics["gross_loss"]
+
+        stats.net_profit = risk_metrics["net_profit"]
+
+        stats.profit_factor = risk_metrics["profit_factor"]
+
+        stats.expectancy = risk_metrics["expectancy"]
+
+        stats.max_drawdown = risk_metrics["max_drawdown"]
+
+        stats.current_drawdown = risk_metrics["current_drawdown"]
+
+        # ----------------------------
+        # Portfolio Metrics
+        # ----------------------------
+
+        stats.equity_curve = portfolio_metrics["equity_curve"]
+
+        return stats
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\performance\portfolio_analytics.py
+==================================================
+class PortfolioAnalytics:
+    """
+    Portfolio performance analytics.
+
+    Responsibility:
+    - Equity Curve
+    - Running Equity
+    - Peak Equity
+    - Portfolio Growth
+    """
+
+    def analyze(self, trades):
+        """
+        Analyze portfolio performance.
+
+        Args:
+            trades (list): List of completed Trade objects.
+
+        Returns:
+            dict
+        """
+
+        if not trades:
+            return {
+                "equity_curve": [],
+                "running_equity": 0.0,
+                "peak_equity": 0.0,
+                "portfolio_growth": 0.0,
+            }
+
+        equity_curve = []
+
+        running_equity = 0.0
+
+        peak_equity = 0.0
+
+        for trade in trades:
+
+            running_equity += trade.pnl
+
+            equity_curve.append(
+                round(running_equity, 2)
+            )
+
+            peak_equity = max(
+                peak_equity,
+                running_equity
+            )
+
+        portfolio_growth = running_equity
+
+        return {
+
+            "equity_curve": equity_curve,
+
+            "running_equity": round(
+                running_equity,
+                2
+            ),
+
+            "peak_equity": round(
+                peak_equity,
+                2
+            ),
+
+            "portfolio_growth": round(
+                portfolio_growth,
+                2
+            ),
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\performance\profit_factor.py
+==================================================
+class ProfitFactor:
+    """
+    Calculates profit metrics.
+    """
+
+    def calculate(self, trades):
+
+        gross_profit = sum(
+
+            trade.pnl
+
+            for trade in trades
+
+            if trade.pnl > 0
+
+        )
+
+        gross_loss = abs(sum(
+
+            trade.pnl
+
+            for trade in trades
+
+            if trade.pnl < 0
+
+        ))
+
+        average_win = 0.0
+
+        average_loss = 0.0
+
+        winners = [
+
+            t.pnl
+
+            for t in trades
+
+            if t.pnl > 0
+
+        ]
+
+        losers = [
+
+            abs(t.pnl)
+
+            for t in trades
+
+            if t.pnl < 0
+
+        ]
+
+        if winners:
+
+            average_win = round(
+
+                sum(winners) / len(winners),
+
+                2
+
+            )
+
+        if losers:
+
+            average_loss = round(
+
+                sum(losers) / len(losers),
+
+                2
+
+            )
+
+        profit_factor = 0.0
+
+        if gross_loss > 0:
+
+            profit_factor = round(
+
+                gross_profit / gross_loss,
+
+                2
+
+            )
+
+        return {
+
+            "gross_profit": round(gross_profit, 2),
+
+            "gross_loss": round(gross_loss, 2),
+
+            "average_win": average_win,
+
+            "average_loss": average_loss,
+
+            "profit_factor": profit_factor
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\performance\risk_analytics.py
+==================================================
+class RiskAnalytics:
+    """
+    Risk and profitability analytics.
+
+    Responsibility:
+    - Gross Profit
+    - Gross Loss
+    - Net Profit
+    - Profit Factor
+    - Expectancy
+    - Maximum Drawdown
+    - Current Drawdown
+    """
+
+    def analyze(self, trades):
+        """
+        Analyze completed trades.
+
+        Args:
+            trades (list): List of completed Trade objects.
+
+        Returns:
+            dict
+        """
+
+        if not trades:
+            return {
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+                "net_profit": 0.0,
+                "profit_factor": 0.0,
+                "expectancy": 0.0,
+                "max_drawdown": 0.0,
+                "current_drawdown": 0.0,
+            }
+
+        winners = [trade.pnl for trade in trades if trade.pnl > 0]
+        losers = [abs(trade.pnl) for trade in trades if trade.pnl < 0]
+
+        gross_profit = sum(winners)
+        gross_loss = sum(losers)
+        net_profit = gross_profit - gross_loss
+
+        average_win = (
+            gross_profit / len(winners)
+            if winners else 0.0
+        )
+
+        average_loss = (
+            gross_loss / len(losers)
+            if losers else 0.0
+        )
+
+        win_rate = (
+            len(winners) / len(trades)
+        ) if trades else 0.0
+
+        loss_rate = (
+            len(losers) / len(trades)
+        ) if trades else 0.0
+
+        expectancy = (
+            (win_rate * average_win)
+            -
+            (loss_rate * average_loss)
+        )
+
+        if gross_loss == 0:
+            profit_factor = float("inf") if gross_profit > 0 else 0.0
+        else:
+            profit_factor = gross_profit / gross_loss
+
+        equity = 0.0
+        peak = 0.0
+        max_drawdown = 0.0
+        current_drawdown = 0.0
+
+        for trade in trades:
+
+            equity += trade.pnl
+
+            if equity > peak:
+                peak = equity
+
+            drawdown = peak - equity
+
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+
+            current_drawdown = drawdown
+
+        return {
+
+            "gross_profit": round(gross_profit, 2),
+
+            "gross_loss": round(gross_loss, 2),
+
+            "net_profit": round(net_profit, 2),
+
+            "profit_factor": (
+                round(profit_factor, 2)
+                if profit_factor != float("inf")
+                else float("inf")
+            ),
+
+            "expectancy": round(expectancy, 2),
+
+            "max_drawdown": round(max_drawdown, 2),
+
+            "current_drawdown": round(current_drawdown, 2),
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\performance\statistics.py
+==================================================
+from dataclasses import dataclass
+
+
+@dataclass
+class PerformanceStatistics:
+    """
+    Aggregated trading performance metrics.
+    """
+
+    total_trades: int = 0
+
+    winning_trades: int = 0
+
+    losing_trades: int = 0
+
+    win_rate: float = 0.0
+
+    loss_rate: float = 0.0
+
+    gross_profit: float = 0.0
+
+    gross_loss: float = 0.0
+
+    net_profit: float = 0.0
+
+    average_win: float = 0.0
+
+    average_loss: float = 0.0
+
+    profit_factor: float = 0.0
+
+    expectancy: float = 0.0
+
+    largest_win: float = 0.0
+
+    largest_loss: float = 0.0
+
+    max_drawdown: float = 0.0
+
+    current_drawdown: float = 0.0
+
+    equity_curve: list[float] | None = None
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\performance\trade_analytics.py
+==================================================
+class TradeAnalytics:
+    """
+    Calculates trade performance statistics.
+
+    Responsibility:
+    - Trade counts
+    - Win/Loss ratio
+    - Average Win/Loss
+    - Largest Win/Loss
+
+    This class is independent of:
+    - PaperBroker
+    - RuntimeContext
+    - Dashboard
+    - Database
+    """
+
+    def analyze(self, trades):
+        """
+        Analyze completed trades.
+
+        Args:
+            trades (list): List of completed Trade objects.
+
+        Returns:
+            dict
+        """
+
+        total_trades = len(trades)
+
+        if total_trades == 0:
+            return {
+                "total_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "win_rate": 0.0,
+                "loss_rate": 0.0,
+                "average_win": 0.0,
+                "average_loss": 0.0,
+                "largest_win": 0.0,
+                "largest_loss": 0.0,
+            }
+
+        winners = [trade.pnl for trade in trades if trade.pnl > 0]
+        losers = [abs(trade.pnl) for trade in trades if trade.pnl < 0]
+
+        winning_trades = len(winners)
+        losing_trades = len(losers)
+
+        average_win = (
+            sum(winners) / winning_trades
+            if winning_trades
+            else 0.0
+        )
+
+        average_loss = (
+            sum(losers) / losing_trades
+            if losing_trades
+            else 0.0
+        )
+
+        return {
+
+            "total_trades": total_trades,
+
+            "winning_trades": winning_trades,
+
+            "losing_trades": losing_trades,
+
+            "win_rate": round(
+                (winning_trades / total_trades) * 100,
+                2
+            ),
+
+            "loss_rate": round(
+                (losing_trades / total_trades) * 100,
+                2
+            ),
+
+            "average_win": round(
+                average_win,
+                2
+            ),
+
+            "average_loss": round(
+                average_loss,
+                2
+            ),
+
+            "largest_win": round(
+                max(winners),
+                2
+            ) if winners else 0.0,
+
+            "largest_loss": round(
+                max(losers),
+                2
+            ) if losers else 0.0,
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\performance\win_rate.py
+==================================================
+class WinRate:
+    """
+    Calculates trade win/loss statistics.
+    """
+
+    def calculate(self, trades):
+
+        total = len(trades)
+
+        if total == 0:
+
+            return {
+
+                "winning_trades": 0,
+
+                "losing_trades": 0,
+
+                "win_rate": 0.0,
+
+                "loss_rate": 0.0
+
+            }
+
+        winning = sum(
+
+            1
+
+            for trade in trades
+
+            if trade.pnl > 0
+
+        )
+
+        losing = total - winning
+
+        return {
+
+            "winning_trades": winning,
+
+            "losing_trades": losing,
+
+            "win_rate": round(
+
+                (winning / total) * 100,
+
+                2
+
+            ),
+
+            "loss_rate": round(
+
+                (losing / total) * 100,
+
+                2
+
+            )
+
+        }
+
+

@@ -1,0 +1,138 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\core\runtime_config.py
+==================================================
+from dataclasses import dataclass
+
+
+@dataclass
+class RuntimeConfig:
+    """
+    Runtime/session configuration.
+
+    These values change depending on the
+    trading account or execution mode.
+    """
+
+    capital: float = 500000
+
+    risk_percent: float = 1.0
+
+    default_lot_size: int = 65
+
+    broker: str = "INDMoney"
+
+    paper_mode: bool = True
+
+    live_mode: bool = False
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\core\runtime_context.py
+==================================================
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass
+class RuntimeContext:
+    """
+    Carries all runtime information
+    through the QuantNifty runtime.
+
+    Shared by
+
+        LiveEngine
+            â†“
+        Analytics Pipeline
+            â†“
+        Decision Engine
+            â†“
+        Paper Trading
+            â†“
+        Dashboard
+    """
+
+    # ==========================================================
+    # MARKET
+    # ==========================================================
+
+    symbol: str = "NIFTY"
+
+    spot: float = 0.0
+
+    expiry: str = ""
+
+    timestamp: str = ""
+
+    # ==========================================================
+    # RAW MARKET DATA
+    # ==========================================================
+
+    option_chain: Any = None
+
+    greeks_df: Any = None
+
+    candles: Any = None
+
+    # ==========================================================
+    # ANALYTICS
+    # ==========================================================
+
+    analytics: dict = field(default_factory=dict)
+
+    features: dict = field(default_factory=dict)
+
+    regime: Any = None
+
+    # ==========================================================
+    # DOMAIN OBJECTS
+    # ==========================================================
+
+    snapshot: Any = None
+
+    decision: Any = None
+
+    explanation: Any = None
+
+    # ==========================================================
+    # PAPER TRADING
+    # ==========================================================
+
+    portfolio: Any = None
+
+    position: Any = None
+
+    last_trade: Any = None
+
+    journal: Any = None
+
+    performance: Any = None
+
+    # Risk Manager State
+    risk_state: Any = None
+
+    trade_status: str = ""
+
+    trade_block_reason: str = ""
+    
+    # ==========================================================
+    # RUNTIME
+    # ==========================================================
+
+    runtime_status: str = "READY"
+
+    cycle_no: int = 0
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\core\runtime_mode.py
+==================================================
+from enum import Enum
+
+
+class RuntimeMode(str, Enum):
+    LIVE = "LIVE"
+    REPLAY = "REPLAY"
+    SIMULATION = "SIMULATION"
+
+

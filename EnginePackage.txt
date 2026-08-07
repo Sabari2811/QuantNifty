@@ -1,0 +1,2299 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\candle_manager.py
+==================================================
+import pandas as pd
+
+
+class CandleManager:
+    """
+    Converts provider candle data into a standardized DataFrame.
+
+    Standard Columns
+
+        datetime
+        open
+        high
+        low
+        close
+        volume
+    """
+
+    def to_dataframe(self, candles):
+
+        if not candles:
+
+            return pd.DataFrame(
+                columns=[
+                    "datetime",
+                    "open",
+                    "high",
+                    "low",
+                    "close",
+                    "volume"
+                ]
+            )
+
+        rows = []
+
+        for candle in candles:
+
+            rows.append({
+
+                "datetime": pd.to_datetime(
+                    candle["ts"],
+                    unit="s"
+                ),
+
+                "open": float(candle["o"]),
+
+                "high": float(candle["h"]),
+
+                "low": float(candle["l"]),
+
+                "close": float(candle["c"]),
+
+                "volume": float(candle["v"])
+
+            })
+
+        df = pd.DataFrame(rows)
+
+        df.sort_values(
+            "datetime",
+            inplace=True
+        )
+
+        df.reset_index(
+            drop=True,
+            inplace=True
+        )
+
+        return df
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\core\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\core\instrument_repository.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\core\lookup_builder.py
+==================================================
+from utils.cache import LookupCache
+
+
+class LookupBuilder:
+    """
+    Builds high-performance lookup caches from
+    instrument master DataFrames.
+    """
+
+    def __init__(self):
+
+        self.option_lookup = LookupCache()
+        self.expiry_lookup = LookupCache()
+        self.lot_lookup = LookupCache()
+        self.index_lookup = LookupCache()
+
+    # ----------------------------------------------------
+    # OPTION LOOKUP
+    # ----------------------------------------------------
+
+    def build_option_lookup(self, df):
+
+        self.option_lookup.clear()
+
+        for _, row in df.iterrows():
+
+            symbol = (
+                str(row["TRADING_SYMBOL"])
+                .split("-")[0]
+                .upper()
+            )
+
+            key = (
+                symbol,
+                row["EXPIRY_DATE"],
+                float(row["STRIKE_PRICE"]),
+                row["OPTION_TYPE"].upper()
+            )
+
+            self.option_lookup.add(key, row)
+
+        return self.option_lookup.size()
+
+    # ----------------------------------------------------
+    # EXPIRY LOOKUP
+    # ----------------------------------------------------
+
+    def build_expiry_lookup(self, df):
+
+        self.expiry_lookup.clear()
+
+        symbols = (
+            df["TRADING_SYMBOL"]
+            .str.split("-")
+            .str[0]
+            .unique()
+        )
+
+        for symbol in symbols:
+
+            expiry = (
+                df[
+                    df["TRADING_SYMBOL"]
+                    .str.startswith(symbol)
+                ]["EXPIRY_DATE"]
+                .drop_duplicates()
+                .sort_values()
+                .tolist()
+            )
+
+            self.expiry_lookup.add(symbol, expiry)
+
+        return self.expiry_lookup.size()
+
+    # ----------------------------------------------------
+    # LOT SIZE LOOKUP
+    # ----------------------------------------------------
+
+    def build_lot_lookup(self, df):
+
+        self.lot_lookup.clear()
+
+        symbols = (
+            df["TRADING_SYMBOL"]
+            .str.split("-")
+            .str[0]
+            .unique()
+        )
+
+        for symbol in symbols:
+
+            lot = int(
+                df[
+                    df["TRADING_SYMBOL"]
+                    .str.startswith(symbol)
+                ]
+                .iloc[0]["LOT_UNITS"]
+            )
+
+            self.lot_lookup.add(symbol, lot)
+
+        return self.lot_lookup.size()
+
+    # ----------------------------------------------------
+    # INDEX LOOKUP
+    # ----------------------------------------------------
+
+    def build_index_lookup(self, df):
+
+        self.index_lookup.clear()
+
+        for _, row in df.iterrows():
+
+            self.index_lookup.add(
+                row["SEGMENT"].upper(),
+                int(row["SECURITY_ID"])
+            )
+
+        return self.index_lookup.size()
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\gamma_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\greeks_engine.py
+==================================================
+from datetime import datetime
+
+from py_vollib.black_scholes.implied_volatility import implied_volatility
+from py_vollib.black_scholes.greeks.analytical import (
+    delta,
+    gamma,
+    theta,
+    vega,
+    rho,
+)
+
+
+class GreeksEngine:
+
+    def __init__(self, risk_free_rate=0.06):
+        self.r = risk_free_rate
+
+    # -------------------------------------------------------
+    # Convert expiry datetime to years
+    # -------------------------------------------------------
+
+    def get_time_to_expiry(self, expiry):
+
+        if isinstance(expiry, str):
+            expiry = datetime.strptime(
+                expiry,
+                "%d/%m/%Y %H:%M"
+            )
+
+        seconds = (expiry - datetime.now()).total_seconds()
+
+        if seconds <= 0:
+            seconds = 1
+
+        return seconds / (365 * 24 * 60 * 60)
+
+    # -------------------------------------------------------
+    # Main Greeks Calculator
+    # -------------------------------------------------------
+
+    def calculate_greeks(
+        self,
+        option_price,
+        spot_price,
+        strike_price,
+        option_type,
+        expiry=None,
+        time_to_expiry=None,
+        risk_free_rate=None
+    ):
+
+        if risk_free_rate is None:
+            risk_free_rate = self.r
+
+        if time_to_expiry is None:
+
+            if expiry is None:
+                raise ValueError(
+                    "Either expiry or time_to_expiry must be provided."
+                )
+
+            time_to_expiry = self.get_time_to_expiry(expiry)
+
+        flag = "c" if option_type.upper() == "CE" else "p"
+
+        try:
+
+            iv = implied_volatility(
+                option_price,
+                spot_price,
+                strike_price,
+                time_to_expiry,
+                risk_free_rate,
+                flag
+            )
+
+            return {
+
+                "iv": iv,
+
+                "delta": delta(
+                    flag,
+                    spot_price,
+                    strike_price,
+                    time_to_expiry,
+                    risk_free_rate,
+                    iv
+                ),
+
+                "gamma": gamma(
+                    flag,
+                    spot_price,
+                    strike_price,
+                    time_to_expiry,
+                    risk_free_rate,
+                    iv
+                ),
+
+                "theta": theta(
+                    flag,
+                    spot_price,
+                    strike_price,
+                    time_to_expiry,
+                    risk_free_rate,
+                    iv
+                ),
+
+                "vega": vega(
+                    flag,
+                    spot_price,
+                    strike_price,
+                    time_to_expiry,
+                    risk_free_rate,
+                    iv
+                ),
+
+                "rho": rho(
+                    flag,
+                    spot_price,
+                    strike_price,
+                    time_to_expiry,
+                    risk_free_rate,
+                    iv
+                )
+
+            }
+
+        except Exception:
+
+            return {
+
+                "iv": None,
+                "delta": None,
+                "gamma": None,
+                "theta": None,
+                "vega": None,
+                "rho": None
+
+            }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\icici_provider.py
+==================================================
+import pandas as pd
+
+
+class ICICIProvider:
+
+    def __init__(self, breeze):
+        self.breeze = breeze
+
+    def get_spot_price(self):
+
+        response = self.breeze.get_quotes(
+            stock_code="NIFTY",
+            exchange_code="NSE",
+            product_type="cash",
+            right="others",
+            strike_price="0",
+            expiry_date=""
+        )
+
+        data = response["Success"][0]
+
+        return {
+            "LTP": data["ltp"],
+            "OPEN": data["open"],
+            "HIGH": data["high"],
+            "LOW": data["low"],
+            "TIME": data["ltt"]
+        }
+
+    def get_option_chain(self,
+                         expiry_date,
+                         right,
+                         strike_price):
+
+        response = self.breeze.get_option_chain_quotes(
+            stock_code="NIFTY",
+            exchange_code="NFO",
+            expiry_date=expiry_date,
+            product_type="options",
+            right=right,
+            strike_price=strike_price
+        )
+
+        return response
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\instrument_manager.py
+==================================================
+import os
+from typing import Dict, List
+
+import pandas as pd
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+class InstrumentManager:
+    """
+    Instrument Manager
+
+    Responsibilities
+    ----------------
+    - Download instrument masters
+    - Cache DataFrames
+    - Search instruments
+    - Lookup option contracts
+    - Expiry lookup
+    - Security ID lookup
+    """
+
+    BASE_URL = "https://api.indstocks.com"
+
+    def __init__(self):
+
+        self.token = os.getenv("INDSTOCKS_API_TOKEN")
+
+        if not self.token:
+            raise Exception("INDSTOCKS_API_TOKEN not found.")
+
+        self.headers = {
+            "Authorization": self.token,
+            "Content-Type": "application/json"
+        }
+
+        self.save_folder = "data/instruments"
+
+        os.makedirs(self.save_folder, exist_ok=True)
+
+        # In-memory cache
+        self.cache: Dict[str, pd.DataFrame] = {}
+
+    # ======================================================
+    # DOWNLOAD
+    # ======================================================
+
+    def download_instruments(self, source: str):
+
+        print(f"\nDownloading {source} instruments...")
+
+        response = requests.get(
+            f"{self.BASE_URL}/market/instruments",
+            headers=self.headers,
+            params={"source": source},
+            timeout=60
+        )
+
+        response.raise_for_status()
+
+        filename = os.path.join(
+            self.save_folder,
+            f"{source}.csv"
+        )
+
+        with open(filename, "wb") as f:
+            f.write(response.content)
+
+        print(f"Saved : {filename}")
+
+        self.cache.pop(source, None)
+
+    # ======================================================
+    # LOAD
+    # ======================================================
+
+    def load(self, source: str) -> pd.DataFrame:
+
+        if source in self.cache:
+            return self.cache[source]
+
+        filename = os.path.join(
+            self.save_folder,
+            f"{source}.csv"
+        )
+
+        if not os.path.exists(filename):
+            raise FileNotFoundError(filename)
+
+        df = pd.read_csv(filename)
+
+        self.cache[source] = df
+
+        print(f"{source.upper()} loaded ({len(df)} records).")
+
+        return df
+
+    # ======================================================
+    # COMPATIBILITY METHODS
+    # ======================================================
+
+    def load_fno(self):
+        return self.load("fno")
+
+    def load_index(self):
+        return self.load("index")
+
+    def load_equity(self):
+        return self.load("equity")
+
+    # ======================================================
+    # PUBLIC
+    # ======================================================
+
+    def get_dataframe(self, source: str):
+
+        return self.load(source)
+
+    def stats(self, source: str):
+
+        df = self.load(source)
+
+        print("\nRows :", len(df))
+        print("Columns :", len(df.columns))
+
+    def columns(self, source: str):
+
+        df = self.load(source)
+
+        print()
+
+        for c in df.columns:
+            print(c)
+
+    # ======================================================
+    # SEARCH
+    # ======================================================
+
+    def search(self, source: str, keyword: str):
+
+        df = self.load(source)
+
+        keyword = keyword.upper()
+
+        return df[
+            df.astype(str)
+            .apply(
+                lambda c: c.str.upper().str.contains(
+                    keyword,
+                    na=False
+                )
+            )
+            .any(axis=1)
+        ]
+    
+    # ======================================================
+    # SCRIP CODE
+    # ======================================================
+
+    def get_scrip_code(
+        self,
+        exchange,
+        security_id
+    ):
+
+        exchange = str(exchange).upper()
+        security_id = int(security_id)
+
+        return f"{exchange}_{security_id}"
+    
+    # ======================================================
+    # OPTIONS
+    # ======================================================
+
+    def get_options(self, symbol: str) -> pd.DataFrame:
+
+        df = self.load("fno")
+
+        symbol = symbol.upper()
+
+        first_token = (
+            df["TRADING_SYMBOL"]
+            .astype(str)
+            .str.split("-")
+            .str[0]
+            .str.upper()
+        )
+
+        return df[first_token == symbol].copy()
+
+    # ======================================================
+    # EXPIRY
+    # ======================================================
+    
+    def get_expiry_dates(self, symbol: str) -> List[str]:
+
+        df = self.get_options(symbol)
+
+        return (
+            df["EXPIRY_DATE"]
+            .dropna()
+            .drop_duplicates()
+            .sort_values()
+            .tolist()
+        )
+
+    def get_nearest_weekly_expiry(self, symbol: str):
+        """
+        Returns the nearest FUTURE weekly expiry.
+        Expired weekly expiries are ignored.
+        """
+
+        df = self.get_options(symbol)
+
+        weekly = df[
+            df["EXPIRY_FLAG"].astype(str).str.upper() == "W"
+        ].copy()
+
+        if weekly.empty:
+            return None
+
+        weekly["EXPIRY_DATE"] = pd.to_datetime(
+            weekly["EXPIRY_DATE"],
+            errors="coerce"
+        )
+
+        weekly = weekly.dropna(
+            subset=["EXPIRY_DATE"]
+        )
+
+        now = pd.Timestamp.now()
+
+        weekly = weekly[
+            weekly["EXPIRY_DATE"] > now
+        ]
+
+        if weekly.empty:
+            return None
+
+        expiry = (
+            weekly["EXPIRY_DATE"]
+            .drop_duplicates()
+            .sort_values()
+            .iloc[0]
+        )
+
+        return expiry.strftime(
+            "%m/%d/%Y %H:%M"
+        )
+
+    def get_monthly_expiry(self, symbol: str):
+
+        df = self.get_options(symbol)
+
+        monthly = df[df["EXPIRY_FLAG"] == "M"]
+
+        expiry = (
+            monthly["EXPIRY_DATE"]
+            .drop_duplicates()
+            .sort_values()
+            .tolist()
+        )
+
+        return expiry[0] if expiry else None
+
+    # ======================================================
+    # OPTION LOOKUP
+    # ======================================================
+
+    def get_option(
+        self,
+        symbol: str,
+        expiry: str,
+        strike: float,
+        option_type: str
+    ):
+
+        df = self.get_options(symbol)
+
+        result = df[
+            (df["EXPIRY_DATE"] == expiry)
+            &
+            (df["STRIKE_PRICE"] == float(strike))
+            &
+            (df["OPTION_TYPE"] == option_type.upper())
+        ]
+
+        if result.empty:
+            return None
+
+        return result.iloc[0]
+
+    # ======================================================
+    # SECURITY ID
+    # ======================================================
+
+    def get_security_id(
+        self,
+        symbol: str,
+        expiry: str,
+        strike: float,
+        option_type: str
+    ):
+
+        option = self.get_option(
+            symbol,
+            expiry,
+            strike,
+            option_type
+        )
+
+        if option is None:
+            return None
+
+        return int(option["SECURITY_ID"])
+
+    # ======================================================
+    # LOT SIZE
+    # ======================================================
+
+    def get_lot_size(self, symbol: str):
+
+        df = self.get_options(symbol)
+
+        if df.empty:
+            return None
+
+        return int(df.iloc[0]["LOT_UNITS"])
+
+    # ======================================================
+    # INDEX SECURITY ID
+    # ======================================================
+
+    def get_index_security_id(self, index_name: str):
+        """
+        Returns SECURITY_ID for supported indices.
+
+        Supports aliases:
+
+            NIFTY
+            NIFTY 50
+
+            BANKNIFTY
+            BANK NIFTY
+
+            FINNIFTY
+            NIFTY FIN SERVICE
+
+            MIDCPNIFTY
+            NIFTY MID SELECT
+        """
+
+        aliases = {
+
+            "NIFTY": "NIFTY 50",
+            "NIFTY50": "NIFTY 50",
+
+            "BANKNIFTY": "BANK NIFTY",
+            "NIFTY BANK": "BANK NIFTY",
+
+            "FINNIFTY": "NIFTY FINANCIAL",
+            "NIFTY FIN SERVICE": "NIFTY FINANCIAL",
+
+            "MIDCPNIFTY": "NIFTY MIDCAP SEL",
+            "NIFTY MID SELECT": "NIFTY MIDCAP SEL"
+
+        }
+
+        lookup = aliases.get(
+            index_name.upper(),
+            index_name
+        )
+
+        df = self.load_index()
+
+        segment = (
+            df["SEGMENT"]
+            .astype(str)
+            .str.upper()
+            .str.strip()
+        )
+
+        # ------------------------------------------
+        # Exact Match
+        # ------------------------------------------
+
+        result = df[
+            segment == lookup.upper()
+        ]
+
+        if not result.empty:
+
+            return int(
+                result.iloc[0]["SECURITY_ID"]
+            )
+
+        # ------------------------------------------
+        # Partial Match
+        # ------------------------------------------
+
+        result = df[
+            segment.str.contains(
+                lookup.upper(),
+                regex=False,
+                na=False
+            )
+        ]
+
+        if not result.empty:
+
+            return int(
+                result.iloc[0]["SECURITY_ID"]
+            )
+
+        print(
+            f"Index not found : {index_name}"
+        )
+
+        return None
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\live_engine.py
+==================================================
+from datetime import datetime
+from core.runtime_context import RuntimeContext
+from decision.explanation_engine import ExplanationEngine
+
+from providers.indmoney_provider import INDMoneyProvider
+from paper_trading.broker import PaperBroker
+
+from engine.instrument_manager import InstrumentManager
+from engine.market_data_manager import MarketDataManager
+from engine.strike_selector import StrikeSelector
+from engine.option_chain_manager import OptionChainManager
+from decision.market_regime_engine import MarketRegimeEngine
+from engine.live_greeks_engine import LiveGreeksEngine
+from engine.candle_manager import CandleManager
+from engine.market_data_pipeline import MarketDataPipeline
+from risk.risk_manager import RiskManager
+
+from analytics.analytics_pipeline import AnalyticsPipeline
+from analytics.market_snapshot.market_snapshot import MarketSnapshot
+
+from decision.decision_engine import DecisionEngine
+
+
+from ui.console_dashboard import ConsoleDashboard
+from execution.trade_execution_pipeline import TradeExecutionPipeline
+from recording.recording_manager import RecordingManager
+from providers.simulation_provider import SimulationProvider
+from runtime.runtime_mode import RuntimeMode
+
+
+class LiveEngine:
+
+    def __init__(self, provider=None):
+
+        self.ctx = RuntimeContext()
+
+        self.provider = provider
+
+        self._initialize()
+
+    # ==========================================================
+    # INITIALIZATION
+    # ==========================================================
+
+    def _initialize(self):
+
+        print()
+        print("=" * 70)
+        print("INITIALIZING QUANTNIFTY")
+        print("=" * 70)
+
+        if self.provider is None:
+            self.provider = INDMoneyProvider()
+
+        self.provider.connect()
+
+        self.instrument = InstrumentManager()
+
+        self.market = MarketDataManager(
+            self.provider
+        )
+
+        self.selector = StrikeSelector(
+            self.instrument
+        )
+
+        self.chain_manager = OptionChainManager(
+            self.provider,
+            self.selector,
+            self.instrument,
+            self.market
+        )
+
+        self.greeks = LiveGreeksEngine()
+
+        self.candle_manager = CandleManager()
+
+        self.market_pipeline = MarketDataPipeline(
+
+            provider=self.provider,
+
+            instrument=self.instrument,
+
+            market=self.market,
+
+            chain_manager=self.chain_manager,
+
+            candle_manager=self.candle_manager
+
+        )
+
+        self.pipeline = AnalyticsPipeline()
+
+        self.market_regime = MarketRegimeEngine()
+
+        # ------------------------------------------------------
+        # Decision Engine
+        # ------------------------------------------------------
+
+        self.decision_engine = DecisionEngine()
+
+        # ------------------------------------------------------
+        # Explanation Engine
+        # ------------------------------------------------------
+
+        self.explanation_engine = ExplanationEngine()        
+
+        # ------------------------------------------------------
+        # Paper Trading
+        # ------------------------------------------------------
+        self.paper_broker = PaperBroker()
+
+        self.risk_manager = RiskManager()
+
+        self.trade_pipeline = TradeExecutionPipeline(
+
+            paper_broker=self.paper_broker,
+
+            risk_manager=self.risk_manager
+
+        )
+
+        self.recording_manager = RecordingManager()
+
+        # ------------------------------------------------------
+        # Console Dashboard
+        # ------------------------------------------------------
+
+        self.dashboard = ConsoleDashboard()
+
+        self.ctx.runtime_status = "READY"
+
+        print()
+        print("Initialization Complete")
+
+
+    # ==========================================================
+    # GREEKS
+    # ==========================================================
+
+    def _calculate_greeks(self):
+
+        self.ctx.greeks_df = self.greeks.calculate_chain_greeks(
+            self.ctx.option_chain,
+            self.ctx.spot,
+            self.ctx.expiry
+        )
+
+        print()
+        print("=" * 70)
+        print("GREEKS DATAFRAME")
+        print("=" * 70)
+
+        print(self.ctx.greeks_df.columns.tolist())
+
+        print()
+
+        print(self.ctx.greeks_df.head())
+
+    # ==========================================================
+    # Runtime Helpers
+    # ==========================================================
+
+    def _is_replay(self):
+
+        return isinstance(
+            self.provider,
+            SimulationProvider
+        )
+
+
+    def _is_replay_fast(self):
+
+        return (
+
+            self._is_replay()
+
+            and
+
+            self.provider.runtime_mode
+            == RuntimeMode.REPLAY_FAST
+
+        )
+
+
+    def _is_replay_recompute(self):
+
+        return (
+
+            self._is_replay()
+
+            and
+
+            self.provider.runtime_mode
+            == RuntimeMode.REPLAY_RECOMPUTE
+
+        )
+
+
+    # ==========================================================
+    # ANALYTICS
+    # ==========================================================
+
+    def _run_analytics(self):
+
+        self.ctx.analytics = self.pipeline.run(
+            greeks_engine=self.greeks.greeks,
+            greeks_df=self.ctx.greeks_df,
+            spot_price=self.ctx.spot,
+            candles=self.ctx.candles
+        )
+
+        # ------------------------------------------------------
+        # Build Market Snapshot
+        # ------------------------------------------------------
+
+        self.ctx.snapshot = MarketSnapshot().save(
+            greeks_df=self.ctx.analytics["greeks"],
+            spot=self.ctx.spot,
+            analytics=self.ctx.analytics
+        )
+
+        # ------------------------------------------------------
+        # Market Regime
+        # ------------------------------------------------------
+
+        regime = self.market_regime.analyze(
+            self.ctx.snapshot
+        )
+
+        self.ctx.snapshot.regime = regime
+        self.ctx.regime = regime
+
+        # ------------------------------------------------------
+        # Build Institutional Decision
+        # ------------------------------------------------------
+
+        self.ctx.decision = self.decision_engine.build(
+            self.ctx.snapshot
+        )
+
+        # ------------------------------------------------------
+        # Market Explanation
+        # ------------------------------------------------------
+
+        self.ctx.explanation = self.explanation_engine.build(
+
+            decision=self.ctx.decision,
+
+            regime=self.ctx.regime,
+
+            snapshot=self.ctx.snapshot
+
+        )
+
+        # ------------------------------------------------------
+        # Execute Paper Trade
+        # ------------------------------------------------------
+
+        self.trade_pipeline.execute(self.ctx)
+
+    # ==========================================================
+    # ONE MARKET CYCLE
+    # ==========================================================
+
+    def run_cycle(self):
+        """
+        Executes one complete live market cycle.
+        Can be called by Streamlit or Scheduler.
+        """
+
+        self.ctx.runtime_status = "RUNNING"
+
+        self.ctx.cycle_no += 1
+
+        self.ctx.timestamp = datetime.now().strftime(
+            "%d-%b-%Y %H:%M:%S"
+        )
+
+        try:
+
+            # --------------------------------------------------
+            # Market Data
+            # --------------------------------------------------
+
+            self.market_pipeline.run(self.ctx)
+
+            # --------------------------------------------------
+            # Update Existing Paper Trades
+            # --------------------------------------------------
+
+            closed_before = len(
+                    self.paper_broker.portfolio.closed_positions
+                )
+
+            self.paper_broker.update_positions(
+                    self.ctx.option_chain
+                )
+
+            closed_after = len(
+                    self.paper_broker.portfolio.closed_positions
+                )
+
+            if closed_after > closed_before:
+
+                    position = self.paper_broker.last_trade
+
+                    if position is not None:
+
+                        self.risk_manager.on_trade_closed(
+                            position
+                        )
+
+            self.trade_pipeline.sync_context(self.ctx)
+
+            # --------------------------------------------------
+            # Analytics
+            # --------------------------------------------------
+
+            if self._is_replay_fast():
+
+                #
+                # Snapshot already contains analytics.
+                #
+                pass
+
+            else:
+
+                self._calculate_greeks()
+
+                self._run_analytics()
+
+            # --------------------------------------------------
+            # Snapshot Recording
+            # --------------------------------------------------
+
+            if not self._is_replay():
+
+                self.recording_manager.record(self.ctx)
+
+                return self.ctx
+
+        except Exception as e:
+
+            print()
+            print("=" * 70)
+            print("LIVE ENGINE ERROR")
+            print("=" * 70)
+            print(e)
+
+            self.ctx.runtime_status = "ERROR"
+
+            raise
+
+        finally:
+
+            if self.ctx.runtime_status != "ERROR":
+                self.ctx.runtime_status = "IDLE"
+
+    # ==========================================================
+    # BUILD CONTEXT
+    # ==========================================================
+
+    def build_context(self):
+        """
+        Backward compatible wrapper.
+        """
+
+        return self.run_cycle()
+
+    # ==========================================================
+    # CONSOLE MODE
+    # ==========================================================
+
+    def run(self):
+
+        print()
+        print("=" * 70)
+        print("LIVE ENGINE STARTED")
+        print("=" * 70)
+
+        ctx = self.run_cycle()
+
+        self.dashboard.show(ctx)
+
+        return ctx
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\live_greeks_engine.py
+==================================================
+from datetime import datetime
+
+import pandas as pd
+
+from engine.greeks_engine import GreeksEngine
+
+
+class LiveGreeksEngine:
+
+    def __init__(self):
+
+        self.greeks = GreeksEngine()
+
+    def calculate_chain_greeks(
+        self,
+        option_chain: pd.DataFrame,
+        spot_price: float,
+        expiry,
+        risk_free_rate=0.06
+    ):
+
+        df = option_chain.copy()
+
+        expiry_date = pd.to_datetime(expiry)
+
+        today = datetime.today()
+
+        days = (expiry_date - today).days
+
+        if days <= 0:
+            days = 1
+
+        time_to_expiry = days / 365
+
+        # -----------------------------
+        # CE Greeks
+        # -----------------------------
+
+        ce_iv = []
+        ce_delta = []
+        ce_gamma = []
+        ce_theta = []
+        ce_vega = []
+        ce_rho = []
+
+        # -----------------------------
+        # PE Greeks
+        # -----------------------------
+
+        pe_iv = []
+        pe_delta = []
+        pe_gamma = []
+        pe_theta = []
+        pe_vega = []
+        pe_rho = []
+
+        for _, row in df.iterrows():
+
+            strike = row["Strike"]
+
+            # ---------------- CE ----------------
+
+            ce = self.greeks.calculate_greeks(
+                option_price=row["CE_LTP"],
+                spot_price=spot_price,
+                strike_price=strike,
+                time_to_expiry=time_to_expiry,
+                option_type="CE",
+                risk_free_rate=risk_free_rate
+            )
+
+            ce_iv.append(ce["iv"])
+            ce_delta.append(ce["delta"])
+            ce_gamma.append(ce["gamma"])
+            ce_theta.append(ce["theta"])
+            ce_vega.append(ce["vega"])
+            ce_rho.append(ce["rho"])
+
+            # ---------------- PE ----------------
+
+            pe = self.greeks.calculate_greeks(
+                option_price=row["PE_LTP"],
+                spot_price=spot_price,
+                strike_price=strike,
+                time_to_expiry=time_to_expiry,
+                option_type="PE",
+                risk_free_rate=risk_free_rate
+            )
+
+            pe_iv.append(pe["iv"])
+            pe_delta.append(pe["delta"])
+            pe_gamma.append(pe["gamma"])
+            pe_theta.append(pe["theta"])
+            pe_vega.append(pe["vega"])
+            pe_rho.append(pe["rho"])
+
+        df["CE_IV"] = ce_iv
+        df["CE_DELTA"] = ce_delta
+        df["CE_GAMMA"] = ce_gamma
+        df["CE_THETA"] = ce_theta
+        df["CE_VEGA"] = ce_vega
+        df["CE_RHO"] = ce_rho
+
+        df["PE_IV"] = pe_iv
+        df["PE_DELTA"] = pe_delta
+        df["PE_GAMMA"] = pe_gamma
+        df["PE_THETA"] = pe_theta
+        df["PE_VEGA"] = pe_vega
+        df["PE_RHO"] = pe_rho
+
+        return df
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\live_trading_engine.py
+==================================================
+import time
+from datetime import datetime
+
+from analytics.analytics_pipeline import AnalyticsPipeline
+from decision.decision_engine import DecisionEngine
+from paper_trading.broker import PaperBroker
+
+
+class LiveTradingEngine:
+    """
+    QuantNifty Live Paper Trading Engine
+
+    Responsibilities
+    ----------------
+    1. Fetch Live Market Data
+    2. Run Analytics
+    3. Build Trading Decision
+    4. Execute Paper Trade
+    5. Repeat until market close
+
+    No business logic belongs here.
+    """
+
+    def __init__(
+        self,
+        provider,
+        option_chain_manager,
+        greeks_engine,
+        runtime_config,
+    ):
+
+        self.provider = provider
+        self.option_chain = option_chain_manager
+        self.greeks_engine = greeks_engine
+        self.runtime_config = runtime_config
+
+        self.analytics = AnalyticsPipeline()
+        self.decision = DecisionEngine()
+        self.paper_broker = PaperBroker()
+
+    # -------------------------------------------------------
+    # Initialize
+    # -------------------------------------------------------
+
+    def initialize(self):
+
+        print("=" * 60)
+        print("QUANTNIFTY LIVE PAPER TRADING")
+        print("=" * 60)
+
+        self.provider.connect()
+
+        print("Initialization Complete\n")
+
+    # -------------------------------------------------------
+    # One Market Cycle
+    # -------------------------------------------------------
+
+    def process_market(self):
+
+        symbol = self.runtime_config.symbol
+
+        print("-" * 60)
+        print(datetime.now())
+        print("-" * 60)
+
+        # ---------------------------------------------------
+        # Spot
+        # ---------------------------------------------------
+
+        spot = self.provider.get_spot_price(symbol)
+
+        print(f"Spot : {spot}")
+
+        # ---------------------------------------------------
+        # Option Chain
+        # ---------------------------------------------------
+
+        option_chain = self.option_chain.get_live_option_chain(
+            symbol=symbol,
+            spot_price=spot,
+            levels=self.runtime_config.option_levels,
+        )
+
+        # ---------------------------------------------------
+        # Greeks
+        # ---------------------------------------------------
+
+        greeks_df = self.greeks_engine.calculate(
+            option_chain
+        )
+
+        # ---------------------------------------------------
+        # Analytics
+        # ---------------------------------------------------
+
+        analytics = self.analytics.run(
+            greeks_engine=self.greeks_engine,
+            greeks_df=greeks_df,
+            spot_price=spot,
+        )
+
+        # ---------------------------------------------------
+        # Decision
+        # ---------------------------------------------------
+
+        decision = self.decision.build(
+            analytics
+        )
+
+        # ---------------------------------------------------
+        # Execute
+        # ---------------------------------------------------
+
+        if decision.valid:
+
+            position = self.paper_broker.execute(
+                decision
+            )
+
+            if position:
+
+                print("Trade Executed")
+
+        else:
+
+            print("WAIT")
+
+    # -------------------------------------------------------
+    # Run
+    # -------------------------------------------------------
+
+    def run(self):
+
+        self.initialize()
+
+        while True:
+
+            try:
+
+                self.process_market()
+
+            except Exception as ex:
+
+                print(ex)
+
+            print()
+
+            time.sleep(
+                self.runtime_config.refresh_interval
+            )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\market_data_manager.py
+==================================================
+from providers.indmoney_provider import INDMoneyProvider
+
+
+class MarketDataManager:
+    """
+    Market Data Manager
+
+    Responsible for:
+        - Spot Price
+        - Index Quotes
+        - Future Quotes
+        - Caching
+    """
+
+    def __init__(self, provider: INDMoneyProvider):
+
+        self.provider = provider
+
+        self.cache = {}
+
+    # -------------------------------------------------------
+    # Live Spot Price
+    # -------------------------------------------------------
+
+    def get_spot_price(self, symbol: str):
+
+        symbol = symbol.upper()
+
+        if symbol == "NIFTY":
+
+            quote = self.provider.get_index_quote("NIFTY 50")
+
+        elif symbol == "BANKNIFTY":
+
+            quote = self.provider.get_index_quote("NIFTY BANK")
+
+        elif symbol == "FINNIFTY":
+
+            quote = self.provider.get_index_quote("NIFTY FIN SERVICE")
+
+        elif symbol == "MIDCPNIFTY":
+
+            quote = self.provider.get_index_quote("NIFTY MID SELECT")
+
+        else:
+
+            raise ValueError(f"Unsupported Index : {symbol}")
+
+        if quote is None:
+
+            raise Exception("Unable to fetch live quote.")
+
+        # ----------------------------
+        # Try common response keys
+        # ----------------------------
+
+        for key in (
+            "ltp",
+            "LTP",
+            "last_price",
+            "lastPrice",
+            "live_price",
+            "close",
+        ):
+
+            if key in quote:
+
+                return float(quote[key])
+
+        raise Exception(
+            f"Spot price not found in response: {quote}"
+        )
+
+    # -------------------------------------------------------
+    # Generic Quote
+    # -------------------------------------------------------
+
+    def get_quote(self, symbol):
+
+        return self.provider.get_quote(symbol)
+
+    # -------------------------------------------------------
+    # Cache
+    # -------------------------------------------------------
+
+    def set_cache(self, key, value):
+
+        self.cache[key] = value
+
+    def get_cache(self, key):
+
+        return self.cache.get(key)
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\market_data_pipeline.py
+==================================================
+from datetime import datetime, timedelta
+
+from providers.simulation_provider import SimulationProvider
+
+
+class MarketDataPipeline:
+    """
+    Responsible for preparing RuntimeContext with market data.
+
+    Supports both:
+
+        â€¢ Live Provider
+        â€¢ Simulation Provider
+    """
+
+    def __init__(
+        self,
+        provider,
+        instrument,
+        market,
+        chain_manager,
+        candle_manager
+    ):
+
+        self.provider = provider
+        self.instrument = instrument
+        self.market = market
+        self.chain_manager = chain_manager
+        self.candle_manager = candle_manager
+
+    # ==========================================================
+    # LIVE PIPELINE
+    # ==========================================================
+
+    def _run_live(self, ctx):
+
+        self._fetch_spot(ctx)
+
+        self._fetch_option_chain(ctx)
+
+        self._fetch_historical_candles(ctx)
+
+    # ==========================================================
+    # REPLAY PIPELINE
+    # ==========================================================
+
+    def _run_replay(self, ctx):
+
+        snapshot = self.provider.next_cycle()
+
+        ctx.timestamp = snapshot.timestamp
+
+        ctx.cycle_no = snapshot.cycle_no
+
+        ctx.symbol = snapshot.symbol
+
+        ctx.spot = snapshot.spot
+
+        ctx.option_chain = snapshot.option_chain.copy()
+
+        ctx.greeks_df = snapshot.greeks.copy()
+
+        ctx.analytics = snapshot.analytics
+
+        ctx.decision = snapshot.decision
+
+        ctx.explanation = snapshot.explanation
+
+        #
+        # Historical candles are already part of analytics
+        # during replay.
+        #
+        ctx.candles = None
+
+    # ==========================================================
+    # LIVE
+    # ==========================================================
+
+    def _fetch_spot(self, ctx):
+
+        ctx.spot = self.market.get_spot_price(
+            ctx.symbol
+        )
+
+    def _fetch_option_chain(self, ctx):
+
+        ctx.expiry = self.instrument.get_nearest_weekly_expiry(
+            ctx.symbol
+        )
+
+        ctx.option_chain = self.chain_manager.get_live_option_chain(
+            ctx.symbol,
+            ctx.spot,
+            5
+        )
+
+    def _fetch_historical_candles(self, ctx):
+
+        security_id = self.instrument.get_index_security_id(
+            "NIFTY 50"
+        )
+
+        scrip_code = self.instrument.get_scrip_code(
+            "NIDX",
+            security_id
+        )
+
+        end = datetime.now()
+
+        start = end - timedelta(days=5)
+
+        candles = self.provider.get_historical_data(
+
+            scrip_code=scrip_code,
+
+            interval="5minute",
+
+            start_time=int(start.timestamp() * 1000),
+
+            end_time=int(end.timestamp() * 1000)
+
+        )
+
+        ctx.candles = self.candle_manager.to_dataframe(
+            candles
+        )
+
+    # ==========================================================
+    # PUBLIC
+    # ==========================================================
+
+    def run(self, ctx):
+
+        if isinstance(
+            self.provider,
+            SimulationProvider
+        ):
+
+            self._run_replay(ctx)
+
+        else:
+
+            self._run_live(ctx)
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\market_data_provider.py
+==================================================
+class MarketDataProvider:
+
+    def get_spot_price(self):
+        pass
+
+    def get_futures_price(self):
+        pass
+
+    def get_option_chain(self):
+        pass
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\market_snapshot.py
+==================================================
+from dataclasses import dataclass
+from datetime import datetime
+
+
+@dataclass
+class MarketSnapshot:
+    """
+    Central market state shared across QuantNifty.
+    """
+
+    # Market
+    symbol: str = "NIFTY"
+
+    spot: float = 0.0
+
+    future: float = 0.0
+
+    expiry: str = ""
+
+    timestamp: datetime = None
+
+    # Volatility
+    india_vix: float = 0.0
+
+    # Session
+    market_open: bool = True
+
+    trading_day: str = ""
+
+    def update(
+        self,
+        symbol,
+        spot,
+        expiry,
+        future=0.0,
+        india_vix=0.0
+    ):
+
+        self.symbol = symbol
+
+        self.spot = spot
+
+        self.future = future
+
+        self.expiry = expiry
+
+        self.india_vix = india_vix
+
+        self.timestamp = datetime.now()
+
+    def to_dict(self):
+
+        return {
+
+            "symbol": self.symbol,
+
+            "spot": self.spot,
+
+            "future": self.future,
+
+            "expiry": self.expiry,
+
+            "india_vix": self.india_vix,
+
+            "timestamp": self.timestamp
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\oi_analyzer.py
+==================================================
+class OIAnalyzer:
+
+    def analyze(self, df):
+
+        total_call_oi = df["CE_OI"].sum()
+        total_put_oi = df["PE_OI"].sum()
+
+        pcr = round(
+            total_put_oi / total_call_oi,
+            2
+        ) if total_call_oi else 0
+
+        max_call_row = df.loc[df["CE_OI"].idxmax()]
+        max_put_row = df.loc[df["PE_OI"].idxmax()]
+
+        resistance = max_call_row["Strike"]
+        support = max_put_row["Strike"]
+
+        call_oi = max_call_row["CE_OI"]
+        put_oi = max_put_row["PE_OI"]
+
+        if pcr > 1.15:
+            bias = "Bullish"
+
+        elif pcr < 0.85:
+            bias = "Bearish"
+
+        else:
+            bias = "Sideways"
+
+        return {
+
+            "Total Call OI": int(total_call_oi),
+
+            "Total Put OI": int(total_put_oi),
+
+            "PCR": pcr,
+
+            "Support": support,
+
+            "Resistance": resistance,
+
+            "Max Put OI": int(put_oi),
+
+            "Max Call OI": int(call_oi),
+
+            "Market Bias": bias
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\option_chain_manager.py
+==================================================
+import pandas as pd
+
+
+class OptionChainManager:
+
+    def __init__(
+        self,
+        provider,
+        strike_selector,
+        instrument_manager,
+        market_manager
+    ):
+
+        self.provider = provider
+        self.selector = strike_selector
+        self.instrument_manager = instrument_manager
+        self.market = market_manager
+
+    # -------------------------------------------------------
+    # Live Option Chain
+    # -------------------------------------------------------
+
+    def get_live_option_chain(
+        self,
+        symbol,
+        spot_price,
+        levels=5
+    ):
+
+        expiry = self.instrument_manager.get_nearest_weekly_expiry(
+            symbol
+        )
+
+        contracts = self.selector.get_option_security_ids(
+            symbol=symbol,
+            expiry=expiry,
+            spot_price=spot_price,
+            levels=levels
+        )
+
+        if not contracts:
+            raise Exception(
+                "No option contracts found for selected expiry."
+            )
+
+        security_ids = []
+
+        for c in contracts:
+
+            security_ids.append(c["CE_ID"])
+            security_ids.append(c["PE_ID"])
+
+        print()
+        print("=" * 70)
+        print("OPTION CONTRACTS")
+        print("=" * 70)
+
+        for c in contracts:
+
+            print(
+                f"{c['strike']}  CE:{c['CE_ID']}  PE:{c['PE_ID']}"
+            )
+
+        quotes = self.provider.get_quotes(security_ids)
+
+        rows = []
+
+        for contract in contracts:
+
+            ce_key = f"NFO_{contract['CE_ID']}"
+            pe_key = f"NFO_{contract['PE_ID']}"
+
+            ce = quotes.get(ce_key, {})
+            pe = quotes.get(pe_key, {})
+
+            rows.append({
+
+                "Strike": contract["strike"],
+
+                "CE_ID": contract["CE_ID"],
+                "CE_LTP": ce.get("live_price"),
+                "CE_OI": ce.get("open_interest"),
+                "CE_VOLUME": ce.get("volume"),
+
+                "PE_ID": contract["PE_ID"],
+                "PE_LTP": pe.get("live_price"),
+                "PE_OI": pe.get("open_interest"),
+                "PE_VOLUME": pe.get("volume")
+
+            })
+
+        df = pd.DataFrame(rows)
+
+        return df
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\replay_engine.py
+==================================================
+from __future__ import annotations
+
+from core.runtime_context import RuntimeContext
+
+from providers.simulation_provider import SimulationProvider
+
+
+class ReplayEngine:
+    """
+    Renders the currently selected replay snapshot
+    into RuntimeContext.
+
+    Navigation is owned by ReplaySession /
+    ReplayController.
+    """
+
+    def __init__(
+        self,
+        provider: SimulationProvider
+    ):
+
+        self.provider = provider
+
+        self.ctx = RuntimeContext()
+
+    # ==========================================================
+    # Render
+    # ==========================================================
+
+    def run_cycle(self):
+        """
+        Render current replay snapshot.
+
+        This method NEVER changes replay position.
+        """
+
+        snapshot = self.provider.current_snapshot()
+
+        self.ctx.timestamp = snapshot.timestamp
+        self.ctx.cycle_no = snapshot.cycle_no
+        self.ctx.symbol = snapshot.symbol
+
+        self.ctx.spot = snapshot.spot
+
+        self.ctx.option_chain = snapshot.option_chain.copy()
+
+        self.ctx.greeks_df = snapshot.greeks.copy()
+
+        self.ctx.analytics = snapshot.analytics
+
+        self.ctx.decision = snapshot.decision
+
+        self.ctx.explanation = snapshot.explanation
+
+        self.ctx.runtime_status = "REPLAY"
+
+        return self.ctx
+
+    # ==========================================================
+    # Helpers
+    # ==========================================================
+
+    def get_context(self):
+
+        return self.ctx
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\run_quantnifty.py
+==================================================
+from engine.live_engine import LiveEngine
+
+engine = LiveEngine()
+
+engine.run()
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\scoring_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\session_manager.py
+==================================================
+from breeze_connect import BreezeConnect
+
+from settings.settings import (
+    BREEZE_API_KEY,
+    BREEZE_SECRET_KEY,
+    API_SESSION
+)
+
+
+class SessionManager:
+    """
+    Handles Breeze API authentication.
+    """
+
+    def __init__(self):
+        self.breeze = BreezeConnect(api_key=BREEZE_API_KEY)
+
+    def connect(self):
+        try:
+            self.breeze.generate_session(
+                api_secret=BREEZE_SECRET_KEY,
+                session_token=API_SESSION
+            )
+
+            print("âœ… Breeze Login Successful")
+
+            return self.breeze
+
+        except Exception as e:
+            print(f"âŒ Login Failed : {e}")
+            raise
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\signal_engine.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\state_manager.py
+==================================================
+class StateManager:
+    """
+    Keeps previous market snapshot in memory.
+
+    Future:
+        Redis
+        SQLite
+        PostgreSQL
+    """
+
+    def __init__(self):
+
+        self.previous_snapshot = None
+
+    def get_previous_snapshot(self):
+
+        return self.previous_snapshot
+
+    def update_snapshot(self, snapshot):
+
+        self.previous_snapshot = snapshot
+
+    def clear(self):
+
+        self.previous_snapshot = None
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\strike_selector.py
+==================================================
+class StrikeSelector:
+
+    def __init__(self, instrument_manager):
+        self.instrument_manager = instrument_manager
+
+    # -------------------------------------------------------
+    # ATM Strike
+    # -------------------------------------------------------
+
+    def get_atm_strike(self, spot_price):
+
+        return int(round(float(spot_price) / 50) * 50)
+
+    # -------------------------------------------------------
+    # Strike Range
+    # -------------------------------------------------------
+
+    def get_surrounding_strikes(
+        self,
+        spot_price,
+        levels=5,
+        step=50
+    ):
+
+        atm = self.get_atm_strike(spot_price)
+
+        return [
+            atm + (i * step)
+            for i in range(-levels, levels + 1)
+        ]
+
+    # -------------------------------------------------------
+    # Option Contracts
+    # -------------------------------------------------------
+
+    def get_option_security_ids(
+        self,
+        symbol,
+        expiry,
+        spot_price,
+        levels=5
+    ):
+
+        # IMPORTANT:
+        # Do NOT modify expiry.
+        # Pass it exactly as InstrumentManager returns it.
+        strikes = self.get_surrounding_strikes(
+            spot_price,
+            levels
+        )
+
+        contracts = []
+
+        for strike in strikes:
+
+            ce = self.instrument_manager.get_option(
+                symbol=symbol,
+                expiry=expiry,
+                strike=float(strike),
+                option_type="CE"
+            )
+
+            pe = self.instrument_manager.get_option(
+                symbol=symbol,
+                expiry=expiry,
+                strike=float(strike),
+                option_type="PE"
+            )
+
+            if ce is None:
+                print(f"Missing CE : {strike}")
+
+            if pe is None:
+                print(f"Missing PE : {strike}")
+
+            if ce is None or pe is None:
+                continue
+
+            contracts.append({
+
+                "strike": strike,
+
+                "CE_ID": int(ce["SECURITY_ID"]),
+
+                "PE_ID": int(pe["SECURITY_ID"])
+
+            })
+
+        return contracts
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\engine\terminal_dashboard.py
+==================================================
+class TerminalDashboard:
+    """
+    Displays QuantNifty output
+    in the terminal.
+    """
+
+    def __init__(self):
+        pass
+
+    def show(self, analytics):
+
+        print()
+
+        print("=" * 80)
+        print("QUANTNIFTY LIVE")
+        print("=" * 80)
+
+        print()
+
+        print("Decision")
+
+        print(
+            analytics.get(
+                "decision",
+                {}
+            )
+        )
+
+        print()
+
+        print("Probability")
+
+        print(
+            analytics.get(
+                "probability",
+                {}
+            )
+        )
+
+        print()
+
+        print("Dealer")
+
+        print(
+            analytics.get(
+                "dealer",
+                {}
+            )
+        )
+
+        print()
+
+        print("Regime")
+
+        print(
+            analytics.get(
+                "market_regime",
+                {}
+            )
+        )
+
+

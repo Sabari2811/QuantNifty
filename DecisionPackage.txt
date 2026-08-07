@@ -1,0 +1,3253 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\ai_decision.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\alert.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\builder.py
+==================================================
+from decision.context import DecisionContext
+
+
+class DecisionBuilder:
+    """
+    Converts MarketSnapshot into DecisionContext.
+
+    This isolates the Decision Engine from the
+    Analytics Pipeline structure.
+    """
+
+    def build(self, snapshot):
+
+        ctx = DecisionContext()
+
+        ctx.snapshot = snapshot
+
+        # --------------------------------------
+        # Analytics
+        # --------------------------------------
+
+        ctx.dealer = snapshot.dealer
+
+        ctx.pcr = snapshot.pcr
+
+        ctx.max_pain = snapshot.max_pain
+
+        ctx.probability = snapshot.prediction
+
+        ctx.institutional = snapshot.institutional
+
+        # Dealer Flow (future)
+
+        ctx.dealer_flow = snapshot.get(
+            "dealer_flow",
+            {}
+        )
+
+        # Liquidity (future)
+
+        ctx.liquidity = snapshot.get(
+            "liquidity",
+            {}
+        )
+
+        # Gamma (future)
+
+        ctx.gamma = {
+
+            "flip": snapshot.dealer.get(
+                "gamma_flip"
+            ),
+
+            "wall": snapshot.dealer.get(
+                "gamma_wall"
+            ),
+
+            "call_wall": snapshot.dealer.get(
+                "call_wall"
+            ),
+
+            "put_wall": snapshot.dealer.get(
+                "put_wall"
+            )
+        }
+
+        return ctx
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\checklist.py
+==================================================
+class Checklist:
+
+    """
+    Trading checklist used by the
+    QuantNifty Terminal.
+    """
+
+    def __init__(self):
+
+        self.items = []
+
+    @classmethod
+    def from_analytics(
+
+        cls,
+
+        analytics,
+
+        spot
+
+    ):
+
+        obj = cls()
+
+        technical = analytics.get(
+            "technical",
+            {}
+        )
+
+        ema = technical.get(
+            "ema",
+            {}
+        )
+
+        vwap = technical.get(
+            "vwap",
+            {}
+        )
+
+        dealer = analytics.get(
+            "dealer",
+            {}
+        )
+
+        pcr = analytics.get(
+            "pcr",
+            {}
+        )
+
+        market_map = analytics.get(
+            "market_map",
+            {}
+        )
+
+        # -----------------------------
+        # EMA20
+        # -----------------------------
+
+        ema20 = ema.get(
+            "ema20",
+            spot
+        )
+
+        obj.items.append(
+
+            {
+
+                "name": "EMA20",
+
+                "status": "ABOVE"
+                if spot > ema20
+                else "BELOW"
+
+            }
+
+        )
+
+        # -----------------------------
+        # VWAP
+        # -----------------------------
+
+        vwap_price = vwap.get(
+            "vwap",
+            spot
+        )
+
+        obj.items.append(
+
+            {
+
+                "name": "VWAP",
+
+                "status": "ABOVE"
+                if spot > vwap_price
+                else "BELOW"
+
+            }
+
+        )
+
+        # -----------------------------
+        # Gamma Flip
+        # -----------------------------
+
+        flip = market_map.get(
+            "gamma_flip",
+            spot
+        )
+
+        obj.items.append(
+
+            {
+
+                "name": "Gamma Flip",
+
+                "status": "ABOVE"
+                if spot > flip
+                else "BELOW"
+
+            }
+
+        )
+
+        # -----------------------------
+        # Dealer
+        # -----------------------------
+
+        obj.items.append(
+
+            {
+
+                "name": "Dealer",
+
+                "status": dealer.get(
+                    "dealer_gamma",
+                    "-"
+                )
+
+            }
+
+        )
+
+        # -----------------------------
+        # PCR
+        # -----------------------------
+
+        value = pcr.get(
+            "oi_pcr",
+            1
+        )
+
+        obj.items.append(
+
+            {
+
+                "name": "PCR",
+
+                "status": "BULLISH"
+                if value >= 1
+                else "BEARISH"
+
+            }
+
+        )
+
+        return obj
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\constants.py
+==================================================
+from enum import Enum
+
+
+class Signal(Enum):
+    BUY_CALL = "BUY CALL"
+    BUY_PUT = "BUY PUT"
+    WAIT = "WAIT"
+
+
+class OptionType(Enum):
+    CE = "CE"
+    PE = "PE"
+
+
+class DealerPosition(Enum):
+    LONG = "LONG"
+    SHORT = "SHORT"
+    NEUTRAL = "NEUTRAL"
+
+
+class InstitutionalFlow(Enum):
+    STRONG = "STRONG"
+    WEAK = "WEAK"
+    NEUTRAL = "NEUTRAL"
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\context.py
+==================================================
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass
+class DecisionContext:
+
+    # --------------------------------------------------
+    # Input
+    # --------------------------------------------------
+
+    snapshot: Any = None
+
+    # --------------------------------------------------
+    # Analytics
+    # --------------------------------------------------
+
+    dealer: dict = field(default_factory=dict)
+
+    dealer_flow: dict = field(default_factory=dict)
+
+    pcr: dict = field(default_factory=dict)
+
+    max_pain: dict = field(default_factory=dict)
+
+    gamma: dict = field(default_factory=dict)
+
+    probability: dict = field(default_factory=dict)
+
+    institutional: dict = field(default_factory=dict)
+
+    liquidity: dict = field(default_factory=dict)
+
+    # --------------------------------------------------
+    # Decision
+    # --------------------------------------------------
+
+    signal: str = "WAIT"
+
+    confidence: int = 0
+
+    reasons: list[str] = field(default_factory=list)
+
+    # --------------------------------------------------
+    # Trade
+    # --------------------------------------------------
+
+    option_type: str = ""
+
+    strike: float | None = None
+
+    entry: float | None = None
+
+    stop_loss: float | None = None
+
+    target1: float | None = None
+
+    target2: float | None = None
+
+    risk_reward: float | None = None
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\decision_builder.py
+==================================================
+from decision.constants import Signal
+from decision.models import Decision
+from decision.rules import DecisionRules
+from decision.validation_result import ValidationResult
+
+
+class DecisionBuilder:
+    """
+    Builds the final Decision object.
+
+    Responsibilities
+    ----------------
+    â€¢ Populate market information
+    â€¢ Populate score breakdown
+    â€¢ Calculate trade confidence
+    â€¢ Assign trading signal
+    â€¢ Initialize validation
+
+    Does NOT perform:
+        - Analytics
+        - Strategy Selection
+        - Execution Planning
+        - Order Validation
+    """
+
+    def build(
+        self,
+        market,
+        score,
+        breakdown,
+        reasons,
+    ):
+
+        decision = Decision()
+
+        # ======================================================
+        # Market Information
+        # ======================================================
+
+        decision.market.dealer = market.dealer
+        decision.market.institutional = market.institutional
+        decision.market.probability = market.probability
+
+        # ======================================================
+        # Score
+        # ======================================================
+
+        decision.score = dict(breakdown)
+
+        trade_confidence = max(
+            0,
+            min(abs(score), 100)
+        )
+
+        decision.signal.confidence = trade_confidence
+
+        decision.reasons = list(reasons)
+
+        # ======================================================
+        # Trading Signal
+        # ======================================================
+
+        if score >= DecisionRules.BUY_THRESHOLD:
+
+            decision.signal.name = Signal.BUY_CALL.value
+
+        elif score <= DecisionRules.SELL_THRESHOLD:
+
+            decision.signal.name = Signal.BUY_PUT.value
+
+        else:
+
+            decision.signal.name = Signal.WAIT.value
+
+        # ======================================================
+        # Validation
+        # ======================================================
+
+        decision.validation = ValidationResult(
+
+            valid=False,
+
+            grade="F",
+
+            confidence=trade_confidence,
+
+            risk_multiplier=0.0,
+
+            warnings=[]
+        )
+
+        return decision
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\decision_engine.py
+==================================================
+from core.runtime_config import RuntimeConfig
+
+from decision.market_analyzer import MarketAnalyzer
+from decision.strategy_selector import StrategySelector
+from decision.scoring_engine import ScoringEngine
+from decision.decision_builder import DecisionBuilder
+from decision.execution.execution_engine import ExecutionEngine
+
+
+class DecisionEngine:
+    """
+    QuantNifty Decision Engine
+
+    Pipeline
+
+        Market Snapshot
+                â”‚
+                â–¼
+        Market Analyzer
+                â”‚
+                â–¼
+        Scoring Engine
+                â”‚
+                â–¼
+        Strategy Selector
+                â”‚
+                â–¼
+        Decision Builder
+                â”‚
+                â–¼
+        Execution Engine
+    """
+
+    def __init__(self):
+
+        self.analyzer = MarketAnalyzer()
+
+        self.scoring = ScoringEngine()
+
+        self.selector = StrategySelector()
+
+        self.builder = DecisionBuilder()
+
+        self.execution = ExecutionEngine()
+
+    def build(
+        self,
+        snapshot,
+        config: RuntimeConfig | None = None,
+    ):
+
+        # --------------------------------------------
+        # Runtime Configuration
+        # --------------------------------------------
+
+        if config is None:
+
+            config = RuntimeConfig()
+
+        # --------------------------------------------
+        # Market Analysis
+        # --------------------------------------------
+
+        market = self.analyzer.analyze(
+
+            snapshot
+
+        )
+
+        # --------------------------------------------
+        # Base Scoring
+        # --------------------------------------------
+
+        score_result = self.scoring.score(
+
+            market
+
+        )
+
+        score = score_result["score"]
+
+        reasons = score_result["reasons"]
+
+        breakdown = score_result["breakdown"]
+
+        # --------------------------------------------
+        # Strategy Adjustment
+        # --------------------------------------------
+
+        strategy = self.selector.select(
+
+            market
+
+        )
+
+        score, strategy_reasons = strategy.adjust(
+
+            score,
+
+            market
+
+        )
+
+        reasons.extend(
+
+            strategy_reasons
+
+        )
+
+        breakdown["strategy"] = (
+
+            score - breakdown["total"]
+
+        )
+
+        breakdown["final"] = score
+
+        # --------------------------------------------
+        # Decision
+        # --------------------------------------------
+
+        decision = self.builder.build(
+
+            market=market,
+
+            score=score,
+
+            breakdown=breakdown,
+
+            reasons=reasons
+
+        )
+
+        # --------------------------------------------
+        # Execution Plan
+        # --------------------------------------------
+
+        decision = self.execution.prepare(
+
+            decision,
+
+            snapshot,
+
+            config
+
+        )
+
+        return decision
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\contract_scorer.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\execution_engine.py
+==================================================
+from core.runtime_config import RuntimeConfig
+
+from decision.constants import Signal
+from decision.execution.position_sizer import PositionSizer
+from decision.execution.preparation_engine import PreparationEngine
+from decision.execution.trade_quality_engine import TradeQualityEngine
+from decision.execution.trade_validator import TradeValidator
+
+
+class ExecutionEngine:
+    """
+    Converts a trading decision
+    into a complete execution plan.
+
+    Responsibilities
+    ----------------
+    1. Prepare trade
+    2. Size position
+    3. Calculate trade quality
+    4. Validate trade
+    5. Populate execution plan
+    """
+
+    def __init__(self):
+
+        self.preparation = PreparationEngine()
+
+        self.quality = TradeQualityEngine()
+
+        self.validator = TradeValidator()
+
+        self.position_sizer = PositionSizer()
+
+    def prepare(
+        self,
+        decision,
+        snapshot,
+        config: RuntimeConfig | None = None,
+    ):
+
+        # --------------------------------------------------
+        # Runtime Configuration
+        # --------------------------------------------------
+
+        if config is None:
+
+            config = RuntimeConfig()
+
+        # --------------------------------------------------
+        # Nothing to Execute
+        # --------------------------------------------------
+
+        if decision.signal.name == Signal.WAIT.value:
+
+            return decision
+
+        # --------------------------------------------------
+        # Prepare Trade
+        # --------------------------------------------------
+
+        decision = self.preparation.prepare(
+
+            decision,
+
+            snapshot
+
+        )
+
+        # --------------------------------------------------
+        # No Valid Contract Found
+        # --------------------------------------------------
+
+        if decision.trade.contract is None:
+
+            decision.valid = False
+
+            decision.signal.name = Signal.WAIT.value
+
+            return decision
+
+        # --------------------------------------------------
+        # Contract Information
+        # --------------------------------------------------
+
+        contract = decision.trade.contract
+
+        lot_size = getattr(
+
+            contract,
+
+            "lot_size",
+
+            config.default_lot_size
+
+        )
+
+        # --------------------------------------------------
+        # Position Sizing
+        # --------------------------------------------------
+
+        position = self.position_sizer.size(
+
+            decision,
+
+            capital=config.capital,
+
+            risk_percent=config.risk_percent,
+
+            lot_size=lot_size
+
+        )
+
+        execution = decision.trade.execution
+
+        execution.capital = position["capital"]
+
+        execution.risk_percent = config.risk_percent
+
+        execution.risk_amount = position["risk_amount"]
+
+        execution.lot_size = lot_size
+
+        execution.lots = position["lots"]
+
+        # --------------------------------------------------
+        # Premium Levels
+        # --------------------------------------------------
+
+        trade = decision.trade
+
+        execution.premium_entry = trade.entry
+
+        execution.premium_stop_loss = trade.stop_loss
+
+        execution.premium_target1 = trade.target1
+
+        execution.premium_target2 = trade.target2
+
+        execution.risk_reward = trade.risk_reward
+
+        # --------------------------------------------------
+        # Trade Quality
+        # --------------------------------------------------
+
+        execution.trade_quality = self.quality.score(
+
+            decision
+
+        )
+
+        # --------------------------------------------------
+        # Validation
+        # --------------------------------------------------
+
+        validation = self.validator.validate(
+
+            decision
+
+        )
+
+        decision.validation = validation
+
+        decision.valid = validation.valid
+
+        decision.reasons.extend(
+
+            validation.warnings
+
+        )
+
+        if not validation.valid:
+
+            decision.signal.name = Signal.WAIT.value
+
+        return decision
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\option_selector.py
+==================================================
+from decision.option_contract import OptionContract
+from decision.constants import OptionType
+
+
+class OptionSelector:
+    """
+    Selects the nearest option contract from the
+    live Greeks dataframe.
+
+    Expected dataframe format:
+
+        Strike
+        CE_LTP
+        CE_OI
+        CE_IV
+        CE_DELTA
+        ...
+
+        PE_LTP
+        PE_OI
+        PE_IV
+        PE_DELTA
+        ...
+    """
+
+    def select(self, snapshot, strike, option_type):
+
+        df = snapshot.greeks_df
+
+        # --------------------------------------------------
+        # Validate dataframe
+        # --------------------------------------------------
+
+        if df is None or df.empty:
+            return None
+
+        option_type = option_type.upper()
+
+        if option_type not in (
+            OptionType.CE.value,
+            OptionType.PE.value,
+        ):
+            return None
+
+        # --------------------------------------------------
+        # Find nearest strike
+        # --------------------------------------------------
+
+        work = df.copy()
+
+        work["distance"] = (
+            work["Strike"] - strike
+        ).abs()
+
+        row = work.sort_values(
+            "distance"
+        ).iloc[0]
+
+        strike = int(row["Strike"])
+
+        # ==================================================
+        # CE CONTRACT
+        # ==================================================
+
+        if option_type == OptionType.CE.value:
+
+            return OptionContract(
+
+                strike=strike,
+
+                option_type="CE",
+
+                expiry=str(row.get("Expiry", "")),
+
+                ltp=float(row.get("CE_LTP", 0)),
+
+                bid=float(row.get("CE_BID", 0)),
+
+                ask=float(row.get("CE_ASK", 0)),
+
+                volume=int(row.get("CE_VOLUME", 0)),
+
+                oi=int(row.get("CE_OI", 0)),
+
+                iv=float(row.get("CE_IV", 0)),
+
+                delta=float(row.get("CE_DELTA", 0)),
+
+                gamma=float(row.get("CE_GAMMA", 0)),
+
+                theta=float(row.get("CE_THETA", 0)),
+
+                vega=float(row.get("CE_VEGA", 0))
+            )
+
+        # ==================================================
+        # PE CONTRACT
+        # ==================================================
+
+        return OptionContract(
+
+            strike=strike,
+
+            option_type="PE",
+
+            expiry=str(row.get("Expiry", "")),
+
+            ltp=float(row.get("PE_LTP", 0)),
+
+            bid=float(row.get("PE_BID", 0)),
+
+            ask=float(row.get("PE_ASK", 0)),
+
+            volume=int(row.get("PE_VOLUME", 0)),
+
+            oi=int(row.get("PE_OI", 0)),
+
+            iv=float(row.get("PE_IV", 0)),
+
+            delta=float(row.get("PE_DELTA", 0)),
+
+            gamma=float(row.get("PE_GAMMA", 0)),
+
+            theta=float(row.get("PE_THETA", 0)),
+
+            vega=float(row.get("PE_VEGA", 0))
+        )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\position_sizer.py
+==================================================
+import math
+
+
+class PositionSizer:
+    """
+    Calculates the number of lots to trade
+    based on account risk.
+    """
+
+    def size(
+
+        self,
+
+        decision,
+
+        capital,
+
+        risk_percent,
+
+        lot_size
+
+    ):
+
+        trade = decision.trade
+
+        # ----------------------------------------
+        # Total Risk Allowed
+        # ----------------------------------------
+
+        risk_amount = capital * risk_percent / 100
+
+        # ----------------------------------------
+        # Premium Risk
+        # ----------------------------------------
+
+        risk_per_unit = (
+
+            trade.entry -
+
+            trade.stop_loss
+
+        )
+
+        if risk_per_unit <= 0:
+
+            return {
+
+                "lots": 0,
+
+                "capital": capital,
+
+                "risk_amount": risk_amount,
+
+                "risk_per_lot": 0
+
+            }
+
+        # ----------------------------------------
+        # Risk Per Lot
+        # ----------------------------------------
+
+        risk_per_lot = risk_per_unit * lot_size
+
+        lots = math.floor(
+
+            risk_amount /
+
+            risk_per_lot
+
+        )
+
+        lots = max(
+
+            lots,
+
+            1
+
+        )
+
+        return {
+
+            "lots": lots,
+
+            "capital": capital,
+
+            "risk_amount": round(risk_amount, 2),
+
+            "risk_per_lot": round(risk_per_lot, 2)
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\premium\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\premium\premium_engine.py
+==================================================
+from config.trading_config import TradingConfig
+
+
+class PremiumEngine:
+    """
+    Builds premium-based trade levels.
+
+    Responsibilities
+    ----------------
+    - Calculate Entry Premium
+    - Calculate Target 1
+    - Calculate Target 2
+
+    Stop Loss:
+        Handled by RiskEngine.
+
+    Future Enhancements
+    -------------------
+    - ATR-based Targets
+    - Expected Move Targets
+    - Gamma Wall Targets
+    """
+
+    def build(self, decision, contract):
+        """
+        Populate premium-based trade levels.
+        """
+
+        if contract is None:
+            return decision
+
+        trade = decision.trade
+
+        premium = contract.ltp
+
+        # -------------------------------------
+        # Invalid Premium
+        # -------------------------------------
+
+        if premium <= 0:
+
+            trade.entry = 0
+            trade.target1 = 0
+            trade.target2 = 0
+
+            return decision
+
+        # -------------------------------------
+        # Entry
+        # -------------------------------------
+
+        trade.entry = round(
+            premium,
+            2
+        )
+
+        # -------------------------------------
+        # Targets
+        # -------------------------------------
+
+        trade.target1 = round(
+            premium *
+            TradingConfig.TARGET1_MULTIPLIER,
+            2
+        )
+
+        trade.target2 = round(
+            premium *
+            TradingConfig.TARGET2_MULTIPLIER,
+            2
+        )
+
+        return decision
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\premium_pricing.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\preparation_engine.py
+==================================================
+from decision.execution.strike_selector import SmartStrikeSelector
+from decision.execution.option_selector import OptionSelector
+from decision.execution.premium.premium_engine import PremiumEngine
+from decision.execution.risk_engine import RiskEngine
+from decision.constants import Signal, OptionType
+
+
+class PreparationEngine:
+    """
+    Responsible for preparing the trade
+    before execution.
+
+    Responsibilities:
+    - Strike selection
+    - Option type selection
+    - Option contract selection
+    - Premium calculation
+    - Risk calculation
+    """
+
+    def __init__(self):
+
+        self.strike_selector = SmartStrikeSelector()
+        self.option_selector = OptionSelector()
+        self.premium_engine = PremiumEngine()
+        self.risk_engine = RiskEngine()
+
+    def prepare(self, decision, snapshot):
+
+        # --------------------------------------------------
+        # Strike Selection
+        # --------------------------------------------------
+
+        strike = self.strike_selector.select(
+
+            decision,
+
+            snapshot
+
+        )
+
+        decision.trade.strike = strike
+
+        # --------------------------------------------------
+        # Option Type Selection
+        # --------------------------------------------------
+
+        if decision.signal.name == Signal.BUY_CALL.value:
+
+            decision.trade.option_type = OptionType.CE.value
+
+        elif decision.signal.name == Signal.BUY_PUT.value:
+
+            decision.trade.option_type = OptionType.PE.value
+
+        else:
+
+            return decision
+
+        # --------------------------------------------------
+        # Contract Selection
+        # --------------------------------------------------
+
+        contract = self.option_selector.select(
+
+            snapshot,
+
+            strike,
+
+            decision.trade.option_type
+
+        )
+
+        if contract is None:
+
+            decision.valid = False
+
+            decision.reasons.append(
+
+                "No option contract found"
+
+            )
+
+            return decision
+
+        decision.trade.contract = contract
+
+        # --------------------------------------------------
+        # Premium Levels
+        # --------------------------------------------------
+
+        decision = self.premium_engine.build(
+
+            decision,
+
+            contract
+
+        )
+
+        # --------------------------------------------------
+        # Risk Levels
+        # --------------------------------------------------
+
+        decision = self.risk_engine.build(
+
+            decision,
+
+            contract
+
+        )
+
+        return decision
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\risk_engine.py
+==================================================
+from config.trading_config import TradingConfig
+
+
+class RiskEngine:
+    """
+    Calculates premium-based risk.
+
+    Responsibilities
+    ----------------
+    - Calculate Stop Loss
+    - Calculate Risk / Reward
+
+    Stop-loss percentage is determined
+    using the implied volatility (IV) regime.
+
+    Future Enhancements
+    -------------------
+    - ATR-aware stop loss
+    - Gamma-aware stop loss
+    - Market regime-aware stop loss
+    """
+
+    def build(self, decision, contract):
+        """
+        Populate stop loss and risk/reward
+        for the selected trade.
+        """
+
+        if contract is None:
+            return decision
+
+        trade = decision.trade
+
+        premium = contract.ltp
+
+        # -------------------------------------
+        # Invalid Premium
+        # -------------------------------------
+
+        if premium <= 0:
+            trade.stop_loss = 0
+            trade.risk_reward = 0
+            return decision
+
+        # -------------------------------------
+        # Stop Loss
+        # -------------------------------------
+
+        risk_pct = self._risk_percent(contract.iv)
+
+        trade.stop_loss = round(
+            premium * (1 - risk_pct),
+            2
+        )
+
+        # -------------------------------------
+        # Validate Trade Levels
+        # -------------------------------------
+
+        if (
+            trade.entry <= 0
+            or trade.target1 <= trade.entry
+        ):
+            trade.risk_reward = 0
+            return decision
+
+        # -------------------------------------
+        # Risk / Reward
+        # -------------------------------------
+
+        risk = trade.entry - trade.stop_loss
+        reward = trade.target1 - trade.entry
+
+        if risk <= 0:
+            trade.risk_reward = 0
+        else:
+            trade.risk_reward = round(
+                reward / risk,
+                2
+            )
+
+        return decision
+
+    # ==================================================
+    # Private Methods
+    # ==================================================
+
+    def _risk_percent(self, iv):
+        """
+        Determine stop-loss percentage
+        based on the IV regime.
+        """
+
+        if iv >= TradingConfig.HIGH_IV_THRESHOLD:
+            return TradingConfig.STOPLOSS_HIGH_IV
+
+        if iv <= TradingConfig.LOW_IV_THRESHOLD:
+            return TradingConfig.STOPLOSS_LOW_IV
+
+        return TradingConfig.STOPLOSS_NORMAL_IV
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\strike_selector.py
+==================================================
+class SmartStrikeSelector:
+    """
+    Selects the best option strike.
+
+    Current Version:
+    - BUY CALL â†’ nearest valid resistance
+    - BUY PUT  â†’ nearest valid support
+
+    Future:
+    - ATM / ITM / OTM selection
+    - Confidence-based selection
+    - IV-aware selection
+    """
+
+    def select(self, decision, snapshot):
+
+        dealer = snapshot.dealer
+
+        spot = snapshot.spot
+
+        if decision.signal.name == "BUY CALL":
+
+            levels = [
+
+                dealer.get("call_wall"),
+
+                dealer.get("gamma_wall")
+
+            ]
+
+            levels = [
+
+                level for level in levels
+
+                if level is not None and level >= spot
+
+            ]
+
+            if levels:
+
+                return min(levels)
+
+            return round(spot / 50) * 50
+
+        if decision.signal.name == "BUY PUT":
+
+            levels = [
+
+                dealer.get("put_wall"),
+
+                dealer.get("gamma_flip")
+
+            ]
+
+            levels = [
+
+                level for level in levels
+
+                if level is not None and level <= spot
+
+            ]
+
+            if levels:
+
+                return max(levels)
+
+            return round(spot / 50) * 50
+
+        return None
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\target_selector.py
+==================================================
+class TargetSelector:
+    """
+    Chooses the best profit target.
+
+    Rules:
+
+    BUY CALL
+        nearest resistance above spot
+
+    BUY PUT
+        nearest support below spot
+    """
+
+    def select(self, decision, snapshot):
+
+        spot = snapshot.spot
+
+        dealer = snapshot.dealer
+
+        move = snapshot.expected_move.get(
+
+            "expected_move",
+
+            100
+
+        )
+
+        levels = []
+
+        # -----------------------------------
+        # BUY CALL
+        # -----------------------------------
+
+        if decision.signal.name == "BUY CALL":
+
+            for level in [
+
+                dealer.get("gamma_wall"),
+
+                dealer.get("call_wall"),
+
+                spot + move
+
+            ]:
+
+                if level is not None and level > spot:
+
+                    levels.append(level)
+
+            if levels:
+
+                levels.sort()
+
+                return levels[0]
+
+        # -----------------------------------
+        # BUY PUT
+        # -----------------------------------
+
+        if decision.signal.name == "BUY PUT":
+
+            for level in [
+
+                dealer.get("put_wall"),
+
+                dealer.get("gamma_flip"),
+
+                spot - move
+
+            ]:
+
+                if level is not None and level < spot:
+
+                    levels.append(level)
+
+            if levels:
+
+                levels.sort(reverse=True)
+
+                return levels[0]
+
+        return spot
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\trade_quality_engine.py
+==================================================
+class TradeQualityEngine:
+    """
+    Scores the overall quality of a trade.
+
+    Score Range:
+        0 - 100
+    """
+
+    def score(self, decision):
+
+        trade = decision.trade
+
+        contract = trade.contract
+
+        if contract is None:
+
+            return 0
+
+        score = 0
+
+        # --------------------------------------
+        # Risk Reward
+        # --------------------------------------
+
+        rr = trade.risk_reward
+
+        if rr >= 2:
+
+            score += 30
+
+        elif rr >= 1.5:
+
+            score += 20
+
+        elif rr >= 1:
+
+            score += 10
+
+        # --------------------------------------
+        # IV
+        # --------------------------------------
+
+        iv = contract.iv
+
+        if 10 <= iv <= 25:
+
+            score += 20
+
+        elif 5 <= iv < 10:
+
+            score += 10
+
+        # --------------------------------------
+        # Open Interest
+        # --------------------------------------
+
+        if contract.oi >= 100000:
+
+            score += 20
+
+        elif contract.oi >= 50000:
+
+            score += 10
+
+        # --------------------------------------
+        # Volume
+        # --------------------------------------
+
+        if contract.volume >= 50000:
+
+            score += 20
+
+        elif contract.volume >= 20000:
+
+            score += 10
+
+        # --------------------------------------
+        # Delta
+        # --------------------------------------
+
+        if 0.30 <= abs(contract.delta) <= 0.70:
+
+            score += 10
+
+        return min(score, 100)
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution\trade_validator.py
+==================================================
+from decision.validation_result import ValidationResult
+
+
+class TradeValidator:
+    """
+    Final validation before execution.
+
+    Produces a ValidationResult instead of
+    a simple True / False.
+    """
+
+    def validate(self, decision):
+
+        trade = decision.trade
+        contract = trade.contract
+
+        warnings = []
+
+        valid = True
+
+        # ----------------------------------
+        # Risk / Reward
+        # ----------------------------------
+
+        if trade.risk_reward < 1.5:
+
+            warnings.append("Risk/Reward below 1.5")
+
+            # Don't reject immediately.
+            # We'll reduce confidence instead.
+            valid = True
+
+        # ----------------------------------
+        # Premium
+        # ----------------------------------
+
+        if trade.entry < 20:
+
+            valid = False
+
+            warnings.append("Premium too low")
+
+        # ----------------------------------
+        # Open Interest
+        # ----------------------------------
+
+        if contract.oi < 50000:
+
+            valid = False
+
+            warnings.append("Low Open Interest")
+
+        # ----------------------------------
+        # Volume
+        # ----------------------------------
+
+        if contract.volume < 20000:
+
+            valid = False
+
+            warnings.append("Low Volume")
+
+        # ----------------------------------
+        # Grade
+        # ----------------------------------
+
+        score = decision.score.get("final", 0)
+
+        if score >= 120:
+
+            grade = "A+"
+
+            confidence = 100
+
+            risk_multiplier = 1.00
+
+        elif score >= 100:
+
+            grade = "A"
+
+            confidence = 90
+
+            risk_multiplier = 0.75
+
+        elif score >= 80:
+
+            grade = "B"
+
+            confidence = 80
+
+            risk_multiplier = 0.50
+
+        elif score >= 60:
+
+            grade = "C"
+
+            confidence = 70
+
+            risk_multiplier = 0.25
+
+        elif score >= 40:
+
+            grade = "D"
+
+            confidence = 50
+
+            risk_multiplier = 0.00
+
+            valid = False
+
+        else:
+
+            grade = "F"
+
+            confidence = 25
+
+            risk_multiplier = 0.00
+
+            valid = False
+
+        return ValidationResult(
+
+            valid=valid,
+
+            grade=grade,
+
+            confidence=confidence,
+
+            risk_multiplier=risk_multiplier,
+
+            warnings=warnings
+
+        )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\execution_planner.py
+==================================================
+from decision.models import Decision
+from decision.execution.target_selector import TargetSelector
+from decision.execution.strike_selector import SmartStrikeSelector
+
+
+class ExecutionPlanner:
+    """
+    Builds an executable trade from a Decision.
+
+    Responsible for:
+
+    - Strike Selection
+    - Entry
+    - Stop Loss
+    - Target Selection
+    - Risk / Reward
+    """
+
+    def __init__(self):
+
+        self.target_selector = TargetSelector()
+
+        self.strike_selector = SmartStrikeSelector()
+
+    def build(self, decision: Decision, snapshot):
+
+        if not decision.valid:
+
+            return decision
+
+        # ----------------------------------------
+        # WAIT
+        # ----------------------------------------
+
+        if decision.signal.name == "WAIT":
+
+            decision.trade.strike = None
+            decision.trade.option_type = ""
+            decision.trade.entry = None
+            decision.trade.stop_loss = None
+            decision.trade.target1 = None
+            decision.trade.target2 = None
+            decision.trade.risk_reward = None
+
+            return decision
+
+        expected_move = snapshot.expected_move.get(
+
+            "expected_move",
+
+            100
+
+        )
+
+        # ----------------------------------------
+        # Smart Strike Selector
+        # ----------------------------------------
+
+        if decision.trade.strike in (0, None):
+
+            decision.trade.strike = self.strike_selector.select(
+
+                decision,
+
+                snapshot
+
+            )
+
+            if decision.signal.name == "BUY CALL":
+
+                decision.trade.option_type = "CE"
+
+            elif decision.signal.name == "BUY PUT":
+
+                decision.trade.option_type = "PE"
+
+        # ----------------------------------------
+        # Entry
+        # ----------------------------------------
+
+        if decision.trade.entry in (0, None):
+
+            decision.trade.entry = snapshot.spot
+
+        # ----------------------------------------
+        # Stop Loss
+        # ----------------------------------------
+
+        if decision.trade.stop_loss in (0, None):
+
+            if decision.signal.name == "BUY CALL":
+
+                decision.trade.stop_loss = round(
+
+                    snapshot.spot - expected_move * 0.25,
+
+                    2
+
+                )
+
+            elif decision.signal.name == "BUY PUT":
+
+                decision.trade.stop_loss = round(
+
+                    snapshot.spot + expected_move * 0.25,
+
+                    2
+
+                )
+
+        # ----------------------------------------
+        # Smart Target Selector
+        # ----------------------------------------
+
+        if decision.trade.target1 in (0, None):
+
+            decision.trade.target1 = self.target_selector.select(
+
+                decision,
+
+                snapshot
+
+            )
+
+        # ----------------------------------------
+        # Target 2
+        # ----------------------------------------
+
+        if decision.trade.target2 in (0, None):
+
+            if decision.signal.name == "BUY CALL":
+
+                decision.trade.target2 = round(
+
+                    decision.trade.target1 +
+
+                    expected_move * 0.50,
+
+                    2
+
+                )
+
+            elif decision.signal.name == "BUY PUT":
+
+                decision.trade.target2 = round(
+
+                    decision.trade.target1 -
+
+                    expected_move * 0.50,
+
+                    2
+
+                )
+
+        # ----------------------------------------
+        # Risk / Reward
+        # ----------------------------------------
+
+        try:
+
+            risk = abs(
+
+                decision.trade.entry -
+
+                decision.trade.stop_loss
+
+            )
+
+            reward = abs(
+
+                decision.trade.target1 -
+
+                decision.trade.entry
+
+            )
+
+            if risk > 0:
+
+                decision.trade.risk_reward = round(
+
+                    reward / risk,
+
+                    2
+
+                )
+
+            else:
+
+                decision.trade.risk_reward = None
+
+        except Exception:
+
+            decision.trade.risk_reward = None
+
+        return decision
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\explanation.py
+==================================================
+from dataclasses import dataclass, field
+
+
+@dataclass
+class Explanation:
+    """
+    Human-readable explanation generated from
+    the institutional decision engine.
+    """
+
+    # ======================================================
+    # OVERVIEW
+    # ======================================================
+
+    title: str = ""
+
+    summary: str = ""
+
+    narrative: str = ""
+
+    recommendation: str = ""
+
+    confidence: int = 0
+
+    # ======================================================
+    # WHY
+    # ======================================================
+
+    why: list[str] = field(default_factory=list)
+
+    # ======================================================
+    # NEXT TRIGGERS
+    # ======================================================
+
+    triggers: list[str] = field(default_factory=list)
+
+    # ======================================================
+    # DETAILS
+    # ======================================================
+
+    strengths: list[str] = field(default_factory=list)
+
+    weaknesses: list[str] = field(default_factory=list)
+
+    warnings: list[str] = field(default_factory=list)
+
+    observations: list[str] = field(default_factory=list)
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\explanation_builder.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\explanation_engine.py
+==================================================
+from decision.explanation import Explanation
+from decision.constants import Signal
+
+
+class ExplanationEngine:
+    """
+    Converts technical analytics into
+    human-readable market intelligence.
+
+    No calculations are performed here.
+
+    It only explains the output produced by the
+    Decision Engine.
+    """
+
+    def build(
+        self,
+        decision,
+        regime,
+        snapshot
+    ):
+
+        explanation = Explanation()
+
+        # =====================================================
+        # Confidence
+        # =====================================================
+
+        explanation.confidence = decision.signal.confidence
+
+        # =====================================================
+        # Recommendation
+        # =====================================================
+
+        if decision.signal.name == Signal.BUY_CALL.value:
+
+            explanation.title = "Bullish Opportunity"
+
+            explanation.recommendation = (
+                "BUY CALL"
+            )
+
+        elif decision.signal.name == Signal.BUY_PUT.value:
+
+            explanation.title = "Bearish Opportunity"
+
+            explanation.recommendation = (
+                "BUY PUT"
+            )
+
+        else:
+
+            explanation.title = "No Trade"
+
+            explanation.recommendation = (
+                "WAIT"
+            )
+
+        # =====================================================
+        # Strengths
+        # =====================================================
+
+        for reason in decision.reasons:
+
+            if any(word in reason for word in (
+                "LONG",
+                "Positive",
+                "Bullish",
+                "High",
+                "Buying",
+                "STRONG"
+            )):
+
+                explanation.strengths.append(reason)
+
+        # =====================================================
+        # Weaknesses
+        # =====================================================
+
+        for reason in decision.reasons:
+
+            if any(word in reason for word in (
+                "SHORT",
+                "Negative",
+                "Weak",
+                "Low",
+                "BEARISH"
+            )):
+
+                explanation.weaknesses.append(reason)
+
+        # =====================================================
+        # Observations
+        # =====================================================
+
+        if regime.regime == "RANGE":
+
+            explanation.observations.append(
+                "Market is trading inside a range."
+            )
+
+        elif regime.regime == "TRENDING":
+
+            explanation.observations.append(
+                "Trending market detected."
+            )
+
+        elif regime.regime == "BREAKOUT":
+
+            explanation.observations.append(
+                "Breakout conditions are developing."
+            )
+
+        if regime.volatility == "HIGH":
+
+            explanation.warnings.append(
+                "High volatility may increase option premiums."
+            )
+
+        elif regime.volatility == "LOW":
+
+            explanation.observations.append(
+                "Low volatility environment."
+            )
+
+        # =====================================================
+        # Dealer Interpretation
+        # =====================================================
+
+        dealer = snapshot.dealer.get(
+            "dealer_gamma",
+            "UNKNOWN"
+        )
+
+        if dealer == "LONG":
+
+            explanation.observations.append(
+                "Dealers are positioned LONG."
+            )
+
+        elif dealer == "SHORT":
+
+            explanation.observations.append(
+                "Dealers are positioned SHORT."
+            )
+
+        # =====================================================
+        # Narrative
+        # =====================================================
+
+        parts = []
+
+        parts.append(
+            f"Market is currently in a {regime.regime} environment."
+        )
+
+        dealer = snapshot.dealer.get("dealer_gamma", "UNKNOWN")
+
+        if dealer == "LONG":
+
+            parts.append(
+                "Dealers remain LONG, indicating a positive gamma environment."
+            )
+
+        elif dealer == "SHORT":
+
+            parts.append(
+                "Dealers remain SHORT, increasing directional risk."
+            )
+
+        if explanation.confidence < 30:
+
+            parts.append(
+                "Current conviction is low."
+            )
+
+        elif explanation.confidence < 70:
+
+            parts.append(
+                "Market conviction is moderate."
+            )
+
+        else:
+
+            parts.append(
+                "Market conviction is high."
+            )
+
+        if explanation.recommendation == "WAIT":
+
+            parts.append(
+                "No high-quality trade setup is currently available."
+            )
+
+        elif explanation.recommendation == "BUY CALL":
+
+            parts.append(
+                "Bullish conditions support long call opportunities."
+            )
+
+        elif explanation.recommendation == "BUY PUT":
+
+            parts.append(
+                "Bearish conditions support long put opportunities."
+            )
+
+        explanation.narrative = " ".join(parts)
+
+        # =====================================================
+        # WHY
+        # =====================================================
+
+        for reason in decision.reasons:
+
+            explanation.why.append(reason)
+
+        # =====================================================
+        # Future Triggers
+        # =====================================================
+
+        if explanation.recommendation == "WAIT":
+
+            explanation.triggers.extend([
+                "Institutional strength improves.",
+                "Probability score increases.",
+                "Trend changes from RANGE to TRENDING.",
+                "Spot breaks a key gamma level."
+            ])
+
+        # =====================================================
+        # Summary
+        # =====================================================
+
+        explanation.summary = (
+            f"{explanation.recommendation} "
+            f"({explanation.confidence}% confidence)"
+        )
+        return explanation
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\market_analyzer.py
+==================================================
+from decision.market_context import MarketContext
+
+
+class MarketAnalyzer:
+    """
+    Converts MarketSnapshot into MarketContext.
+
+    Responsible ONLY for understanding
+    the current market.
+    """
+
+    def analyze(self, snapshot):
+
+        market = MarketContext()
+
+        # ==================================================
+        # Dealer
+        # ==================================================
+
+        dealer = snapshot.dealer
+
+        market.dealer = dealer.get(
+            "dealer_gamma",
+            "UNKNOWN"
+        )
+
+        # ==================================================
+        # Gamma Levels
+        # ==================================================
+
+        market.gamma_flip = dealer.get(
+            "gamma_flip"
+        )
+
+        market.gamma_wall = dealer.get(
+            "gamma_wall"
+        )
+
+        market.call_wall = dealer.get(
+            "call_wall"
+        )
+
+        market.put_wall = dealer.get(
+            "put_wall"
+        )
+
+        if market.gamma_flip is not None:
+
+            if snapshot.spot > market.gamma_flip:
+
+                market.gamma_state = "POSITIVE"
+
+            else:
+
+                market.gamma_state = "NEGATIVE"
+
+        # ==================================================
+        # PCR
+        # ==================================================
+
+        market.pcr_bias = snapshot.pcr.get(
+            "bias",
+            "UNKNOWN"
+        )
+
+        # ==================================================
+        # Institutional
+        # ==================================================
+
+        inst = snapshot.institutional.get(
+            "institutional",
+            {}
+        )
+
+        score = inst.get(
+            "score",
+            0
+        )
+
+        if score >= 70:
+
+            market.institutional = "STRONG"
+
+        elif score >= 40:
+
+            market.institutional = "MODERATE"
+
+        else:
+
+            market.institutional = "WEAK"
+
+        # ==================================================
+        # Probability
+        # ==================================================
+
+        market.probability = snapshot.prediction.get(
+            "prediction_score",
+            0
+        )
+
+        # ==================================================
+        # Expected Move
+        # ==================================================
+
+        market.expected_move = snapshot.expected_move.get(
+            "expected_move",
+            0
+        )
+
+        # ==================================================
+        # Max Pain
+        # ==================================================
+
+        market.max_pain = snapshot.max_pain.get(
+            "max_pain"
+        )
+
+        # ==================================================
+        # Volatility
+        # ==================================================
+
+        atr = snapshot.atr.get(
+            "atr",
+            0
+        )
+
+        market.atr = atr
+
+        if atr >= 250:
+
+            market.volatility = "HIGH"
+
+        elif atr >= 120:
+
+            market.volatility = "NORMAL"
+
+        else:
+
+            market.volatility = "LOW"
+
+        # ==================================================
+        # Liquidity
+        # ==================================================
+
+        market.liquidity = "NORMAL"
+
+        # ==================================================
+        # Regime
+        # ==================================================
+
+        bullish = 0
+        bearish = 0
+
+        if market.dealer == "LONG":
+            bullish += 1
+        elif market.dealer == "SHORT":
+            bearish += 1
+
+        if market.gamma_state == "POSITIVE":
+            bullish += 1
+        elif market.gamma_state == "NEGATIVE":
+            bearish += 1
+
+        if market.pcr_bias == "BULLISH":
+            bullish += 1
+        elif market.pcr_bias == "BEARISH":
+            bearish += 1
+
+        if market.institutional == "STRONG":
+            bullish += 1
+        elif market.institutional == "WEAK":
+            bearish += 1
+
+        if bullish >= 3:
+
+            market.regime = "TRENDING"
+
+            market.bias = "BULLISH"
+
+        elif bearish >= 3:
+
+            market.regime = "TRENDING"
+
+            market.bias = "BEARISH"
+
+        else:
+
+            market.regime = "RANGE"
+
+            market.bias = "NEUTRAL"
+
+        return market
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\market_context.py
+==================================================
+from dataclasses import dataclass
+
+
+@dataclass
+class MarketContext:
+    """
+    Represents the current market state.
+    Generated by MarketAnalyzer.
+    """
+
+    # =====================================================
+    # REGIME
+    # =====================================================
+
+    regime: str = "UNKNOWN"
+
+    bias: str = "NEUTRAL"
+
+    # =====================================================
+    # DEALER
+    # =====================================================
+
+    dealer: str = "UNKNOWN"
+
+    gamma_state: str = "UNKNOWN"
+
+    # =====================================================
+    # VOLATILITY
+    # =====================================================
+
+    volatility: str = "NORMAL"
+
+    atr: float = 0.0
+
+    expected_move: float = 0.0
+
+    # =====================================================
+    # MARKET STRUCTURE
+    # =====================================================
+
+    pcr_bias: str = "UNKNOWN"
+
+    institutional: str = "UNKNOWN"
+
+    liquidity: str = "UNKNOWN"
+
+    probability: int = 0
+
+    # =====================================================
+    # IMPORTANT LEVELS
+    # =====================================================
+
+    gamma_flip: float | None = None
+
+    gamma_wall: float | None = None
+
+    call_wall: float | None = None
+
+    put_wall: float | None = None
+
+    max_pain: float | None = None
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\market_map.py
+==================================================
+class MarketMap:
+
+    """
+    Decision object representing the important
+    market levels for the trading terminal.
+    """
+
+    def __init__(self):
+
+        self.spot = None
+
+        self.dealer = "-"
+
+        self.gamma_flip = "-"
+
+        self.gamma_wall = "-"
+
+        self.call_wall = "-"
+
+        self.put_wall = "-"
+
+        self.max_pain = "-"
+
+        self.expected_move = "-"
+
+    @classmethod
+    def from_analytics(
+
+        cls,
+
+        analytics
+
+    ):
+
+        obj = cls()
+
+        data = analytics.get(
+            "market_map",
+            {}
+        )
+
+        obj.spot = data.get(
+            "spot"
+        )
+
+        obj.dealer = data.get(
+            "dealer_gamma"
+        )
+
+        obj.gamma_flip = data.get(
+            "gamma_flip"
+        )
+
+        obj.gamma_wall = data.get(
+            "gamma_wall"
+        )
+
+        obj.call_wall = data.get(
+            "call_wall"
+        )
+
+        obj.put_wall = data.get(
+            "put_wall"
+        )
+
+        obj.max_pain = data.get(
+            "max_pain"
+        )
+
+        obj.expected_move = data.get(
+            "expected_move"
+        )
+
+        return obj
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\market_regime.py
+==================================================
+from dataclasses import dataclass
+
+
+@dataclass
+class MarketRegime:
+
+    regime: str = "UNKNOWN"
+
+    trend: str = "NEUTRAL"
+
+    volatility: str = "NORMAL"
+
+    confidence: int = 0
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\market_regime_engine.py
+==================================================
+from decision.market_regime import MarketRegime
+
+
+class MarketRegimeEngine:
+    """
+    Determines the current market regime.
+    """
+
+    def analyze(self, snapshot):
+
+        regime = MarketRegime()
+
+        dealer = snapshot.dealer
+        prediction = snapshot.prediction
+        pcr = snapshot.pcr
+
+        dealer_gamma = dealer.get("dealer_gamma", "UNKNOWN")
+        probability = prediction.get("prediction_score", 0)
+        bias = pcr.get("bias", "NEUTRAL")
+
+        # -------------------------------------
+        # Trend
+        # -------------------------------------
+
+        if dealer_gamma == "LONG" and bias == "BULLISH":
+
+            regime.trend = "BULLISH"
+
+        elif dealer_gamma == "SHORT" and bias == "BEARISH":
+
+            regime.trend = "BEARISH"
+
+        else:
+
+            regime.trend = "NEUTRAL"
+
+        # -------------------------------------
+        # Regime
+        # -------------------------------------
+
+        if probability >= 80:
+
+            regime.regime = "TRENDING"
+
+        elif probability >= 60:
+
+            regime.regime = "BREAKOUT"
+
+        else:
+
+            regime.regime = "RANGE"
+
+        # -------------------------------------
+        # Volatility
+        # -------------------------------------
+
+        atr = snapshot.atr.get("atr", 0)
+
+        if atr >= 250:
+
+            regime.volatility = "HIGH"
+
+        elif atr <= 100:
+
+            regime.volatility = "LOW"
+
+        else:
+
+            regime.volatility = "NORMAL"
+
+        regime.confidence = probability
+
+        return regime
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\models\__init__.py
+==================================================
+from .signal import Signal
+from .trade import Trade
+from .market import Market
+from .execution_plan import ExecutionPlan
+from .decision import Decision
+from .option_contract import OptionContract
+
+__all__ = [
+    "Signal",
+    "Trade",
+    "Market",
+    "Decision",
+    "ExecutionPlan",
+    "OptionContract",
+]
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\models\decision.py
+==================================================
+from dataclasses import dataclass, field
+
+from .signal import Signal
+from .trade import Trade
+from .market import Market
+from decision.validation_result import ValidationResult
+
+
+@dataclass
+class Decision:
+    """
+    Final output of Decision Engine.
+    """
+
+    signal: Signal = field(
+        default_factory=Signal
+    )
+
+    trade: Trade = field(
+        default_factory=Trade
+    )
+
+    market: Market = field(
+        default_factory=Market
+    )
+
+    reasons: list = field(
+        default_factory=list
+    )
+
+    # Institutional Score Breakdown
+    score: dict = field(
+        default_factory=dict
+    )
+
+    # ------------------------------------------------------------------
+    # Legacy field (keep until all modules migrate)
+    # ------------------------------------------------------------------
+    valid: bool = False
+
+    # ------------------------------------------------------------------
+    # New validation model
+    # ------------------------------------------------------------------
+    validation: ValidationResult = field(
+        default_factory=lambda: ValidationResult(
+            valid=False,
+            grade="F",
+            confidence=0,
+            risk_multiplier=0.0,
+            warnings=[]
+        )
+    )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\models\execution_plan.py
+==================================================
+from dataclasses import dataclass
+
+
+@dataclass
+class ExecutionPlan:
+    """
+    Final executable trade plan.
+    """
+
+    capital: float = 0
+
+    risk_percent: float = 0
+
+    risk_amount: float = 0
+
+    lot_size: int = 0
+
+    lots: int = 0
+
+    premium_entry: float = 0
+
+    premium_stop_loss: float = 0
+
+    premium_target1: float = 0
+
+    premium_target2: float = 0
+
+    risk_reward: float = 0
+
+    trade_quality: int = 0
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\models\market.py
+==================================================
+from dataclasses import dataclass
+
+
+@dataclass
+class Market:
+    """
+    Market summary used by the Decision Engine.
+    """
+
+    dealer: str = ""
+
+    institutional: str = ""
+
+    probability: float = 0
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\models\option_contract.py
+==================================================
+from dataclasses import dataclass
+
+
+@dataclass
+class OptionContract:
+    """
+    Represents one tradable option contract.
+    """
+
+    strike: int
+
+    option_type: str
+
+    expiry: str = ""
+
+    ltp: float = 0.0
+
+    bid: float = 0.0
+
+    ask: float = 0.0
+
+    volume: int = 0
+
+    oi: int = 0
+
+    iv: float = 0.0
+
+    delta: float = 0.0
+
+    gamma: float = 0.0
+
+    theta: float = 0.0
+
+    vega: float = 0.0
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\models\signal.py
+==================================================
+from dataclasses import dataclass
+
+
+@dataclass
+class Signal:
+    """
+    Trading signal produced by the Decision Engine.
+    """
+
+    name: str = "WAIT"
+
+    confidence: int = 0
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\models\trade.py
+==================================================
+from dataclasses import dataclass, field
+from typing import Optional
+
+from .option_contract import OptionContract
+from .execution_plan import ExecutionPlan
+
+
+@dataclass
+class Trade:
+    """
+    Represents the executable option trade.
+
+    This contains:
+    - Selected option contract
+    - Trade details
+    - Execution plan
+    """
+
+    # =====================================================
+    # Selected Contract
+    # =====================================================
+
+    contract: Optional[OptionContract] = None
+
+    # =====================================================
+    # Option Details
+    # =====================================================
+
+    option_type: str = ""
+
+    strike: float = 0
+
+    # =====================================================
+    # Premium Trade
+    # =====================================================
+
+    entry: float = 0
+
+    stop_loss: float = 0
+
+    target1: float = 0
+
+    target2: float = 0
+
+    risk_reward: float = 0
+
+    # =====================================================
+    # Execution Plan
+    # =====================================================
+
+    execution: ExecutionPlan = field(
+        default_factory=ExecutionPlan
+    )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\option_contract.py
+==================================================
+from dataclasses import dataclass
+
+
+@dataclass
+class OptionContract:
+    """
+    Represents one tradable option contract.
+    """
+
+    strike: int
+
+    option_type: str
+
+    expiry: str = ""
+
+    ltp: float = 0.0
+
+    bid: float = 0.0
+
+    ask: float = 0.0
+
+    volume: int = 0
+
+    oi: int = 0
+
+    iv: float = 0.0
+
+    delta: float = 0.0
+
+    gamma: float = 0.0
+
+    theta: float = 0.0
+
+    vega: float = 0.0
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\rules.py
+==================================================
+class DecisionRules:
+
+    BUY_THRESHOLD = 70
+
+    SELL_THRESHOLD = -70
+
+    DEALER_WEIGHT = 30
+
+    GAMMA_WEIGHT = 20
+
+    PCR_WEIGHT = 15
+
+    INSTITUTION_WEIGHT = 20
+
+    PROBABILITY_WEIGHT = 15
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\scoring_engine.py
+==================================================
+from config.trading_config import TradingConfig
+
+
+class ScoringEngine:
+    """
+    Institutional weighted scoring engine.
+
+    Produces a score together with
+    a detailed score breakdown.
+    """
+
+    def score(self, market):
+
+        score = 0
+
+        reasons = []
+
+        breakdown = {}
+
+        # ----------------------------------
+        # Dealer
+        # ----------------------------------
+
+        dealer_score = 0
+
+        if market.dealer == "LONG":
+
+            dealer_score = TradingConfig.DEALER_LONG_SCORE
+
+            reasons.append("Dealer LONG")
+
+        elif market.dealer == "SHORT":
+
+            dealer_score = TradingConfig.DEALER_SHORT_SCORE
+
+            reasons.append("Dealer SHORT")
+
+        breakdown["dealer"] = dealer_score
+
+        score += dealer_score
+
+        # ----------------------------------
+        # Gamma
+        # ----------------------------------
+
+        gamma_score = 0
+
+        if market.gamma_state == "POSITIVE":
+
+            gamma_score = TradingConfig.GAMMA_POSITIVE_SCORE
+
+            reasons.append("Positive Gamma")
+
+        elif market.gamma_state == "NEGATIVE":
+
+            gamma_score = TradingConfig.GAMMA_NEGATIVE_SCORE
+
+            reasons.append("Negative Gamma")
+
+        breakdown["gamma"] = gamma_score
+
+        score += gamma_score
+
+        # ----------------------------------
+        # PCR
+        # ----------------------------------
+
+        pcr_score = 0
+
+        if market.pcr_bias == "BULLISH":
+
+            pcr_score = TradingConfig.PCR_BULLISH_SCORE
+
+            reasons.append("PCR Bullish")
+
+        elif market.pcr_bias == "BEARISH":
+
+            pcr_score = TradingConfig.PCR_BEARISH_SCORE
+
+            reasons.append("PCR Bearish")
+
+        breakdown["pcr"] = pcr_score
+
+        score += pcr_score
+
+        # ----------------------------------
+        # Institutional
+        # ----------------------------------
+
+        institutional_score = 0
+
+        if market.institutional == "STRONG":
+
+            institutional_score = TradingConfig.INSTITUTION_STRONG_SCORE
+
+            reasons.append("Institution Buying")
+
+        elif market.institutional == "WEAK":
+
+            institutional_score = TradingConfig.INSTITUTION_WEAK_SCORE
+
+            reasons.append("Weak Institution")
+
+        breakdown["institutional"] = institutional_score
+
+        score += institutional_score
+
+        # ----------------------------------
+        # Probability
+        # ----------------------------------
+
+        probability_score = 0
+
+        if market.probability >= TradingConfig.HIGH_PROBABILITY_THRESHOLD:
+
+            probability_score = TradingConfig.PROBABILITY_HIGH_SCORE
+
+            reasons.append("High Probability")
+
+        elif market.probability <= TradingConfig.LOW_PROBABILITY_THRESHOLD:
+
+            probability_score = TradingConfig.PROBABILITY_LOW_SCORE
+
+            reasons.append("Low Probability")
+
+        breakdown["probability"] = probability_score
+
+        score += probability_score
+
+        # ----------------------------------
+        # Final
+        # ----------------------------------
+
+        breakdown["total"] = score
+
+        return {
+
+            "score": score,
+
+            "reasons": reasons,
+
+            "breakdown": breakdown
+
+        }
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\strategies\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\strategies\base_strategy.py
+==================================================
+from abc import ABC, abstractmethod
+
+
+class BaseStrategy(ABC):
+    """
+    Strategy modifies the institutional score.
+
+    It never calculates the base score.
+    """
+
+    @abstractmethod
+    def adjust(self, score, market):
+
+        pass
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\strategies\range_strategy.py
+==================================================
+from decision.strategies.base_strategy import BaseStrategy
+
+
+class RangeStrategy(BaseStrategy):
+    """
+    Range market adjustment.
+    """
+
+    def adjust(self, score, market):
+
+        reasons = []
+
+        # Reduce aggressive scores
+        score = int(score * 0.70)
+
+        reasons.append("Range Market")
+
+        return score, reasons
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\strategies\trend_strategy.py
+==================================================
+from decision.strategies.base_strategy import BaseStrategy
+
+
+class TrendStrategy(BaseStrategy):
+    """
+    Trending market adjustment.
+    """
+
+    def adjust(self, score, market):
+
+        reasons = []
+
+        # Strong trend deserves a boost
+        if market.regime == "TRENDING":
+
+            score += 10
+
+            reasons.append("Trending Market")
+
+        # Strong probability deserves another boost
+        if market.probability >= 85:
+
+            score += 5
+
+            reasons.append("Very High Probability")
+
+        return score, reasons
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\strategy_selector.py
+==================================================
+from decision.strategies.trend_strategy import TrendStrategy
+from decision.strategies.range_strategy import RangeStrategy
+
+
+class StrategySelector:
+    """
+    Selects the appropriate trading strategy
+    based on the current MarketContext.
+    """
+
+    def __init__(self):
+
+        self.trend = TrendStrategy()
+
+        self.range = RangeStrategy()
+
+    def select(self, market):
+
+        if market.regime == "TRENDING":
+
+            return self.trend
+
+        elif market.regime == "RANGE":
+
+            return self.range
+
+        #
+        # Future
+        #
+
+        # BREAKOUT
+
+        # REVERSAL
+
+        return self.range
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\terminal.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\decision\validation_result.py
+==================================================
+from dataclasses import dataclass, field
+
+
+@dataclass
+class ValidationResult:
+
+    valid: bool
+
+    grade: str
+
+    confidence: int
+
+    risk_multiplier: float
+
+    warnings: list = field(default_factory=list)
+
+

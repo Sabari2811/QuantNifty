@@ -1,0 +1,585 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\runtime\__init__.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\runtime\change_detector.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\runtime\composition.py
+==================================================
+from __future__ import annotations
+
+"""
+==========================================================
+Composition Root
+
+Creates every long-lived dependency exactly once.
+
+Nothing else in QuantNifty should instantiate these
+objects directly.
+
+==========================================================
+"""
+
+from analytics.intelligence.feature_extractor import FeatureExtractor
+from analytics.intelligence.memory_engine import MarketMemory
+from analytics.intelligence.similarity.similarity_engine import SimilarityEngine
+from analytics.intelligence.evidence.evidence_engine import EvidenceEngine
+
+from application.intelligence_service import IntelligenceService
+
+from paper_trading.broker import PaperBroker
+
+
+class CompositionRoot:
+
+    def __init__(self):
+
+        #
+        # Infrastructure
+        #
+
+        self.paper_broker = PaperBroker()
+
+        #
+        # Intelligence
+        #
+
+        self.feature_extractor = FeatureExtractor()
+
+        self.market_memory = MarketMemory()
+
+        self.similarity_engine = SimilarityEngine()
+
+        self.evidence_engine = EvidenceEngine(
+            similarity_engine=self.similarity_engine
+        )
+
+        #
+        # Application Services
+        #
+
+        self.intelligence_service = IntelligenceService(
+            feature_extractor=self.feature_extractor,
+            market_memory=self.market_memory,
+            evidence_engine=self.evidence_engine,
+        )
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\runtime\event_manager.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\runtime\live_cycle.py
+==================================================
+from runtime.runtime_manager import RuntimeManager
+
+
+class LiveCycle:
+    """
+    Executes one complete market cycle.
+
+    Scheduler calls this class repeatedly.
+    """
+
+    def __init__(self):
+
+        self.runtime = RuntimeManager()
+
+    def cycle(self):
+
+        return self.runtime.run_once()
+
+    def get_context(self):
+
+        return self.runtime.get_context()
+
+    def get_engine(self):
+
+        return self.runtime.get_engine()
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\runtime\market_clock.py
+==================================================
+from datetime import datetime, time
+
+
+class MarketClock:
+
+    MARKET_OPEN = time(9, 15)
+    MARKET_CLOSE = time(15, 30)
+
+    def now(self):
+        return datetime.now()
+
+    def is_market_open(self):
+
+        current = self.now().time()
+
+        return self.MARKET_OPEN <= current <= self.MARKET_CLOSE
+
+    def is_pre_market(self):
+
+        return self.now().time() < self.MARKET_OPEN
+
+    def is_post_market(self):
+
+        return self.now().time() > self.MARKET_CLOSE
+
+    def market_status(self):
+
+        if self.is_pre_market():
+            return "PRE_MARKET"
+
+        if self.is_market_open():
+            return "OPEN"
+
+        return "CLOSED"
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\runtime\runtime_context.py
+==================================================
+from __future__ import annotations
+
+"""
+==========================================================
+
+Runtime Context
+
+Holds the application's runtime state.
+
+Does NOT create dependencies.
+
+Dependencies are injected from CompositionRoot.
+
+==========================================================
+"""
+
+
+class RuntimeContext:
+
+    def __init__(
+        self,
+        composition,
+    ):
+
+        #
+        # Composition Root
+        #
+
+        self.composition = composition
+
+        #
+        # Infrastructure
+        #
+
+        self.paper_broker = composition.paper_broker
+
+        #
+        # Application Services
+        #
+
+        self.intelligence_service = (
+            composition.intelligence_service
+        )
+
+    # ===================================================
+    # Broker
+    # ===================================================
+
+    @property
+    def portfolio(self):
+
+        return self.paper_broker.portfolio
+
+    @property
+    def journal(self):
+
+        return self.paper_broker.journal
+
+    @property
+    def position(self):
+
+        return self.paper_broker.position
+
+    @property
+    def last_trade(self):
+
+        return self.paper_broker.last_trade
+
+    @property
+    def performance(self):
+
+        return self.paper_broker.performance
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\runtime\runtime_manager.py
+==================================================
+import threading
+
+from engine.live_engine import LiveEngine
+from providers.indmoney_provider import INDMoneyProvider
+from providers.simulation_provider import SimulationProvider
+from runtime.runtime_mode import RuntimeMode
+from runtime.scheduler import Scheduler
+
+
+class RuntimeManager:
+    """
+    Singleton Runtime Manager.
+
+    Owns exactly one:
+
+        â€¢ Provider
+        â€¢ LiveEngine
+        â€¢ Scheduler
+        â€¢ Runtime Thread
+    """
+
+    _instance = None
+
+    # ==========================================================
+    # Singleton
+    # ==========================================================
+
+    def __new__(
+        cls,
+        mode: RuntimeMode = RuntimeMode.LIVE,
+        replay_session=None
+    ):
+
+        if cls._instance is None:
+
+            cls._instance = super().__new__(cls)
+
+            cls._instance._initialize(
+                mode,
+                replay_session
+            )
+
+        return cls._instance
+
+    # ==========================================================
+    # Initialization
+    # ==========================================================
+
+    def _initialize(
+        self,
+        mode,
+        replay_session
+    ):
+
+        self.mode = mode
+
+        self.provider = self._create_provider(
+            mode,
+            replay_session
+        )
+
+        self.engine = LiveEngine(
+            provider=self.provider
+        )
+
+        self.scheduler = Scheduler()
+
+        self.running = False
+
+        self.thread = None
+
+    # ==========================================================
+    # Provider Factory
+    # ==========================================================
+
+    def _create_provider(
+        self,
+        mode,
+        replay_session
+    ):
+
+        if mode == RuntimeMode.LIVE:
+
+            return INDMoneyProvider()
+
+        if mode in (
+
+            RuntimeMode.REPLAY_FAST,
+
+            RuntimeMode.REPLAY_RECOMPUTE
+
+        ):
+
+            if replay_session is None:
+
+                raise ValueError(
+                    "ReplaySession is required."
+                )
+
+            return SimulationProvider(
+
+                replay_source=replay_session,
+
+                runtime_mode=mode
+
+            )
+
+        raise ValueError(
+            f"Unsupported runtime mode: {mode}"
+        )
+
+    # ==========================================================
+    # Runtime
+    # ==========================================================
+
+    def start(
+        self,
+        interval=30
+    ):
+
+        if self.running:
+
+            print("Runtime already running.")
+
+            return
+
+        self.running = True
+
+        self.thread = threading.Thread(
+
+            target=self.scheduler.start,
+
+            kwargs={
+
+                "callback": self.engine.run_cycle,
+
+                "interval": interval
+
+            },
+
+            daemon=True
+
+        )
+
+        self.thread.start()
+
+        print(
+            f"Runtime started ({self.mode.value})."
+        )
+
+    def stop(self):
+
+        if not self.running:
+
+            return
+
+        self.running = False
+
+        self.scheduler.stop()
+
+        if self.thread is not None:
+
+            self.thread.join(timeout=2)
+
+            self.thread = None
+
+        print("Runtime stopped.")
+
+    # ==========================================================
+    # Helpers
+    # ==========================================================
+
+    def run_once(self):
+
+        return self.engine.run_cycle()
+
+    def get_context(self):
+
+        return self.engine.ctx
+
+    def get_engine(self):
+
+        return self.engine
+
+    def get_provider(self):
+
+        return self.provider
+
+    def is_running(self):
+
+        return self.running
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\runtime\runtime_mode.py
+==================================================
+from enum import Enum
+
+
+class RuntimeMode(str, Enum):
+    """
+    Runtime execution modes.
+
+    LIVE
+        Uses live market data from broker.
+
+    REPLAY_FAST
+        Loads recorded analytics without recomputing.
+
+    REPLAY_RECOMPUTE
+        Loads recorded market data and recomputes
+        analytics, decisions and trades.
+    """
+
+    LIVE = "LIVE"
+
+    REPLAY_FAST = "REPLAY_FAST"
+
+    REPLAY_RECOMPUTE = "REPLAY_RECOMPUTE"
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\runtime\runtime_state.py
+==================================================
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\runtime\scheduler.py
+==================================================
+from runtime.market_clock import MarketClock
+from runtime.sleep_timer import SleepTimer
+
+
+class Scheduler:
+
+    def __init__(self):
+
+        self.clock = MarketClock()
+        self.timer = SleepTimer()
+
+        self.running = False
+
+    # ==========================================================
+    # START
+    # ==========================================================
+
+    def start(
+        self,
+        callback,
+        interval=30,
+        max_cycles=None
+    ):
+
+        if self.running:
+            print("Scheduler already running.")
+            return
+
+        self.running = True
+
+        print()
+        print("=" * 70)
+        print("SCHEDULER STARTED")
+        print("=" * 70)
+
+        cycle = 0
+
+        try:
+
+            while self.running:
+
+                cycle += 1
+
+                print()
+                print("-" * 70)
+                print(f"Cycle : {cycle}")
+                print("-" * 70)
+
+                status = self.clock.market_status()
+
+                print(f"Market Status : {status}")
+
+                if self.clock.is_market_open():
+
+                    callback()
+
+                else:
+
+                    print("Market Closed.")
+
+                if (
+                    max_cycles is not None
+                    and cycle >= max_cycles
+                ):
+
+                    print()
+                    print("=" * 70)
+                    print("MAX CYCLES REACHED")
+                    print("=" * 70)
+
+                    break
+
+                self.timer.wait(interval)
+
+        except KeyboardInterrupt:
+
+            print()
+            print("Scheduler interrupted by user.")
+
+        finally:
+
+            self.running = False
+
+            print()
+            print("=" * 70)
+            print("SCHEDULER STOPPED")
+            print("=" * 70)
+
+    # ==========================================================
+    # STOP
+    # ==========================================================
+
+    def stop(self):
+
+        self.running = False
+
+
+==================================================
+FILE: D:\Projects\NiftySignalEngine\runtime\sleep_timer.py
+==================================================
+from datetime import datetime
+import time
+
+
+class SleepTimer:
+
+    def wait(self, interval=30):
+
+        now = datetime.now()
+
+        current = now.timestamp()
+
+        next_tick = (
+            (int(current / interval) + 1)
+            * interval
+        )
+
+        sleep_time = next_tick - current
+
+        if sleep_time > 0:
+
+            print()
+
+            print("-" * 70)
+            print(f"Sleeping {sleep_time:.2f} seconds...")
+            print("-" * 70)
+
+            time.sleep(sleep_time)
+
+

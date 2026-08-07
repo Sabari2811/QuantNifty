@@ -1,0 +1,62 @@
+﻿==================================================
+FILE: D:\Projects\NiftySignalEngine\analytics\market_regime\market_regime_engine.py
+==================================================
+class MarketRegimeEngine:
+    """
+    Identifies the current market regime.
+
+    Regimes:
+        TRENDING_UP
+        TRENDING_DOWN
+        RANGE_BOUND
+        BREAKOUT
+        BREAKDOWN
+        HIGH_VOLATILITY
+        LOW_VOLATILITY
+    """
+
+    def __init__(self):
+        pass
+
+    def analyze(
+        self,
+        technical,
+        dealer,
+        probability
+    ):
+
+        regime = {
+            "regime": "UNKNOWN",
+            "confidence": 0,
+            "reasons": []
+        }
+
+        trend = technical.get("EMA", {}).get("trend", "")
+
+        volatility = technical.get("ATR", {}).get("volatility", "")
+
+        dealer_gamma = dealer.get("dealer_gamma", "")
+
+        bullish = probability.get("bullish_probability", 50)
+
+        if trend == "STRONG_BULLISH" and bullish >= 70:
+
+            regime["regime"] = "TRENDING_UP"
+            regime["confidence"] = 80
+            regime["reasons"].append("Strong EMA trend + High bullish probability")
+
+        elif trend == "STRONG_BEARISH" and bullish <= 30:
+
+            regime["regime"] = "TRENDING_DOWN"
+            regime["confidence"] = 80
+            regime["reasons"].append("Strong EMA trend + High bearish probability")
+
+        elif volatility == "LOW" and dealer_gamma == "LONG":
+
+            regime["regime"] = "RANGE_BOUND"
+            regime["confidence"] = 75
+            regime["reasons"].append("Low volatility + Dealers long gamma")
+
+        return regime
+
+
