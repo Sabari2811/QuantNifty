@@ -1,4 +1,4 @@
-from analytics.gamma_flip import GammaFlipDetector
+﻿from analytics.gamma.gamma_flip import GammaFlipDetector
 
 from analytics.greeks.greeks_analyzer import GreeksAnalyzer
 

@@ -1,129 +1,71 @@
+import pytest
+
 from analytics.market_snapshot.market_snapshot import MarketSnapshot
 from decision.decision_engine import DecisionEngine
 
-
-analytics = {
-
-    "dealer": {
-
-        "dealer_gamma": "LONG",
-
-        "gamma_flip": 24200,
-
-        "gamma_wall": 24300,
-
-        "call_wall": 24400,
-
-        "put_wall": 24100
-
-    },
-
-    "prediction": {
-
-        "prediction_score": 88
-
-    },
-
-    "institutional_score": {
-
-        "institutional": {
-
-            "score": 82,
-
-            "max_score": 100
-
-        }
-
-    },
-
-    "pcr": {
-
-        "bias": "BULLISH"
-
-    },
-
-    "expected_move": {
-
-        "expected_move": 185
-
-    },
-
-    "max_pain": {
-
-        "max_pain": 24250
-
-    },
-
-    "atr": {
-
-        "atr": 155
-
-    }
-
-}
-
 import pandas as pd
 
-greeks_df = pd.DataFrame([
-    {
-        "strike": 24300,
-        "option_type": "CE",
-        "ltp": 180.0,
-        "bid": 179.5,
-        "ask": 180.5,
-        "volume": 120000,
-        "oi": 250000,
-        "iv": 14.2,
-        "delta": 0.52,
-        "gamma": 0.018,
-        "theta": -12.5,
-        "vega": 8.4,
-        "expiry": "31-Jul-2026"
+
+def canonical_greeks_df():
+    return pd.DataFrame([
+        {
+            "Strike": 24200, "CE_ID": 1001, "CE_LTP": 165.0,
+            "CE_BID": 164.5, "CE_ASK": 165.5, "CE_OI": 210000,
+            "CE_VOLUME": 110000, "CE_IV": 14.8, "CE_DELTA": 0.48,
+            "CE_GAMMA": 0.019, "CE_THETA": -13.2, "CE_VEGA": 8.7,
+            "PE_ID": 1002, "PE_LTP": 120.0, "PE_BID": 119.5,
+            "PE_ASK": 120.5, "PE_OI": 230000, "PE_VOLUME": 105000,
+            "PE_IV": 14.4, "PE_DELTA": -0.44, "PE_GAMMA": 0.018,
+            "PE_THETA": -12.8, "PE_VEGA": 8.5, "Expiry": "31-Jul-2026",
+        },
+        {
+            "Strike": 24300, "CE_ID": 1003, "CE_LTP": 180.0,
+            "CE_BID": 179.5, "CE_ASK": 180.5, "CE_OI": 250000,
+            "CE_VOLUME": 120000, "CE_IV": 14.2, "CE_DELTA": 0.52,
+            "CE_GAMMA": 0.018, "CE_THETA": -12.5, "CE_VEGA": 8.4,
+            "PE_ID": 1004, "PE_LTP": 135.0, "PE_BID": 134.5,
+            "PE_ASK": 135.5, "PE_OI": 220000, "PE_VOLUME": 100000,
+            "PE_IV": 14.6, "PE_DELTA": -0.47, "PE_GAMMA": 0.019,
+            "PE_THETA": -13.0, "PE_VEGA": 8.6, "Expiry": "31-Jul-2026",
+        },
+        {
+            "Strike": 24400, "CE_ID": 1005, "CE_LTP": 142.0,
+            "CE_BID": 141.5, "CE_ASK": 142.5, "CE_OI": 180000,
+            "CE_VOLUME": 95000, "CE_IV": 13.9, "CE_DELTA": 0.46,
+            "CE_GAMMA": 0.017, "CE_THETA": -11.8, "CE_VEGA": 8.1,
+            "PE_ID": 1006, "PE_LTP": 150.0, "PE_BID": 149.5,
+            "PE_ASK": 150.5, "PE_OI": 190000, "PE_VOLUME": 90000,
+            "PE_IV": 14.9, "PE_DELTA": -0.51, "PE_GAMMA": 0.017,
+            "PE_THETA": -13.4, "PE_VEGA": 8.8, "Expiry": "31-Jul-2026",
+        },
+    ])
+
+ANALYTICS = {
+    "dealer": {
+        "dealer_gamma": "LONG",
+        "gamma_flip": 24200,
+        "gamma_wall": 24300,
+        "call_wall": 24400,
+        "put_wall": 24100,
     },
-    {
-        "strike": 24400,
-        "option_type": "CE",
-        "ltp": 142.0,
-        "bid": 141.5,
-        "ask": 142.5,
-        "volume": 95000,
-        "oi": 180000,
-        "iv": 13.9,
-        "delta": 0.46,
-        "gamma": 0.017,
-        "theta": -11.8,
-        "vega": 8.1,
-        "expiry": "31-Jul-2026"
+    "prediction": {"prediction_score": 88},
+    "institutional_score": {
+        "institutional": {"score": 82, "max_score": 100}
     },
-    {
-        "strike": 24200,
-        "option_type": "PE",
-        "ltp": 165.0,
-        "bid": 164.5,
-        "ask": 165.5,
-        "volume": 110000,
-        "oi": 210000,
-        "iv": 14.8,
-        "delta": -0.48,
-        "gamma": 0.019,
-        "theta": -13.2,
-        "vega": 8.7,
-        "expiry": "31-Jul-2026"
-    }
-])
+    "pcr": {"bias": "BULLISH"},
+    "expected_move": {"expected_move": 185},
+    "max_pain": {"max_pain": 24250},
+    "atr": {"atr": 155},
+}
 
-snapshot = MarketSnapshot().save(
-    greeks_df=greeks_df,
-    spot=24310,
-    analytics=analytics
-)
 
-decision = DecisionEngine().build(snapshot)
+def test_decision_engine_v4_uses_canonical_option_schema():
+    snapshot = MarketSnapshot().save(
+        greeks_df=canonical_greeks_df(),
+        spot=24310,
+        analytics=ANALYTICS,
+    )
 
-print()
+    decision = DecisionEngine().build(snapshot)
 
-print("=" * 70)
-
-print(decision)
-
-print("=" * 70)
+    assert decision is not None

@@ -4,24 +4,45 @@ from decision.strategies.base_strategy import BaseStrategy
 class TrendStrategy(BaseStrategy):
     """
     Trending market adjustment.
+
+    Strategy adjustments are direction-aware:
+    - Positive scores represent BUY CALL direction.
+    - Negative scores represent BUY PUT direction.
+    - Zero represents WAIT.
+
+    Strategy boosts conviction in the existing direction.
+    It must never reverse the direction.
     """
 
     def adjust(self, score, market):
-
         reasons = []
 
-        # Strong trend deserves a boost
+        direction = (
+            "BUY CALL"
+            if score > 0
+            else "BUY PUT"
+            if score < 0
+            else "WAIT"
+        )
+
+        # Strong trend deserves a directional boost
         if market.regime == "TRENDING":
+            adjustment = 10
 
-            score += 10
+            if direction == "BUY PUT":
+                adjustment = -adjustment
 
+            score += adjustment
             reasons.append("Trending Market")
 
-        # Strong probability deserves another boost
+        # Strong probability deserves another directional boost
         if market.probability >= 85:
+            adjustment = 5
 
-            score += 5
+            if direction == "BUY PUT":
+                adjustment = -adjustment
 
+            score += adjustment
             reasons.append("Very High Probability")
 
         return score, reasons

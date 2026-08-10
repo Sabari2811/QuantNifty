@@ -10,17 +10,28 @@ class DecisionBuilder:
 
     Responsibilities
     ----------------
-    • Populate market information
-    • Populate score breakdown
-    • Calculate trade confidence
-    • Assign trading signal
-    • Initialize validation
+    - Populate market information
+    - Populate score breakdown
+    - Calculate trade confidence
+    - Assign trading signal
+    - Initialize validation
 
     Does NOT perform:
         - Analytics
         - Strategy Selection
         - Execution Planning
         - Order Validation
+
+    Direction Contract
+    ------------------
+    When an authoritative direction is supplied, it is treated
+    as the source of truth for the final trading signal.
+
+    The score represents conviction / quality and must not be
+    allowed to manufacture or reverse direction.
+
+    During the migration period, direction=None preserves the
+    legacy score-derived behavior.
     """
 
     def build(
@@ -29,8 +40,8 @@ class DecisionBuilder:
         score,
         breakdown,
         reasons,
+        direction=None,
     ):
-
         decision = Decision()
 
         # ======================================================
@@ -60,32 +71,39 @@ class DecisionBuilder:
         # Trading Signal
         # ======================================================
 
-        if score >= DecisionRules.BUY_THRESHOLD:
+        if direction is not None:
+            if direction not in {
+                Signal.BUY_CALL.value,
+                Signal.BUY_PUT.value,
+                Signal.WAIT.value,
+            }:
+                raise ValueError(
+                    f"Unsupported decision direction: {direction}"
+                )
 
-            decision.signal.name = Signal.BUY_CALL.value
-
-        elif score <= DecisionRules.SELL_THRESHOLD:
-
-            decision.signal.name = Signal.BUY_PUT.value
+            # Direction is authoritative.
+            decision.signal.name = direction
 
         else:
+            # Legacy compatibility path.
+            if score >= DecisionRules.BUY_THRESHOLD:
+                decision.signal.name = Signal.BUY_CALL.value
 
-            decision.signal.name = Signal.WAIT.value
+            elif score <= DecisionRules.SELL_THRESHOLD:
+                decision.signal.name = Signal.BUY_PUT.value
+
+            else:
+                decision.signal.name = Signal.WAIT.value
 
         # ======================================================
         # Validation
         # ======================================================
 
         decision.validation = ValidationResult(
-
             valid=False,
-
             grade="F",
-
             confidence=trade_confidence,
-
             risk_multiplier=0.0,
-
             warnings=[]
         )
 

@@ -1,42 +1,38 @@
-import os
-import sys
-import traceback
+﻿import sys
+import types
 from unittest.mock import MagicMock, patch
 
+
 # ----------------------------------------------------------
-# Add Project Root
+# Isolate the legacy Breeze SDK at test-import time.
+#
+# engine.session_manager imports:
+#     from breeze_connect import BreezeConnect
+#
+# The real Breeze package performs SDK initialization during
+# import and currently expects SECURITY_MASTER_URL.
+#
+# We only need to test SessionManager's behavior, so inject
+# a lightweight fake module before importing it.
 # ----------------------------------------------------------
 
-PROJECT_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..")
-)
+fake_breeze_module = types.ModuleType("breeze_connect")
 
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+
+class FakeBreezeConnect:
+    def __init__(self, *args, **kwargs):
+        pass
+
+
+fake_breeze_module.BreezeConnect = FakeBreezeConnect
+
+sys.modules["breeze_connect"] = fake_breeze_module
+
 
 from engine.session_manager import SessionManager
 
 
-# ----------------------------------------------------------
-# Helper
-# ----------------------------------------------------------
-
-def check(name, condition):
-
-    if condition:
-        print(f"✓ {name}")
-    else:
-        print(f"✗ {name}")
-        raise AssertionError(name)
-
-
-# ----------------------------------------------------------
-# Successful Login
-# ----------------------------------------------------------
-
-def test_success():
-
-    print("\n[1] Successful Login")
+def test_session_manager_successful_login():
 
     with patch("engine.session_manager.BreezeConnect") as MockBreeze:
 
@@ -47,23 +43,13 @@ def test_success():
 
         result = manager.connect()
 
+        MockBreeze.assert_called_once()
         mock_breeze.generate_session.assert_called_once()
 
-        check(
-            "Returned Breeze Instance",
-            result == mock_breeze
-        )
-
-        print("✓ generate_session called")
+        assert result == mock_breeze
 
 
-# ----------------------------------------------------------
-# Failed Login
-# ----------------------------------------------------------
-
-def test_failure():
-
-    print("\n[2] Failed Login")
+def test_session_manager_failed_login_propagates_exception():
 
     with patch("engine.session_manager.BreezeConnect") as MockBreeze:
 
@@ -78,48 +64,7 @@ def test_failure():
         manager = SessionManager()
 
         try:
-
             manager.connect()
-
-            raise Exception("Expected Exception")
-
-        except Exception:
-
-            print("✓ Exception propagated")
-
-
-# ----------------------------------------------------------
-# Main
-# ----------------------------------------------------------
-
-def run():
-
-    print("=" * 70)
-    print("Session Manager Test")
-    print("=" * 70)
-
-    test_success()
-
-    test_failure()
-
-    print("\n" + "=" * 70)
-    print("ALL TESTS PASSED")
-    print("=" * 70)
-
-
-# ----------------------------------------------------------
-# Entry
-# ----------------------------------------------------------
-
-if __name__ == "__main__":
-
-    try:
-        run()
-
-    except Exception:
-
-        print("\n" + "=" * 70)
-        print("TEST FAILED")
-        print("=" * 70)
-
-        traceback.print_exc()
+            assert False, "Expected SessionManager.connect() to raise"
+        except Exception as exc:
+            assert str(exc) == "Invalid Session"

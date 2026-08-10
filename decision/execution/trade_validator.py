@@ -5,8 +5,25 @@ class TradeValidator:
     """
     Final validation before execution.
 
-    Produces a ValidationResult instead of
-    a simple True / False.
+    Validation uses TRADE QUALITY, not directional signed score.
+
+    Score contract
+    --------------
+    quality_score:
+        Absolute institutional quality, 0-100.
+
+    signed_score:
+        Direction-aware score.
+
+        BUY CALL -> positive
+        BUY PUT  -> negative
+        WAIT     -> zero
+
+    final:
+        Final decision score after strategy adjustment.
+
+    The validator must never interpret a negative signed score
+    as poor trade quality.
     """
 
     def validate(self, decision):
@@ -24,7 +41,9 @@ class TradeValidator:
 
         if trade.risk_reward < 1.5:
 
-            warnings.append("Risk/Reward below 1.5")
+            warnings.append(
+                "Risk/Reward below 1.5"
+            )
 
             # Don't reject immediately.
             # We'll reduce confidence instead.
@@ -38,7 +57,9 @@ class TradeValidator:
 
             valid = False
 
-            warnings.append("Premium too low")
+            warnings.append(
+                "Premium too low"
+            )
 
         # ----------------------------------
         # Open Interest
@@ -48,7 +69,9 @@ class TradeValidator:
 
             valid = False
 
-            warnings.append("Low Open Interest")
+            warnings.append(
+                "Low Open Interest"
+            )
 
         # ----------------------------------
         # Volume
@@ -58,15 +81,51 @@ class TradeValidator:
 
             valid = False
 
-            warnings.append("Low Volume")
+            warnings.append(
+                "Low Volume"
+            )
+
+        # ----------------------------------
+        # Quality
+        # ----------------------------------
+        #
+        # IMPORTANT:
+        #
+        # New direction-aware decisions contain:
+        #
+        #   quality_score = 69
+        #   signed_score  = -69   # BUY PUT
+        #
+        # Validation must use quality_score.
+        #
+        # Legacy decisions may only contain "final",
+        # so retain backward compatibility.
+        # ----------------------------------
+
+        quality_score = decision.score.get(
+            "quality_score"
+        )
+
+        if quality_score is None:
+
+            # Legacy compatibility.
+            #
+            # Existing decisions used final as an
+            # unsigned quality score.
+            quality_score = decision.score.get(
+                "final",
+                0
+            )
+
+        quality_score = abs(
+            float(quality_score)
+        )
 
         # ----------------------------------
         # Grade
         # ----------------------------------
 
-        score = decision.score.get("final", 0)
-
-        if score >= 120:
+        if quality_score >= 120:
 
             grade = "A+"
 
@@ -74,7 +133,7 @@ class TradeValidator:
 
             risk_multiplier = 1.00
 
-        elif score >= 100:
+        elif quality_score >= 100:
 
             grade = "A"
 
@@ -82,7 +141,7 @@ class TradeValidator:
 
             risk_multiplier = 0.75
 
-        elif score >= 80:
+        elif quality_score >= 80:
 
             grade = "B"
 
@@ -90,7 +149,7 @@ class TradeValidator:
 
             risk_multiplier = 0.50
 
-        elif score >= 60:
+        elif quality_score >= 60:
 
             grade = "C"
 
@@ -98,7 +157,7 @@ class TradeValidator:
 
             risk_multiplier = 0.25
 
-        elif score >= 40:
+        elif quality_score >= 40:
 
             grade = "D"
 

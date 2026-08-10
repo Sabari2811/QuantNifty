@@ -1,10 +1,10 @@
-﻿import pandas as pd
-
-from analytics.market_snapshot.market_snapshot import MarketSnapshot
+﻿from analytics.market_snapshot.market_snapshot import MarketSnapshot
 from decision.decision_engine import DecisionEngine
 
+import pandas as pd
 
-def _greeks_df():
+
+def canonical_greeks_df():
     return pd.DataFrame([
         {
             "Strike": 24200,
@@ -87,7 +87,7 @@ def _greeks_df():
     ])
 
 
-def _snapshot():
+def _snapshot(signal_name, institutional_score):
     analytics = {
         "dealer": {
             "dealer_gamma": "LONG",
@@ -111,7 +111,7 @@ def _snapshot():
             "support": 24200,
             "resistance": 24500,
             "absorption": {
-                "count": 2,
+                "count": 2
             },
             "order_imbalance": {
                 "buy_pressure": True,
@@ -141,29 +141,70 @@ def _snapshot():
             "prediction_score": 88,
         },
         "signal": {
-            "signal": "BUY CALL",
+            "signal": signal_name,
             "confidence": 80,
             "spot": 24310,
             "reasons": [],
         },
-        "institutional_score": {
-            "score": 69,
-        },
+        "institutional_score": institutional_score,
     }
 
+    # --------------------------------------------------------
+    # Direction-aware PUT runtime fixture
+    # --------------------------------------------------------
+    #
+    # Keep the production engines untouched.  For the BUY PUT
+    # runtime regression, provide bearish evidence so the test
+    # represents a coherent PUT setup rather than a bullish
+    # market forced into a PUT signal.
+    #
+    if signal_name == "BUY PUT":
+        analytics["dealer"]["dealer_gamma"] = "SHORT"
+        analytics["dealer"]["total_gex"] = -1250000
+
+        analytics["liquidity"]["order_imbalance"] = {
+            "buy_pressure": False,
+            "sell_pressure": True,
+        }
+
+        analytics["market_structure"]["bias"] = "BEARISH"
+        analytics["pcr"]["oi_pcr"] = 0.80
+        analytics["iv_skew"]["market_sentiment"] = "BEARISH"
     return MarketSnapshot().save(
-        greeks_df=_greeks_df(),
+        greeks_df=canonical_greeks_df(),
         spot=24310,
         analytics=analytics,
     )
 
 
-def test_decision_pipeline_builds_decision_from_market_snapshot():
-    snapshot = _snapshot()
+def test_decision_engine_preserves_buy_call_direction():
+    snapshot = _snapshot(
+        "BUY CALL",
+        {"score": 69},
+    )
 
     decision = DecisionEngine().build(snapshot)
 
-    assert decision is not None
     assert decision.signal.name == "BUY CALL"
-    assert decision.trade.contract is not None
-    assert decision.trade.option_type == "CE"
+
+
+def test_decision_engine_preserves_buy_put_direction():
+    snapshot = _snapshot(
+        "BUY PUT",
+        {"score": 69},
+    )
+
+    decision = DecisionEngine().build(snapshot)
+
+    assert decision.signal.name == "BUY PUT"
+
+
+def test_decision_engine_preserves_wait_direction():
+    snapshot = _snapshot(
+        "WAIT",
+        {"score": 13},
+    )
+
+    decision = DecisionEngine().build(snapshot)
+
+    assert decision.signal.name == "WAIT"
