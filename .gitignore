@@ -36,3 +36,8 @@ Thumbs.db
 
 # Local runtime data (optional)
 data/snapshots/
+
+# R2-004 repository hygiene
+logs/
+docs/archive/
+*_Review.txt
