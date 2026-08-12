@@ -1,0 +1,1515 @@
+
+
+============================================================
+FILE: .\analytics\intelligence\feature_extractor.py
+============================================================
+from __future__ import annotations
+
+from analytics.intelligence.models import TradeIntelligenceRecord
+
+from analytics.intelligence.extractors.market import MarketExtractor
+from analytics.intelligence.extractors.greeks import GreeksExtractor
+from analytics.intelligence.extractors.dealer import DealerExtractor
+from analytics.intelligence.extractors.decision import DecisionExtractor
+from analytics.intelligence.extractors.trade import TradeExtractor
+
+
+class FeatureExtractor:
+    """
+    Builds a TradeIntelligenceRecord from RuntimeContext.
+
+    Each extractor owns one domain only.
+    """
+
+    def __init__(self):
+
+        self.extractors = [
+
+            MarketExtractor(),
+
+            GreeksExtractor(),
+
+            DealerExtractor(),
+
+            DecisionExtractor(),
+
+            TradeExtractor(),
+
+        ]
+
+    def extract(
+        self,
+        ctx,
+    ) -> TradeIntelligenceRecord:
+
+        record = TradeIntelligenceRecord()
+
+        for extractor in self.extractors:
+
+            extractor.extract(
+                ctx,
+                record,
+            )
+
+        return record
+
+
+
+
+============================================================
+FILE: .\analytics\intelligence\models.py
+============================================================
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import List
+
+
+# ============================================================
+# Trade Intelligence Record
+# ============================================================
+
+@dataclass(slots=True)
+class TradeIntelligenceRecord:
+    """
+    Complete market fingerprint captured for every
+    trading decision.
+
+    This object is designed for:
+
+    • Historical validation
+    • Similarity search
+    • AI datasets
+    • Strategy optimization
+    • Performance analytics
+    """
+
+    # =====================================================
+    # Metadata
+    # =====================================================
+
+    timestamp: datetime | None = None
+
+    trading_day: str = ""
+
+    expiry: str = ""
+
+    session: str = ""
+
+    # =====================================================
+    # Market
+    # =====================================================
+
+    spot_price: float = 0.0
+
+    atm_strike: float = 0.0
+
+    futures_price: float = 0.0
+
+    india_vix: float = 0.0
+
+    # =====================================================
+    # Option Chain
+    # =====================================================
+
+    strike: float = 0.0
+
+    option_type: str = ""
+
+    premium: float = 0.0
+
+    implied_volatility: float = 0.0
+
+    iv_rank: float = 0.0
+
+    iv_percentile: float = 0.0
+
+    open_interest: float = 0.0
+
+    change_in_oi: float = 0.0
+
+    volume: float = 0.0
+
+    # =====================================================
+    # Greeks
+    # =====================================================
+
+    delta: float = 0.0
+
+    gamma: float = 0.0
+
+    theta: float = 0.0
+
+    vega: float = 0.0
+
+    rho: float = 0.0
+
+    # =====================================================
+    # Dealer Positioning
+    # =====================================================
+
+    dealer_gamma: str = ""
+
+    dealer_delta: str = ""
+
+    gamma_exposure: float = 0.0
+
+    delta_exposure: float = 0.0
+
+    gamma_wall: float = 0.0
+
+    gamma_flip: float = 0.0
+
+    zero_gamma: float = 0.0
+
+    # =====================================================
+    # Market Structure
+    # =====================================================
+
+    trend: str = ""
+
+    market_structure: str = ""
+
+    institutional_bias: str = ""
+
+    conviction: str = ""
+
+    probability: float = 0.0
+
+    # =====================================================
+    # Technicals
+    # =====================================================
+
+    ad_ratio: float = 0.0
+
+    pcr: float = 0.0
+
+    rsi: float = 0.0
+
+    atr: float = 0.0
+
+    adx: float = 0.0
+
+    vwap_distance: float = 0.0
+
+    # =====================================================
+    # Decision
+    # =====================================================
+
+    signal: str = ""
+
+    confidence: float = 0.0
+
+    trade_quality: float = 0.0
+
+    strategy_name: str = ""
+
+    execution_plan: str = ""
+
+    reasons: List[str] = field(default_factory=list)
+
+    # =====================================================
+    # Trade
+    # =====================================================
+
+    entry_price: float = 0.0
+
+    stop_loss: float = 0.0
+
+    target1: float = 0.0
+
+    target2: float = 0.0
+
+    quantity: int = 0
+
+    lots: int = 0
+
+    risk_reward: float = 0.0
+
+    # =====================================================
+    # Exit
+    # =====================================================
+
+    exit_price: float = 0.0
+
+    pnl: float = 0.0
+
+    holding_minutes: float = 0.0
+
+    exit_reason: str = ""
+
+    outcome: str = ""
+
+    # =====================================================
+    # AI
+    # =====================================================
+
+    similarity_score: float = 0.0
+
+    historical_win_rate: float = 0.0
+
+    expected_move: float = 0.0
+
+    expected_holding: float = 0.0
+
+    expected_probability: float = 0.0
+
+
+
+
+============================================================
+FILE: .\analytics\intelligence\evidence\evidence_engine.py
+============================================================
+from __future__ import annotations
+
+from analytics.intelligence.evidence.models import HistoricalEvidence
+from analytics.intelligence.memory_engine import MarketMemory
+from analytics.intelligence.models import TradeIntelligenceRecord
+from analytics.intelligence.similarity.similarity_engine import SimilarityEngine
+
+
+class EvidenceEngine:
+    """
+    Converts historical market memory into actionable evidence.
+
+    Responsibilities
+    ----------------
+    - Search historical memory
+    - Aggregate historical statistics
+    - Produce explainable evidence
+
+    Notes
+    -----
+    This class owns NO dependencies.
+    All dependencies are injected.
+    """
+
+    def __init__(
+        self,
+        similarity_engine: SimilarityEngine,
+    ):
+
+        self._similarity_engine = similarity_engine
+
+    def analyze(
+        self,
+        current: TradeIntelligenceRecord,
+        memory: MarketMemory,
+    ) -> HistoricalEvidence:
+
+        evidence = HistoricalEvidence()
+
+        matches = self._similarity_engine.search(
+            current=current,
+            history=memory.records,
+            top_n=100,
+        )
+
+        if not matches:
+            return evidence
+
+        scores = [score for score, _ in matches]
+        records = [record for _, record in matches]
+
+        evidence.matches = records
+        evidence.similar_markets = len(records)
+        evidence.average_similarity = sum(scores) / len(scores)
+        evidence.best_similarity = max(scores)
+
+        wins = [
+            record
+            for record in records
+            if record.outcome == "WIN"
+        ]
+
+        losses = [
+            record
+            for record in records
+            if record.outcome == "LOSS"
+        ]
+
+        breakevens = [
+            record
+            for record in records
+            if record.outcome == "BREAKEVEN"
+        ]
+
+        evidence.win_rate = (
+            len(wins) / len(records)
+        ) * 100
+
+        evidence.average_pnl = (
+            sum(r.pnl for r in records)
+            / len(records)
+        )
+
+        evidence.average_holding_minutes = (
+            sum(r.holding_minutes for r in records)
+            / len(records)
+        )
+
+        evidence.target_probability = (
+            len(wins)
+            / len(records)
+        ) * 100
+
+        evidence.stoploss_probability = (
+            len(losses)
+            / len(records)
+        ) * 100
+
+        evidence.breakeven_probability = (
+            len(breakevens)
+            / len(records)
+        ) * 100
+
+        #
+        # Confidence Adjustment
+        #
+
+        if evidence.win_rate >= 70:
+
+            evidence.recommendation = "BUY"
+            evidence.confidence_adjustment = 5.0
+
+        elif evidence.win_rate >= 55:
+
+            evidence.recommendation = "BUY"
+            evidence.confidence_adjustment = 2.0
+
+        elif evidence.win_rate >= 45:
+
+            evidence.recommendation = "WAIT"
+            evidence.confidence_adjustment = 0.0
+
+        else:
+
+            evidence.recommendation = "WAIT"
+            evidence.confidence_adjustment = -5.0
+
+        evidence.confidence_after_validation = (
+            evidence.confidence_adjustment
+        )
+
+        evidence.explanation = (
+            f"Found {evidence.similar_markets} similar historical "
+            f"markets with {evidence.win_rate:.1f}% win rate."
+        )
+
+        return evidence
+
+
+
+
+============================================================
+FILE: .\analytics\scoring\score_engine.py
+============================================================
+from analytics.scoring.dealer_score import DealerScore
+from analytics.scoring.liquidity_score import LiquidityScore
+from analytics.scoring.gamma_score import GammaScore
+from analytics.scoring.structure_score import StructureScore
+from analytics.scoring.volatility_score import VolatilityScore
+from analytics.scoring.institutional_score import InstitutionalScore
+
+
+class ScoreEngine:
+    """
+    Master Institutional Scoring Engine
+    """
+
+    def __init__(self):
+
+        self.dealer = DealerScore()
+        self.liquidity = LiquidityScore()
+        self.gamma = GammaScore()
+        self.structure = StructureScore()
+        self.volatility = VolatilityScore()
+        self.institutional = InstitutionalScore()
+
+    def calculate(
+
+        self,
+
+        dealer,
+
+        dealer_flow,
+
+        liquidity,
+
+        market_structure,
+
+        pcr,
+
+        expected_move,
+
+        iv_skew,
+
+        iv_smile,
+
+        atr,
+
+        spot,
+
+        signal=None
+
+    ):
+
+        # -----------------------------------------
+        # Backward Compatibility
+        # -----------------------------------------
+
+        if signal is None:
+
+            signal = {
+
+                "signal": "NO TRADE"
+
+            }
+
+        # -----------------------------------------
+        # Dealer
+        # -----------------------------------------
+
+        dealer_score = self.dealer.calculate(
+
+            dealer,
+
+            dealer_flow,
+
+            signal
+
+        )
+
+        # -----------------------------------------
+        # Liquidity
+        # -----------------------------------------
+
+        liquidity_score = self.liquidity.calculate(
+
+            liquidity,
+
+            signal,
+
+            spot
+
+        )
+
+        # -----------------------------------------
+        # Gamma
+        # -----------------------------------------
+
+        gamma_score = self.gamma.calculate(
+
+            dealer,
+
+            signal
+
+        )
+
+        # -----------------------------------------
+        # Structure
+        # -----------------------------------------
+
+        structure_score = self.structure.calculate(
+
+            market_structure,
+
+            pcr,
+
+            expected_move,
+
+            signal,
+
+            spot
+
+        )
+
+        # -----------------------------------------
+        # Volatility
+        # -----------------------------------------
+
+        volatility_score = self.volatility.calculate(
+
+            dealer,
+
+            iv_skew,
+
+            iv_smile,
+
+            atr,
+
+            signal
+
+        )
+
+        # -----------------------------------------
+        # Institutional Score
+        # -----------------------------------------
+
+        institutional = self.institutional.calculate(
+
+            dealer_score,
+
+            liquidity_score,
+
+            gamma_score,
+
+            structure_score,
+
+            volatility_score
+
+        )
+
+        return {
+
+            "institutional": institutional,
+
+            "dealer_score": dealer_score,
+
+            "liquidity_score": liquidity_score,
+
+            "gamma_score": gamma_score,
+
+            "structure_score": structure_score,
+
+            "volatility_score": volatility_score
+
+        }
+
+
+
+
+============================================================
+FILE: .\analytics\signal\probability_engine.py
+============================================================
+class ProbabilityEngine:
+    """
+    Institutional Probability Engine
+
+    Combines
+
+    - Dealer Position
+    - Market Structure
+    - PCR
+    - IV Skew
+    - Technical Analysis
+
+    Produces
+
+        Bullish Probability
+        Bearish Probability
+        Confidence
+    """
+
+    def __init__(self):
+        pass
+
+    def calculate(
+
+        self,
+
+        dealer,
+
+        market_structure,
+
+        pcr,
+
+        iv_skew,
+
+        technical
+
+    ):
+
+        bullish = 50
+        bearish = 50
+
+        reasons = []
+
+        # ==================================================
+        # Dealer Gamma
+        # ==================================================
+
+        if dealer.get("dealer_gamma") == "LONG":
+
+            bullish += 20
+            bearish -= 20
+
+            reasons.append("Dealers Long Gamma")
+
+        elif dealer.get("dealer_gamma") == "SHORT":
+
+            bullish -= 20
+            bearish += 20
+
+            reasons.append("Dealers Short Gamma")
+
+        # ==================================================
+        # Market Mode
+        # ==================================================
+
+        mode = dealer.get("market_mode", "UNKNOWN")
+
+        if mode == "PINNED":
+
+            bullish += 5
+            bearish -= 5
+
+            reasons.append("Pinned Market")
+
+        elif mode == "TRENDING":
+
+            bullish -= 5
+            bearish += 5
+
+            reasons.append("Trending Market")
+
+        # ==================================================
+        # PCR
+        # ==================================================
+
+        sentiment = pcr.get("sentiment", "NEUTRAL")
+
+        if sentiment == "BULLISH":
+
+            bullish += 10
+            bearish -= 10
+
+            reasons.append("Bullish PCR")
+
+        elif sentiment == "BEARISH":
+
+            bullish -= 10
+            bearish += 10
+
+            reasons.append("Bearish PCR")
+
+        # ==================================================
+        # IV Skew
+        # ==================================================
+
+        bias = iv_skew.get("iv_bias", "UNKNOWN")
+
+        if bias == "CALLS_EXPENSIVE":
+
+            bullish += 5
+            bearish -= 5
+
+            reasons.append("Call IV Expensive")
+
+        elif bias == "PUTS_EXPENSIVE":
+
+            bullish -= 5
+            bearish += 5
+
+            reasons.append("Put IV Expensive")
+
+        # ==================================================
+        # Technical Analysis
+        # ==================================================
+
+        ema = technical.get("ema", {})
+        rsi = technical.get("rsi", {})
+        vwap = technical.get("vwap", {})
+        adx = technical.get("adx", {})
+
+        # EMA Trend
+
+        trend = ema.get("trend", "UNKNOWN")
+
+        if trend in ("BULLISH", "STRONG_BULLISH"):
+
+            bullish += 10
+            bearish -= 10
+
+            reasons.append("EMA Bullish")
+
+        elif trend in ("BEARISH", "STRONG_BEARISH"):
+
+            bullish -= 10
+            bearish += 10
+
+            reasons.append("EMA Bearish")
+
+        # RSI
+
+        state = rsi.get("state", "UNKNOWN")
+
+        if state == "BULLISH":
+
+            bullish += 5
+            bearish -= 5
+
+            reasons.append("RSI Bullish")
+
+        elif state == "BEARISH":
+
+            bullish -= 5
+            bearish += 5
+
+            reasons.append("RSI Bearish")
+
+        elif state == "OVERBOUGHT":
+
+            bearish += 5
+
+            reasons.append("RSI Overbought")
+
+        elif state == "OVERSOLD":
+
+            bullish += 5
+
+            reasons.append("RSI Oversold")
+
+        # VWAP
+
+        position = vwap.get("position", "UNKNOWN")
+
+        if position == "ABOVE":
+
+            bullish += 5
+            bearish -= 5
+
+            reasons.append("Above VWAP")
+
+        elif position == "BELOW":
+
+            bullish -= 5
+            bearish += 5
+
+            reasons.append("Below VWAP")
+
+        # ADX
+
+        strength = adx.get("strength", "UNKNOWN")
+
+        if strength in ("STRONG", "VERY_STRONG"):
+
+            bullish += 5
+
+            reasons.append("Strong Trend")
+
+        # ==================================================
+        # Clamp
+        # ==================================================
+
+        bullish = max(0, min(100, bullish))
+        bearish = max(0, min(100, bearish))
+
+        confidence = abs(bullish - bearish)
+
+        # ==================================================
+        # Result
+        # ==================================================
+
+        return {
+
+            "bullish_probability": bullish,
+
+            "bearish_probability": bearish,
+
+            "confidence": confidence,
+
+            "reasons": reasons
+
+        }
+
+
+
+
+============================================================
+FILE: .\analytics\gamma\gamma_exposure.py
+============================================================
+import pandas as pd
+
+
+class GammaExposureEngine:
+    """
+    Gamma Exposure (GEX)
+
+    Computes
+
+        CE_GEX
+        PE_GEX
+        NET_GEX
+
+    Formula
+
+        GEX = Gamma × OI × Lot Size
+
+    NET_GEX = CE_GEX - PE_GEX
+    """
+
+    def __init__(self, lot_size=65):
+
+        self.lot_size = lot_size
+
+    # ======================================================
+    # Standard API
+    # ======================================================
+
+    def analyze(self, df: pd.DataFrame):
+
+        df = df.copy()
+
+        required = [
+
+            "CE_GAMMA",
+            "PE_GAMMA",
+            "CE_OI",
+            "PE_OI"
+
+        ]
+
+        for col in required:
+
+            if col not in df.columns:
+
+                df[col] = 0
+
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="coerce"
+            ).fillna(0)
+
+        df["CE_GEX"] = (
+
+            df["CE_GAMMA"]
+            *
+            df["CE_OI"]
+            *
+            self.lot_size
+
+        )
+
+        df["PE_GEX"] = (
+
+            df["PE_GAMMA"]
+            *
+            df["PE_OI"]
+            *
+            self.lot_size
+
+        )
+
+        df["NET_GEX"] = (
+
+            df["CE_GEX"]
+            -
+            df["PE_GEX"]
+
+        )
+
+        return df
+
+    # ======================================================
+    # Backward Compatibility
+    # ======================================================
+
+    def calculate(self, df):
+
+        return self.analyze(df)
+
+
+
+
+============================================================
+FILE: .\analytics\gamma\gamma_flip.py
+============================================================
+import pandas as pd
+
+
+class GammaFlipDetector:
+
+    # ======================================================
+    # Standard API
+    # ======================================================
+
+    def analyze(self, df: pd.DataFrame):
+
+        if "NET_GEX" not in df.columns:
+            raise ValueError("NET_GEX column not found.")
+
+        previous_gamma = None
+        previous_row = None
+
+        for _, row in df.iterrows():
+
+            current_gamma = row["NET_GEX"]
+
+            if previous_gamma is None:
+
+                previous_gamma = current_gamma
+                previous_row = row
+                continue
+
+            if previous_gamma < 0 <= current_gamma:
+
+                return {
+
+                    "flip_found": True,
+
+                    "direction": "NEGATIVE_TO_POSITIVE",
+
+                    "lower_strike": previous_row["Strike"],
+
+                    "upper_strike": row["Strike"],
+
+                    "gamma_flip": row["Strike"]
+
+                }
+
+            if previous_gamma > 0 >= current_gamma:
+
+                return {
+
+                    "flip_found": True,
+
+                    "direction": "POSITIVE_TO_NEGATIVE",
+
+                    "lower_strike": previous_row["Strike"],
+
+                    "upper_strike": row["Strike"],
+
+                    "gamma_flip": row["Strike"]
+
+                }
+
+            previous_gamma = current_gamma
+            previous_row = row
+
+        return {
+
+            "flip_found": False,
+
+            "direction": None,
+
+            "lower_strike": None,
+
+            "upper_strike": None,
+
+            "gamma_flip": None
+
+        }
+
+    # ======================================================
+    # Backward Compatibility
+    # ======================================================
+
+    def detect(self, df):
+
+        return self.analyze(df)
+
+    def find_flip(self, df):
+
+        return self.analyze(df)
+
+
+
+
+============================================================
+FILE: .\analytics\iv\iv_skew_analyzer.py
+============================================================
+import pandas as pd
+
+
+class IVSkewAnalyzer:
+    """
+    Institutional IV Skew Analyzer
+
+    Safe against missing option quotes.
+    """
+
+    def analyze(self, df: pd.DataFrame):
+
+        if df is None or df.empty:
+
+            return self._unknown()
+
+        df = df.copy()
+
+        for col in ["CE_IV", "PE_IV"]:
+
+            if col not in df.columns:
+                df[col] = pd.NA
+
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="coerce"
+            )
+
+        call_iv = df["CE_IV"].mean(skipna=True)
+        put_iv = df["PE_IV"].mean(skipna=True)
+
+        if pd.isna(call_iv):
+            call_iv = 0
+
+        if pd.isna(put_iv):
+            put_iv = 0
+
+        skew = call_iv - put_iv
+
+        # ---------------------------------------
+        # Bias
+        # ---------------------------------------
+
+        if skew > 0.02:
+
+            bias = "CALLS_EXPENSIVE"
+            sentiment = "BULLISH"
+
+        elif skew < -0.02:
+
+            bias = "PUTS_EXPENSIVE"
+            sentiment = "BEARISH"
+
+        else:
+
+            bias = "BALANCED"
+            sentiment = "NEUTRAL"
+
+        # ---------------------------------------
+        # Volatility
+        # ---------------------------------------
+
+        highest_iv = max(call_iv, put_iv)
+
+        if highest_iv > 0.30:
+
+            volatility = "VERY_HIGH"
+
+        elif highest_iv > 0.20:
+
+            volatility = "HIGH"
+
+        elif highest_iv > 0.10:
+
+            volatility = "NORMAL"
+
+        else:
+
+            volatility = "LOW"
+
+        return {
+
+            "average_call_iv": round(call_iv, 4),
+
+            "average_put_iv": round(put_iv, 4),
+
+            "iv_skew": round(skew, 4),
+
+            "iv_bias": bias,
+
+            "market_sentiment": sentiment,
+
+            "volatility": volatility
+
+        }
+
+    def _unknown(self):
+
+        return {
+
+            "average_call_iv": 0,
+
+            "average_put_iv": 0,
+
+            "iv_skew": 0,
+
+            "iv_bias": "UNKNOWN",
+
+            "market_sentiment": "UNKNOWN",
+
+            "volatility": "UNKNOWN"
+
+        }
+
+
+
+
+============================================================
+FILE: .\analytics\oi\oi_flow_engine.py
+============================================================
+import pandas as pd
+
+
+class OIFlowEngine:
+    """
+    Institutional Open Interest Flow Engine
+
+    Classification
+
+        ↑ Price + ↑ OI  -> LONG_BUILDUP
+        ↓ Price + ↑ OI  -> SHORT_BUILDUP
+        ↑ Price + ↓ OI  -> SHORT_COVERING
+        ↓ Price + ↓ OI  -> LONG_UNWINDING
+
+    NOTE:
+    Version-1 uses snapshot data only.
+    Future Version-2 can use ΔPrice and ΔOI between snapshots.
+    """
+
+    FLOW_TYPES = [
+        "LONG_BUILDUP",
+        "SHORT_BUILDUP",
+        "LONG_UNWINDING",
+        "SHORT_COVERING",
+        "UNKNOWN",
+    ]
+
+    def __init__(self):
+        pass
+
+    def _classify(self, price: float, oi: float) -> str:
+        """
+        Snapshot-based classification.
+        (Existing logic preserved)
+        """
+
+        if price == 0 and oi == 0:
+            return "UNKNOWN"
+
+        if price > 0 and oi > 0:
+            return "LONG_BUILDUP"
+
+        elif price <= 0 and oi > 0:
+            return "SHORT_BUILDUP"
+
+        elif price > 0 and oi <= 0:
+            return "SHORT_COVERING"
+
+        return "LONG_UNWINDING"
+
+    def _count_flow(self, series: pd.Series) -> dict:
+        """
+        Count occurrences of every flow type.
+        """
+
+        counts = {}
+
+        for flow in self.FLOW_TYPES:
+            counts[flow.lower()] = int((series == flow).sum())
+
+        return counts
+
+    def _market_bias(self, ce_summary: dict, pe_summary: dict) -> str:
+
+        call_long = ce_summary["long_buildup"]
+        put_long = pe_summary["long_buildup"]
+
+        if put_long > call_long:
+            return "BULLISH"
+
+        if call_long > put_long:
+            return "BEARISH"
+
+        return "NEUTRAL"
+
+    def _trend(self, ce_summary: dict, pe_summary: dict) -> str:
+
+        total_long = (
+            ce_summary["long_buildup"]
+            + pe_summary["long_buildup"]
+        )
+
+        total_cover = (
+            ce_summary["short_covering"]
+            + pe_summary["short_covering"]
+        )
+
+        if total_long > total_cover:
+            return "TRENDING"
+
+        if total_cover > total_long:
+            return "REVERSAL"
+
+        return "SIDEWAYS"
+
+    def analyze(self, greeks_df: pd.DataFrame):
+
+        if greeks_df is None or greeks_df.empty:
+
+            return {
+                "summary": {},
+                "table": greeks_df,
+            }
+
+        df = greeks_df.copy()
+
+        required = [
+            "CE_LTP",
+            "CE_OI",
+            "PE_LTP",
+            "PE_OI",
+        ]
+
+        for col in required:
+
+            if col not in df.columns:
+                df[col] = 0
+
+            df[col] = (
+                pd.to_numeric(
+                    df[col],
+                    errors="coerce",
+                )
+                .fillna(0)
+            )
+
+        # -------------------------------------------------
+        # CE Flow
+        # -------------------------------------------------
+
+        df["CE_FLOW"] = df.apply(
+            lambda row: self._classify(
+                float(row["CE_LTP"]),
+                float(row["CE_OI"]),
+            ),
+            axis=1,
+        )
+
+        # -------------------------------------------------
+        # PE Flow
+        # -------------------------------------------------
+
+        df["PE_FLOW"] = df.apply(
+            lambda row: self._classify(
+                float(row["PE_LTP"]),
+                float(row["PE_OI"]),
+            ),
+            axis=1,
+        )
+
+        # -------------------------------------------------
+        # Summary
+        # -------------------------------------------------
+
+        ce_summary = self._count_flow(df["CE_FLOW"])
+        pe_summary = self._count_flow(df["PE_FLOW"])
+
+        summary = {
+            "call": ce_summary,
+            "put": pe_summary,
+            "market_bias": self._market_bias(
+                ce_summary,
+                pe_summary,
+            ),
+            "trend": self._trend(
+                ce_summary,
+                pe_summary,
+            ),
+            "total_strikes": len(df),
+        }
+
+        return {
+            "summary": summary,
+            "table": df,
+        }
+
+
+
+
+============================================================
+FILE: .\analytics\dealer_flow\vanna_engine.py
+============================================================
+import pandas as pd
+
+
+class VannaEngine:
+    """
+    Dealer Vanna Exposure
+
+    Approximation:
+
+        VANNA = VEGA / SPOT
+
+    Exposure:
+
+        VANNA × OI × LOT_SIZE
+    """
+
+    def calculate(
+        self,
+        greeks_df: pd.DataFrame,
+        spot: float
+    ):
+
+        df = greeks_df.copy()
+
+        if "LOT_SIZE" in df.columns:
+            lot = df["LOT_SIZE"]
+        else:
+            lot = 65
+
+        # ---------------------------------
+        # CE
+        # ---------------------------------
+
+        df["CE_VANNA"] = (
+
+            df["CE_VEGA"]
+
+            / spot
+
+            * df["CE_OI"]
+
+            * lot
+
+        )
+
+        # ---------------------------------
+        # PE
+        # ---------------------------------
+
+        df["PE_VANNA"] = (
+
+            df["PE_VEGA"]
+
+            / spot
+
+            * df["PE_OI"]
+
+            * lot
+
+        )
+
+        # ---------------------------------
+        # Net
+        # ---------------------------------
+
+        df["NET_VANNA"] = (
+
+            df["CE_VANNA"]
+
+            +
+
+            df["PE_VANNA"]
+
+        )
+
+        summary = {
+
+            "total_vanna": float(df["NET_VANNA"].sum()),
+
+            "positive_vanna": float(
+                df.loc[
+                    df["NET_VANNA"] > 0,
+                    "NET_VANNA"
+                ].sum()
+            ),
+
+            "negative_vanna": float(
+                df.loc[
+                    df["NET_VANNA"] < 0,
+                    "NET_VANNA"
+                ].sum()
+            )
+
+        }
+
+        return df, summary
+
+
+
+
+============================================================
+FILE: .\analytics\dealer_flow\charm_engine.py
+============================================================
+import pandas as pd
+
+
+class CharmEngine:
+    """
+    Dealer Charm Exposure
+
+    Approximation:
+
+        CHARM = Theta / Spot
+
+    Exposure:
+
+        CHARM × OI × Lot Size
+    """
+
+    def calculate(
+        self,
+        greeks_df: pd.DataFrame,
+        spot: float
+    ):
+
+        df = greeks_df.copy()
+
+        if "LOT_SIZE" in df.columns:
+            lot = df["LOT_SIZE"]
+        else:
+            lot = 65
+
+        # ---------------------------------------
+        # CE
+        # ---------------------------------------
+
+        df["CE_CHARM"] = (
+
+            df["CE_THETA"]
+
+            / spot
+
+            * df["CE_OI"]
+
+            * lot
+
+        )
+
+        # ---------------------------------------
+        # PE
+        # ---------------------------------------
+
+        df["PE_CHARM"] = (
+
+            df["PE_THETA"]
+
+            / spot
+
+            * df["PE_OI"]
+
+            * lot
+
+        )
+
+        # ---------------------------------------
+        # Net
+        # ---------------------------------------
+
+        df["NET_CHARM"] = (
+
+            df["CE_CHARM"]
+
+            +
+
+            df["PE_CHARM"]
+
+        )
+
+        summary = {
+
+            "total_charm": float(
+                df["NET_CHARM"].sum()
+            ),
+
+            "positive_charm": float(
+                df.loc[
+                    df["NET_CHARM"] > 0,
+                    "NET_CHARM"
+                ].sum()
+            ),
+
+            "negative_charm": float(
+                df.loc[
+                    df["NET_CHARM"] < 0,
+                    "NET_CHARM"
+                ].sum()
+            )
+
+        }
+
+        return df, summary
