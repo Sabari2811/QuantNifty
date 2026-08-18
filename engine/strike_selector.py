@@ -1,4 +1,4 @@
-class StrikeSelector:
+﻿class StrikeSelector:
 
     def __init__(self, instrument_manager):
         self.instrument_manager = instrument_manager
@@ -41,9 +41,9 @@ class StrikeSelector:
         levels=5
     ):
 
-        # IMPORTANT:
-        # Do NOT modify expiry.
-        # Pass it exactly as InstrumentManager returns it.
+        if not expiry:
+            return []
+
         strikes = self.get_surrounding_strikes(
             spot_price,
             levels
@@ -77,13 +77,10 @@ class StrikeSelector:
                 continue
 
             contracts.append({
-
                 "strike": strike,
-
                 "CE_ID": int(ce["SECURITY_ID"]),
-
                 "PE_ID": int(pe["SECURITY_ID"])
-
             })
 
         return contracts
+

@@ -208,46 +208,76 @@ class InstrumentManager:
 
     def get_nearest_weekly_expiry(self, symbol: str):
         """
-        Returns the nearest FUTURE weekly expiry.
-        Expired weekly expiries are ignored.
+        Return the nearest future NIFTY option expiry.
+
+        Prefer a future weekly expiry. If no future weekly expiry
+        exists (for example, after the current weekly expiry),
+        fall back to the nearest future expiry of any type.
+
+        The returned value preserves the exact EXPIRY_DATE format
+        used by the instrument master.
         """
 
         df = self.get_options(symbol)
 
-        weekly = df[
-            df["EXPIRY_FLAG"].astype(str).str.upper() == "W"
-        ].copy()
-
-        if weekly.empty:
+        if df.empty:
             return None
 
-        weekly["EXPIRY_DATE"] = pd.to_datetime(
-            weekly["EXPIRY_DATE"],
-            errors="coerce"
+        expiry_dates = pd.to_datetime(
+            df["EXPIRY_DATE"],
+            errors="coerce",
         )
 
-        weekly = weekly.dropna(
-            subset=["EXPIRY_DATE"]
+        valid = df.loc[
+            expiry_dates.notna()
+        ].copy()
+
+        if valid.empty:
+            return None
+
+        valid["_EXPIRY_PARSED"] = pd.to_datetime(
+            valid["EXPIRY_DATE"],
+            errors="coerce",
         )
 
         now = pd.Timestamp.now()
 
-        weekly = weekly[
-            weekly["EXPIRY_DATE"] > now
-        ]
+        future = valid[
+            valid["_EXPIRY_PARSED"] > now
+        ].copy()
 
-        if weekly.empty:
+        if future.empty:
             return None
 
-        expiry = (
-            weekly["EXPIRY_DATE"]
-            .drop_duplicates()
-            .sort_values()
-            .iloc[0]
-        )
+        weekly = future[
+            future["EXPIRY_FLAG"]
+            .astype(str)
+            .str.upper()
+            .eq("W")
+        ].copy()
 
-        return expiry.strftime(
-            "%m/%d/%Y %H:%M"
+        if not weekly.empty:
+            selected = (
+                weekly["_EXPIRY_PARSED"]
+                .drop_duplicates()
+                .sort_values()
+                .iloc[0]
+            )
+        else:
+            selected = (
+                future["_EXPIRY_PARSED"]
+                .drop_duplicates()
+                .sort_values()
+                .iloc[0]
+            )
+
+        matches = valid[
+            valid["_EXPIRY_PARSED"] == selected
+        ]
+
+        return str(
+            matches["EXPIRY_DATE"]
+            .iloc[0]
         )
 
     def get_monthly_expiry(self, symbol: str):

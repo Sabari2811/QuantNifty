@@ -31,6 +31,11 @@ class OptionChainManager:
             symbol
         )
 
+        if not expiry:
+            raise Exception(
+                "No future option expiry found."
+            )
+
         contracts = self.selector.get_option_security_ids(
             symbol=symbol,
             expiry=expiry,
@@ -45,33 +50,64 @@ class OptionChainManager:
 
         security_ids = []
 
-        for c in contracts:
+        for contract in contracts:
 
-            security_ids.append(c["CE_ID"])
-            security_ids.append(c["PE_ID"])
+            security_ids.append(
+                contract["CE_ID"]
+            )
+
+            security_ids.append(
+                contract["PE_ID"]
+            )
+
+        print()
+        print("=" * 70)
+        print("OPTION EXPIRY")
+        print("=" * 70)
+        print(expiry)
 
         print()
         print("=" * 70)
         print("OPTION CONTRACTS")
         print("=" * 70)
 
-        for c in contracts:
+        for contract in contracts:
 
             print(
-                f"{c['strike']}  CE:{c['CE_ID']}  PE:{c['PE_ID']}"
+                f"{contract['strike']}  "
+                f"CE:{contract['CE_ID']}  "
+                f"PE:{contract['PE_ID']}"
             )
 
-        quotes = self.provider.get_quotes(security_ids)
+        # ---------------------------------------------------
+        # Fetch live quotes
+        # ---------------------------------------------------
+
+        quotes = self.provider.get_quotes(
+            security_ids
+        )
 
         rows = []
 
         for contract in contracts:
 
-            ce_key = f"NFO_{contract['CE_ID']}"
-            pe_key = f"NFO_{contract['PE_ID']}"
+            ce_key = (
+                f"NFO_{contract['CE_ID']}"
+            )
 
-            ce = quotes.get(ce_key, {})
-            pe = quotes.get(pe_key, {})
+            pe_key = (
+                f"NFO_{contract['PE_ID']}"
+            )
+
+            ce = quotes.get(
+                ce_key,
+                {}
+            )
+
+            pe = quotes.get(
+                pe_key,
+                {}
+            )
 
             rows.append({
 
@@ -89,6 +125,4 @@ class OptionChainManager:
 
             })
 
-        df = pd.DataFrame(rows)
-
-        return df
+        return pd.DataFrame(rows)
