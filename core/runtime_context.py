@@ -16,6 +16,8 @@ class RuntimeContext:
             ↓
         Decision Engine
             ↓
+        Intelligence Layer
+            ↓
         Paper Trading
             ↓
         Dashboard
@@ -63,6 +65,8 @@ class RuntimeContext:
 
     explanation: Any = None
 
+    intelligence: Any = None
+
     # ==========================================================
     # PAPER TRADING
     # ==========================================================
@@ -78,12 +82,13 @@ class RuntimeContext:
     performance: Any = None
 
     # Risk Manager State
+
     risk_state: Any = None
 
     trade_status: str = ""
 
     trade_block_reason: str = ""
-    
+
     # ==========================================================
     # RUNTIME
     # ==========================================================
