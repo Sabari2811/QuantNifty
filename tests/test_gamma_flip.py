@@ -1,65 +1,333 @@
-﻿from analytics.gamma.gamma_flip import GammaFlipDetector
+﻿from __future__ import annotations
 
-from analytics.greeks.greeks_analyzer import GreeksAnalyzer
+import pandas as pd
+import pytest
 
-from engine.option_chain_manager import OptionChainManager
-from engine.market_data_manager import MarketDataManager
-from engine.instrument_manager import InstrumentManager
-from engine.strike_selector import StrikeSelector
-from engine.live_greeks_engine import LiveGreeksEngine
-
-from providers.indmoney_provider import INDMoneyProvider
+from analytics.gamma.gamma_flip import GammaFlipDetector
 
 
-provider = INDMoneyProvider()
-provider.connect()
+# ==========================================================
+# Helpers
+# ==========================================================
 
-instrument = InstrumentManager()
-instrument.load_fno()
+def make_df(gammas, strikes=None):
+    if strikes is None:
+        strikes = [
+            24000 + (index * 50)
+            for index in range(len(gammas))
+        ]
 
-market = MarketDataManager(provider)
+    return pd.DataFrame(
+        {
+            "Strike": strikes,
+            "NET_GEX": gammas,
+        }
+    )
 
-selector = StrikeSelector(instrument)
 
-chain = OptionChainManager(
-    provider,
-    selector,
-    instrument,
-    market
-)
+# ==========================================================
+# Fixture
+# ==========================================================
 
-spot = 24270.85
+@pytest.fixture
+def detector():
+    return GammaFlipDetector()
 
-option_chain = chain.get_live_option_chain(
-    symbol="NIFTY",
-    spot_price=spot,
-    levels=5
-)
 
-expiry = instrument.get_nearest_weekly_expiry("NIFTY")
+# ==========================================================
+# Positive → Negative
+# ==========================================================
 
-greeks = LiveGreeksEngine()
+def test_positive_to_negative_flip(detector):
 
-greeks_df = greeks.calculate_chain_greeks(
-    option_chain,
-    spot,
-    expiry
-)
+    df = make_df(
+        [100.0, 50.0, -25.0],
+        [24000, 24050, 24100],
+    )
 
-analyzer = GreeksAnalyzer()
+    result = detector.analyze(df)
 
-greeks_df = analyzer.enrich(
-    greeks_df,
-    spot
-)
+    assert result["flip_found"] is True
 
-flip = GammaFlipDetector()
+    assert (
+        result["direction"]
+        == "POSITIVE_TO_NEGATIVE"
+    )
 
-result = flip.find_flip(greeks_df)
+    assert result["lower_strike"] == 24050
+    assert result["upper_strike"] == 24100
+    assert result["gamma_flip"] == 24100
 
-print("\n")
-print("=" * 60)
-print("GAMMA FLIP")
-print("=" * 60)
 
-print(result)
+# ==========================================================
+# Negative → Positive
+# ==========================================================
+
+def test_negative_to_positive_flip(detector):
+
+    df = make_df(
+        [-100.0, -50.0, 25.0],
+        [24000, 24050, 24100],
+    )
+
+    result = detector.analyze(df)
+
+    assert result["flip_found"] is True
+
+    assert (
+        result["direction"]
+        == "NEGATIVE_TO_POSITIVE"
+    )
+
+    assert result["lower_strike"] == 24050
+    assert result["upper_strike"] == 24100
+    assert result["gamma_flip"] == 24100
+
+
+# ==========================================================
+# Negative → Zero
+# ==========================================================
+
+def test_negative_to_zero_is_negative_to_positive_flip(
+    detector,
+):
+
+    df = make_df(
+        [-100.0, 0.0],
+        [24000, 24050],
+    )
+
+    result = detector.analyze(df)
+
+    assert result["flip_found"] is True
+
+    assert (
+        result["direction"]
+        == "NEGATIVE_TO_POSITIVE"
+    )
+
+    assert result["lower_strike"] == 24000
+    assert result["upper_strike"] == 24050
+    assert result["gamma_flip"] == 24050
+
+
+# ==========================================================
+# Positive → Zero
+# ==========================================================
+
+def test_positive_to_zero_is_positive_to_negative_flip(
+    detector,
+):
+
+    df = make_df(
+        [100.0, 0.0],
+        [24000, 24050],
+    )
+
+    result = detector.analyze(df)
+
+    assert result["flip_found"] is True
+
+    assert (
+        result["direction"]
+        == "POSITIVE_TO_NEGATIVE"
+    )
+
+    assert result["lower_strike"] == 24000
+    assert result["upper_strike"] == 24050
+    assert result["gamma_flip"] == 24050
+
+
+# ==========================================================
+# No flip
+# ==========================================================
+
+def test_no_flip_when_gamma_remains_positive(detector):
+
+    df = make_df(
+        [10.0, 20.0, 30.0],
+        [24000, 24050, 24100],
+    )
+
+    result = detector.analyze(df)
+
+    assert result["flip_found"] is False
+    assert result["direction"] is None
+    assert result["lower_strike"] is None
+    assert result["upper_strike"] is None
+
+
+def test_no_flip_when_gamma_remains_negative(detector):
+
+    df = make_df(
+        [-10.0, -20.0, -30.0],
+        [24000, 24050, 24100],
+    )
+
+    result = detector.analyze(df)
+
+    assert result["flip_found"] is False
+    assert result["direction"] is None
+    assert result["lower_strike"] is None
+    assert result["upper_strike"] is None
+
+
+# ==========================================================
+# Zero without crossing
+# ==========================================================
+
+def test_zero_to_positive_does_not_create_flip(detector):
+
+    df = make_df(
+        [0.0, 100.0],
+        [24000, 24050],
+    )
+
+    result = detector.analyze(df)
+
+    assert result["flip_found"] is False
+    assert result["direction"] is None
+
+
+def test_zero_to_negative_does_not_create_flip(detector):
+
+    df = make_df(
+        [0.0, -100.0],
+        [24000, 24050],
+    )
+
+    result = detector.analyze(df)
+
+    assert result["flip_found"] is False
+    assert result["direction"] is None
+
+
+# ==========================================================
+# First crossing in a longer sequence
+# ==========================================================
+
+def test_first_gamma_flip_is_returned(detector):
+
+    df = make_df(
+        [-100.0, -50.0, 25.0, 100.0, -20.0],
+        [24000, 24050, 24100, 24150, 24200],
+    )
+
+    result = detector.analyze(df)
+
+    assert result["flip_found"] is True
+
+    assert (
+        result["direction"]
+        == "NEGATIVE_TO_POSITIVE"
+    )
+
+    assert result["lower_strike"] == 24050
+    assert result["upper_strike"] == 24100
+    assert result["gamma_flip"] == 24100
+
+
+# ==========================================================
+# Single row
+# ==========================================================
+
+def test_single_row_has_no_flip(detector):
+
+    df = make_df(
+        [100.0],
+        [24000],
+    )
+
+    result = detector.analyze(df)
+
+    assert result["flip_found"] is False
+    assert result["direction"] is None
+    assert result["lower_strike"] is None
+    assert result["upper_strike"] is None
+
+
+# ==========================================================
+# Empty DataFrame
+# ==========================================================
+
+def test_empty_dataframe_has_no_flip(detector):
+
+    df = pd.DataFrame(
+        columns=[
+            "Strike",
+            "NET_GEX",
+        ]
+    )
+
+    result = detector.analyze(df)
+
+    assert result["flip_found"] is False
+    assert result["direction"] is None
+    assert result["lower_strike"] is None
+    assert result["upper_strike"] is None
+
+
+# ==========================================================
+# Missing NET_GEX
+# ==========================================================
+
+def test_missing_net_gex_raises_value_error(detector):
+
+    df = pd.DataFrame(
+        {
+            "Strike": [24000, 24050],
+            "GEX": [-100.0, 100.0],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="NET_GEX column not found",
+    ):
+        detector.analyze(df)
+
+
+# ==========================================================
+# Backward compatibility: detect()
+# ==========================================================
+
+def test_detect_delegates_to_analyze(detector):
+
+    df = make_df(
+        [-100.0, 100.0],
+        [24000, 24050],
+    )
+
+    result = detector.detect(df)
+
+    assert result["flip_found"] is True
+
+    assert (
+        result["direction"]
+        == "NEGATIVE_TO_POSITIVE"
+    )
+
+    assert result["gamma_flip"] == 24050
+
+
+# ==========================================================
+# Backward compatibility: find_flip()
+# ==========================================================
+
+def test_find_flip_delegates_to_analyze(detector):
+
+    df = make_df(
+        [100.0, -100.0],
+        [24000, 24050],
+    )
+
+    result = detector.find_flip(df)
+
+    assert result["flip_found"] is True
+
+    assert (
+        result["direction"]
+        == "POSITIVE_TO_NEGATIVE"
+    )
+
+    assert result["gamma_flip"] == 24050
