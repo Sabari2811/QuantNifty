@@ -1,40 +1,80 @@
 from datetime import datetime
+
 from core.runtime_context import RuntimeContext
+
 from decision.explanation_engine import ExplanationEngine
 
 from providers.indmoney_provider import INDMoneyProvider
+from providers.simulation_provider import SimulationProvider
+
 from paper_trading.broker import PaperBroker
 
 from engine.instrument_manager import InstrumentManager
 from engine.market_data_manager import MarketDataManager
 from engine.strike_selector import StrikeSelector
 from engine.option_chain_manager import OptionChainManager
-from decision.market_regime_engine import MarketRegimeEngine
 from engine.live_greeks_engine import LiveGreeksEngine
 from engine.candle_manager import CandleManager
 from engine.market_data_pipeline import MarketDataPipeline
+
+from decision.market_regime_engine import MarketRegimeEngine
+from decision.decision_engine import DecisionEngine
+
 from risk.risk_manager import RiskManager
 
 from analytics.analytics_pipeline import AnalyticsPipeline
 from analytics.market_snapshot.market_snapshot import MarketSnapshot
 
-from decision.decision_engine import DecisionEngine
+from execution.trade_execution_pipeline import TradeExecutionPipeline
 
+from recording.recording_manager import RecordingManager
 
 from ui.console_dashboard import ConsoleDashboard
-from execution.trade_execution_pipeline import TradeExecutionPipeline
-from recording.recording_manager import RecordingManager
-from providers.simulation_provider import SimulationProvider
+
 from runtime.runtime_mode import RuntimeMode
 
 
 class LiveEngine:
 
-    def __init__(self, provider=None):
+    def __init__(
+        self,
+        provider=None,
+        intelligence_service=None,
+        paper_broker=None,
+        trade_pipeline=None,
+    ):
 
         self.ctx = RuntimeContext()
 
         self.provider = provider
+
+        #
+        # C6 Intelligence Service
+        #
+        # Created by CompositionRoot and injected here.
+        #
+
+        self.intelligence_service = intelligence_service
+
+        #
+        # Paper Broker
+        #
+        # Prefer the CompositionRoot-owned broker.
+        # Keep fallback for backward compatibility with
+        # direct LiveEngine() construction.
+        #
+
+        self.paper_broker = paper_broker
+
+        #
+        # Trade Execution Pipeline
+        #
+        # Prefer the CompositionRoot-owned pipeline.
+        # Keep fallback for backward compatibility with
+        # direct LiveEngine() construction.
+        #
+
+        self.trade_pipeline = trade_pipeline
 
         self._initialize()
 
@@ -50,6 +90,7 @@ class LiveEngine:
         print("=" * 70)
 
         if self.provider is None:
+
             self.provider = INDMoneyProvider()
 
         self.provider.connect()
@@ -103,22 +144,43 @@ class LiveEngine:
         # Explanation Engine
         # ------------------------------------------------------
 
-        self.explanation_engine = ExplanationEngine()        
+        self.explanation_engine = ExplanationEngine()
 
         # ------------------------------------------------------
-        # Paper Trading
+        # Paper Trading / Execution
         # ------------------------------------------------------
-        self.paper_broker = PaperBroker()
 
-        self.risk_manager = RiskManager()
+        if self.paper_broker is None:
 
-        self.trade_pipeline = TradeExecutionPipeline(
+            self.paper_broker = PaperBroker()
 
-            paper_broker=self.paper_broker,
+        #
+        # CompositionRoot owns the complete TradeExecutionPipeline.
+        #
+        # For direct LiveEngine() construction, preserve the
+        # previous behavior by constructing the legacy dependencies.
+        #
 
-            risk_manager=self.risk_manager
+        if self.trade_pipeline is None:
 
-        )
+            self.risk_manager = RiskManager()
+
+            self.trade_pipeline = TradeExecutionPipeline(
+
+                paper_broker=self.paper_broker,
+
+                risk_manager=self.risk_manager
+
+            )
+
+        else:
+
+            #
+            # The injected pipeline is authoritative.
+            #
+            self.risk_manager = (
+                self.trade_pipeline.risk_manager
+            )
 
         self.recording_manager = RecordingManager()
 
@@ -132,7 +194,6 @@ class LiveEngine:
 
         print()
         print("Initialization Complete")
-
 
     # ==========================================================
     # GREEKS
@@ -151,11 +212,15 @@ class LiveEngine:
         print("GREEKS DATAFRAME")
         print("=" * 70)
 
-        print(self.ctx.greeks_df.columns.tolist())
+        print(
+            self.ctx.greeks_df.columns.tolist()
+        )
 
         print()
 
-        print(self.ctx.greeks_df.head())
+        print(
+            self.ctx.greeks_df.head()
+        )
 
     # ==========================================================
     # Runtime Helpers
@@ -167,7 +232,6 @@ class LiveEngine:
             self.provider,
             SimulationProvider
         )
-
 
     def _is_replay_fast(self):
 
@@ -182,7 +246,6 @@ class LiveEngine:
 
         )
 
-
     def _is_replay_recompute(self):
 
         return (
@@ -195,7 +258,6 @@ class LiveEngine:
             == RuntimeMode.REPLAY_RECOMPUTE
 
         )
-
 
     # ==========================================================
     # ANALYTICS
@@ -254,10 +316,24 @@ class LiveEngine:
         )
 
         # ------------------------------------------------------
+        # Intelligence Layer
+        # ------------------------------------------------------
+
+        if self.intelligence_service is not None:
+
+            self.ctx.intelligence = (
+                self.intelligence_service.analyze(
+                    self.ctx
+                )
+            )
+
+        # ------------------------------------------------------
         # Execute Paper Trade
         # ------------------------------------------------------
 
-        self.trade_pipeline.execute(self.ctx)
+        self.trade_pipeline.execute(
+            self.ctx
+        )
 
     # ==========================================================
     # ONE MARKET CYCLE
@@ -266,6 +342,7 @@ class LiveEngine:
     def run_cycle(self):
         """
         Executes one complete live market cycle.
+
         Can be called by Streamlit or Scheduler.
         """
 
@@ -283,35 +360,39 @@ class LiveEngine:
             # Market Data
             # --------------------------------------------------
 
-            self.market_pipeline.run(self.ctx)
+            self.market_pipeline.run(
+                self.ctx
+            )
 
             # --------------------------------------------------
             # Update Existing Paper Trades
             # --------------------------------------------------
 
             closed_before = len(
-                    self.paper_broker.portfolio.closed_positions
-                )
+                self.paper_broker.portfolio.closed_positions
+            )
 
             self.paper_broker.update_positions(
-                    self.ctx.option_chain
-                )
+                self.ctx.option_chain
+            )
 
             closed_after = len(
-                    self.paper_broker.portfolio.closed_positions
-                )
+                self.paper_broker.portfolio.closed_positions
+            )
 
             if closed_after > closed_before:
 
-                    position = self.paper_broker.last_trade
+                position = self.paper_broker.last_trade
 
-                    if position is not None:
+                if position is not None:
 
-                        self.risk_manager.on_trade_closed(
-                            position
-                        )
+                    self.risk_manager.on_trade_closed(
+                        position
+                    )
 
-            self.trade_pipeline.sync_context(self.ctx)
+            self.trade_pipeline.sync_context(
+                self.ctx
+            )
 
             # --------------------------------------------------
             # Analytics
@@ -322,6 +403,7 @@ class LiveEngine:
                 #
                 # Snapshot already contains analytics.
                 #
+
                 pass
 
             else:
@@ -336,9 +418,11 @@ class LiveEngine:
 
             if not self._is_replay():
 
-                self.recording_manager.record(self.ctx)
+                self.recording_manager.record(
+                    self.ctx
+                )
 
-                return self.ctx
+            return self.ctx
 
         except Exception as e:
 
@@ -346,6 +430,7 @@ class LiveEngine:
             print("=" * 70)
             print("LIVE ENGINE ERROR")
             print("=" * 70)
+
             print(e)
 
             self.ctx.runtime_status = "ERROR"
@@ -355,6 +440,7 @@ class LiveEngine:
         finally:
 
             if self.ctx.runtime_status != "ERROR":
+
                 self.ctx.runtime_status = "IDLE"
 
     # ==========================================================
@@ -381,6 +467,8 @@ class LiveEngine:
 
         ctx = self.run_cycle()
 
-        self.dashboard.show(ctx)
+        self.dashboard.show(
+            ctx
+        )
 
         return ctx
