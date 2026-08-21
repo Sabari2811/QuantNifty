@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from py_vollib.black_scholes.implied_volatility import implied_volatility
-from py_vollib.black_scholes.greeks.analytical import (
+from vollib.black_scholes.implied_volatility import implied_volatility
+from vollib.black_scholes.greeks.analytical import (
     delta,
     gamma,
     theta,
