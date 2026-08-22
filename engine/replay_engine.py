@@ -36,6 +36,9 @@ class ReplayEngine:
 
         snapshot = self.provider.current_snapshot()
 
+        # Preserve the authoritative replay snapshot itself.
+        self.ctx.snapshot = snapshot
+
         self.ctx.timestamp = snapshot.timestamp
         self.ctx.cycle_no = snapshot.cycle_no
         self.ctx.symbol = snapshot.symbol
