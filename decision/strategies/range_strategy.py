@@ -4,10 +4,19 @@ from decision.strategies.base_strategy import BaseStrategy
 class RangeStrategy(BaseStrategy):
     """
     Range market adjustment.
+
+    Strategy identity:
+        RANGE
     """
 
-    def adjust(self, score, market):
+    @property
+    def name(self):
+        """
+        Canonical strategy identity.
+        """
+        return "RANGE"
 
+    def adjust(self, score, market):
         reasons = []
 
         # Reduce aggressive scores

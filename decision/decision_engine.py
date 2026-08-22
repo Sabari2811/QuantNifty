@@ -373,6 +373,15 @@ class DecisionEngine:
             market
         )
 
+        # --------------------------------------------
+        # Strategy Provenance
+        # --------------------------------------------
+        #
+        # Strategy identity is an explicit contract.
+        # Do not infer identity from the Python class name.
+
+        strategy_name = strategy.name
+
         score_before_strategy = score
 
         score, strategy_reasons = strategy.adjust(
@@ -402,9 +411,17 @@ class DecisionEngine:
             breakdown=breakdown,
 
             reasons=reasons,
-
             direction=direction,
         )
+
+        # --------------------------------------------
+        # Preserve Strategy Provenance
+        # --------------------------------------------
+        #
+        # The selected strategy is the authoritative
+        # source of strategy identity for this decision.
+
+        decision.strategy_name = strategy_name
 
         # --------------------------------------------
         # Execution Plan

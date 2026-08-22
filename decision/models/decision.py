@@ -14,6 +14,10 @@ class Decision:
     The authoritative market snapshot is preserved by identity
     so downstream execution and audit layers can trace the
     decision back to the exact snapshot used for analysis.
+
+    Strategy identity is also preserved explicitly so downstream
+    intelligence layers do not need to infer it from the
+    Python strategy class name.
     """
 
     # ------------------------------------------------------------------
@@ -21,6 +25,12 @@ class Decision:
     # ------------------------------------------------------------------
 
     snapshot: object = None
+
+    # ------------------------------------------------------------------
+    # Authoritative strategy identity
+    # ------------------------------------------------------------------
+
+    strategy_name: str = ""
 
     signal: Signal = field(
         default_factory=Signal

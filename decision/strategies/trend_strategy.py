@@ -5,6 +5,9 @@ class TrendStrategy(BaseStrategy):
     """
     Trending market adjustment.
 
+    Strategy identity:
+        TREND
+
     Strategy adjustments are direction-aware:
     - Positive scores represent BUY CALL direction.
     - Negative scores represent BUY PUT direction.
@@ -13,6 +16,13 @@ class TrendStrategy(BaseStrategy):
     Strategy boosts conviction in the existing direction.
     It must never reverse the direction.
     """
+
+    @property
+    def name(self):
+        """
+        Canonical strategy identity.
+        """
+        return "TREND"
 
     def adjust(self, score, market):
         reasons = []

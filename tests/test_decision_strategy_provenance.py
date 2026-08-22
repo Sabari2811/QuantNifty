@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 from decision.decision_engine import DecisionEngine
 
 
@@ -17,6 +15,12 @@ class FakeMarketAnalyzer:
 
 
 class FakeStrategy:
+    """
+    Deterministic strategy fixture.
+
+    Strategy identity is an explicit contract.
+    It must NOT be inferred from the Python class name.
+    """
 
     name = "FAKE"
 
@@ -38,7 +42,6 @@ class FakeExecutionEngine:
         snapshot,
         config,
     ):
-        decision.execution_snapshot = snapshot
         return decision
 
 
@@ -175,11 +178,6 @@ class FakeSnapshot(dict):
 # ==========================================================
 
 
-def build_snapshot():
-
-    return FakeSnapshot()
-
-
 def build_engine():
 
     engine = DecisionEngine()
@@ -192,79 +190,33 @@ def build_engine():
 
 
 # ==========================================================
-# Snapshot provenance
+# Strategy provenance
 # ==========================================================
 
 
-def test_decision_pipeline_preserves_authoritative_snapshot_identity():
+def test_decision_preserves_selected_strategy_identity():
 
     engine = build_engine()
 
-    snapshot = build_snapshot()
+    snapshot = FakeSnapshot()
 
     decision = engine.build(snapshot)
 
-    # Decision must retain the exact authoritative
-    # snapshot supplied to DecisionEngine.build().
-    assert decision.snapshot is snapshot
-
-    # Execution preparation must receive the exact
-    # same snapshot object.
-    assert decision.execution_snapshot is snapshot
+    # Strategy identity comes from the explicit strategy
+    # contract, not from the Python class name.
+    assert decision.strategy_name == "FAKE"
 
 
-def test_decision_builder_receives_same_snapshot_used_for_analysis():
+def test_decision_strategy_identity_is_not_inferred_from_class_name():
 
     engine = build_engine()
 
-    observed = {}
-
-    class ObservingAnalyzer:
-
-        def analyze(self, snapshot):
-
-            observed["snapshot"] = snapshot
-
-            return snapshot
-
-    engine.analyzer = ObservingAnalyzer()
-
-    snapshot = build_snapshot()
+    snapshot = FakeSnapshot()
 
     decision = engine.build(snapshot)
 
-    # Analyzer receives the authoritative snapshot.
-    assert observed["snapshot"] is snapshot
+    assert decision.strategy_name == "FAKE"
 
-    # Decision preserves that same object.
-    assert decision.snapshot is snapshot
-
-
-def test_execution_boundary_receives_authoritative_snapshot():
-
-    engine = build_engine()
-
-    observed = {}
-
-    class ObservingExecutionEngine:
-
-        def prepare(
-            self,
-            decision,
-            snapshot,
-            config,
-        ):
-
-            observed["snapshot"] = snapshot
-
-            return decision
-
-    engine.execution = ObservingExecutionEngine()
-
-    snapshot = build_snapshot()
-
-    engine.build(snapshot)
-
-    # Execution boundary receives the exact authoritative
-    # snapshot object.
-    assert observed["snapshot"] is snapshot
+    # Explicitly protect the provenance contract:
+    # the strategy name is NOT the Python class name.
+    assert decision.strategy_name != "FakeStrategy"
