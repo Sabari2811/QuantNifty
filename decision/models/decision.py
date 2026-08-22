@@ -10,7 +10,17 @@ from decision.validation_result import ValidationResult
 class Decision:
     """
     Final output of Decision Engine.
+
+    The authoritative market snapshot is preserved by identity
+    so downstream execution and audit layers can trace the
+    decision back to the exact snapshot used for analysis.
     """
+
+    # ------------------------------------------------------------------
+    # Authoritative source snapshot
+    # ------------------------------------------------------------------
+
+    snapshot: object = None
 
     signal: Signal = field(
         default_factory=Signal
@@ -36,11 +46,13 @@ class Decision:
     # ------------------------------------------------------------------
     # Legacy field (keep until all modules migrate)
     # ------------------------------------------------------------------
+
     valid: bool = False
 
     # ------------------------------------------------------------------
     # New validation model
     # ------------------------------------------------------------------
+
     validation: ValidationResult = field(
         default_factory=lambda: ValidationResult(
             valid=False,

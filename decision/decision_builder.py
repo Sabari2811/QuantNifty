@@ -10,6 +10,7 @@ class DecisionBuilder:
 
     Responsibilities
     ----------------
+    - Preserve the authoritative market snapshot
     - Populate market information
     - Populate score breakdown
     - Calculate trade confidence
@@ -43,6 +44,14 @@ class DecisionBuilder:
         direction=None,
     ):
         decision = Decision()
+
+        # ======================================================
+        # Authoritative Snapshot Provenance
+        # ======================================================
+
+        # Preserve the exact snapshot object used by the
+        # decision pipeline. Do not copy or reconstruct it.
+        decision.snapshot = market
 
         # ======================================================
         # Market Information
