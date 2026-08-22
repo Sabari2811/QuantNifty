@@ -5,7 +5,27 @@ from analytics.intelligence.extractors.base_extractor import BaseExtractor
 
 class DecisionExtractor(BaseExtractor):
     """
-    Extracts TradingDecision information.
+    Extracts authoritative TradingDecision information.
+
+    Source ownership
+    ----------------
+    signal:
+        decision.signal.name
+
+    confidence:
+        decision.signal.confidence
+
+    trade_quality:
+        decision.trade.execution.trade_quality
+
+    reasons:
+        decision.reasons
+
+    strategy_name:
+        Not currently persisted on Decision.
+
+    execution_plan:
+        Not currently represented as a string field on Decision.
     """
 
     def extract(
@@ -23,6 +43,10 @@ class DecisionExtractor(BaseExtractor):
         if decision is None:
             return
 
+        # ======================================================
+        # Signal
+        # ======================================================
+
         signal = getattr(
             decision,
             "signal",
@@ -37,29 +61,55 @@ class DecisionExtractor(BaseExtractor):
                 "",
             )
 
-        record.confidence = getattr(
+            record.confidence = getattr(
+                signal,
+                "confidence",
+                0.0,
+            )
+
+        # ======================================================
+        # Trade Quality
+        # ======================================================
+
+        trade = getattr(
             decision,
-            "confidence",
-            0.0,
+            "trade",
+            None,
         )
 
-        record.trade_quality = getattr(
-            decision,
-            "trade_quality",
-            0.0,
-        )
+        if trade is not None:
 
-        record.strategy_name = getattr(
-            decision,
-            "strategy_name",
-            "",
-        )
+            execution = getattr(
+                trade,
+                "execution",
+                None,
+            )
 
-        record.execution_plan = getattr(
-            decision,
-            "execution_plan",
-            "",
-        )
+            if execution is not None:
+
+                record.trade_quality = getattr(
+                    execution,
+                    "trade_quality",
+                    0.0,
+                )
+
+        # ======================================================
+        # Strategy / Execution Plan
+        # ======================================================
+        #
+        # Do NOT invent these values.
+        #
+        # The current Decision contract does not persist an
+        # authoritative strategy name, and execution_plan is
+        # represented by the trade execution object rather
+        # than a string field on Decision.
+        #
+        # Leave the intelligence record at its default value
+        # until ownership is explicitly added to the contract.
+
+        # ======================================================
+        # Reasons
+        # ======================================================
 
         record.reasons = list(
             getattr(
