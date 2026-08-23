@@ -97,7 +97,7 @@ class MarketDataPipeline:
     def _fetch_historical_candles(self, ctx):
 
         security_id = self.instrument.get_index_security_id(
-            "NIFTY 50"
+            ctx.symbol
         )
 
         scrip_code = self.instrument.get_scrip_code(
