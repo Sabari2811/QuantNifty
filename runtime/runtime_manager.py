@@ -11,45 +11,20 @@ from runtime.composition import CompositionRoot
 
 
 class RuntimeManager:
-    """
-    Singleton Runtime Manager.
-
-    Owns exactly one:
-
-        • Provider
-        • CompositionRoot
-        • LiveEngine
-        • Scheduler
-        • Runtime Thread
-    """
+    """Own the single canonical QuantNifty runtime."""
 
     _instance = None
 
-    # ==========================================================
-    # Singleton
-    # ==========================================================
-
-    def __new__(
-        cls,
-        mode: RuntimeMode = RuntimeMode.LIVE,
-        replay_session=None
-    ):
-
+    def __new__(cls, mode: RuntimeMode = RuntimeMode.LIVE, replay_session=None):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialize(mode, replay_session)
-
         return cls._instance
-
-    # ==========================================================
-    # Initialization
-    # ==========================================================
 
     def _initialize(self, mode, replay_session):
         self.mode = mode
         self.composition = CompositionRoot()
         self.provider = self._create_provider(mode, replay_session)
-
         self.engine = LiveEngine(
             provider=self.provider,
             intelligence_service=self.composition.intelligence_service,
@@ -59,10 +34,6 @@ class RuntimeManager:
         self.scheduler = Scheduler()
         self.running = False
         self.thread = None
-
-    # ==========================================================
-    # Provider Factory
-    # ==========================================================
 
     def _create_provider(self, mode, replay_session):
         if mode == RuntimeMode.LIVE:
@@ -77,10 +48,6 @@ class RuntimeManager:
             )
 
         raise ValueError(f"Unsupported runtime mode: {mode}")
-
-    # ==========================================================
-    # Runtime
-    # ==========================================================
 
     def start(self, interval=30):
         if self.running:
@@ -105,21 +72,19 @@ class RuntimeManager:
 
         self.running = False
         self.scheduler.stop()
-
         if self.thread is not None:
             self.thread.join(timeout=2)
             self.thread = None
-
         print("Runtime stopped.")
 
-    # ==========================================================
-    # Helpers
-    # ==========================================================
-
-    def run_once(self, symbol=None):
-        """Run one canonical runtime cycle for the requested symbol."""
+    def run_once(self, symbol=None, levels=None):
+        """Run one canonical runtime cycle for the requested dashboard state."""
         if symbol:
             self.engine.ctx.symbol = symbol
+        if levels is not None:
+            if not isinstance(levels, int) or not 2 <= levels <= 10:
+                raise ValueError("levels must be an integer between 2 and 10")
+            self.engine.ctx.strike_levels = levels
         return self.engine.run_cycle()
 
     def get_context(self):
