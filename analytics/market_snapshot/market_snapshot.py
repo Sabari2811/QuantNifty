@@ -28,28 +28,20 @@ class MarketSnapshot:
         self.analytics = {}
         self.regime = None
 
-    # =====================================================
-    # SAVE SNAPSHOT
-    # =====================================================
-
     def save(
         self,
         greeks_df,
         spot,
         analytics
     ):
-
         self.timestamp = datetime.now()
-
         self.spot = float(spot)
-
-        if greeks_df is not None:
-            self.greeks_df = greeks_df.copy()
-        else:
-            self.greeks_df = None
-
+        self.greeks_df = (
+            greeks_df.copy()
+            if greeks_df is not None
+            else None
+        )
         self.analytics = analytics.copy()
-
         return self
 
     # =====================================================
@@ -61,8 +53,14 @@ class MarketSnapshot:
         return self.analytics.get("dealer", {})
 
     @property
+    def probability(self):
+        """Canonical probability output from the analytics pipeline."""
+        return self.analytics.get("probability", {})
+
+    @property
     def prediction(self):
-        return self.analytics.get("prediction", {})
+        """Backward-compatible alias for legacy consumers."""
+        return self.probability
 
     @property
     def trade_plan(self):
@@ -71,7 +69,7 @@ class MarketSnapshot:
     @property
     def max_pain(self):
         return self.analytics.get("max_pain", {})
-    
+
     @property
     def market_regime(self):
         return self.regime
@@ -109,8 +107,14 @@ class MarketSnapshot:
         return self.analytics.get("iv", {})
 
     @property
+    def oi_flow(self):
+        """Canonical option-interest-flow output."""
+        return self.analytics.get("oi_flow", {})
+
+    @property
     def oi(self):
-        return self.analytics.get("oi", {})
+        """Backward-compatible alias for legacy consumers."""
+        return self.oi_flow
 
     # =====================================================
     # GENERIC ACCESS
