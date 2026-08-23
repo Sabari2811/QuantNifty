@@ -106,6 +106,7 @@ class IntelligenceService:
             - RegimeState
             - dict
             - string
+            - market-regime object exposing the same fields
             - None
         """
 
@@ -169,6 +170,32 @@ class IntelligenceService:
             return RegimeState(
                 regime=regime,
                 confidence=0.0,
+            )
+
+        # MarketRegimeEngine returns a domain object rather than the
+        # canonical RegimeState. Normalize that object at this boundary
+        # instead of silently converting a valid runtime regime to UNKNOWN.
+        if regime is not None and hasattr(regime, "regime"):
+            return RegimeState(
+                regime=str(
+                    getattr(regime, "regime", "UNKNOWN")
+                    or "UNKNOWN"
+                ),
+                previous_regime=str(
+                    getattr(regime, "previous_regime", "UNKNOWN")
+                    or "UNKNOWN"
+                ),
+                transition=bool(
+                    getattr(regime, "transition", False)
+                ),
+                transition_reason=str(
+                    getattr(regime, "transition_reason", "")
+                    or ""
+                ),
+                confidence=float(
+                    getattr(regime, "confidence", 0.0)
+                    or 0.0
+                ),
             )
 
         return RegimeState()
@@ -373,7 +400,7 @@ class IntelligenceService:
                 getattr(
                     scenario,
                     "invalidation",
-                    "",
+                    ""
                 )
                 or ""
             ),
@@ -436,6 +463,7 @@ class IntelligenceService:
         synthesis = None
 
         if decision is not None:
+
             synthesis = (
                 self._synthesis_engine.synthesize(
                     families=families,
