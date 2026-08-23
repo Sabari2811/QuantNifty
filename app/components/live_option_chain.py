@@ -32,17 +32,53 @@ def _get_level(strike, analytics):
 
 
 # ==========================================================
+# DISPLAY HELPERS
+# ==========================================================
+
+def _display_series(series, decimals=None):
+    """Format missing observations without hiding legitimate zeroes."""
+
+    values = series.copy()
+
+    if decimals is not None:
+        values = values.round(decimals)
+
+    return values.where(values.notna(), "—")
+
+
+def _provenance_message(ctx):
+    """Return a UI warning when acquisition provenance is incomplete."""
+
+    provenance = getattr(ctx, "data_provenance", None)
+    if provenance is None:
+        return None
+
+    incomplete = []
+    for name in ("option_chain", "spot", "candles"):
+        acquisition = getattr(provenance, name, None)
+        if acquisition is not None and not acquisition.complete:
+            incomplete.append(name.replace("_", " "))
+
+    if not incomplete:
+        return None
+
+    return (
+        "Live data is incomplete for: "
+        + ", ".join(incomplete)
+        + ". Missing observations are shown as —; displayed zeroes are "
+        "actual zero values, not placeholders."
+    )
+
+
+# ==========================================================
 # ATM DETECTION
 # ==========================================================
 
 def _find_atm(df, spot):
 
     return min(
-
         df["Strike"],
-
-        key=lambda x: abs(x - spot)
-
+        key=lambda x: abs(x - spot),
     )
 
 
@@ -53,52 +89,23 @@ def _find_atm(df, spot):
 def _highlight_rows(row, atm):
 
     if row["Strike"] == atm:
-
-        return [
-
-            "background-color:#FFF3B0;font-weight:bold"
-
-        ] * len(row)
+        return ["background-color:#FFF3B0;font-weight:bold"] * len(row)
 
     level = row["Level"]
 
     if "Gamma Flip" in level:
-
-        return [
-
-            "background-color:#D4EDDA"
-
-        ] * len(row)
+        return ["background-color:#D4EDDA"] * len(row)
 
     if "Max Pain" in level:
-
-        return [
-
-            "background-color:#FFF3B0"
-
-        ] * len(row)
+        return ["background-color:#FFF3B0"] * len(row)
 
     if "Call Wall" in level:
-
-        return [
-
-            "background-color:#F8D7DA"
-
-        ] * len(row)
+        return ["background-color:#F8D7DA"] * len(row)
 
     if "Put Wall" in level:
+        return ["background-color:#D4EDDA"] * len(row)
 
-        return [
-
-            "background-color:#D4EDDA"
-
-        ] * len(row)
-
-    return [
-
-        ""
-
-    ] * len(row)
+    return [""] * len(row)
 
 
 # ==========================================================
@@ -109,96 +116,57 @@ def show(ctx):
 
     st.subheader("📊 Live Option Chain")
 
+    provenance_message = _provenance_message(ctx)
+    if provenance_message:
+        st.warning(provenance_message)
+
     df = ctx.greeks_df
 
     if df is None or df.empty:
-
-        st.warning(
-            "Option Chain not available."
-        )
-
+        st.warning("Option Chain not available.")
         return
 
-    analytics = ctx.analytics
+    analytics = ctx.analytics or {}
 
     display = pd.DataFrame()
 
-    display["CE LTP"] = df["CE_LTP"]
-
-    display["CE OI"] = df["CE_OI"]
-
-    display["CE Volume"] = df["CE_VOLUME"]
-
-    display["CE IV"] = df["CE_IV"].round(4)
-
-    display["CE Δ"] = df["CE_DELTA"].round(2)
-
-    display["CE Γ"] = df["CE_GAMMA"].round(4)
-
-    display["CE Θ"] = df["CE_THETA"].round(4)
-
-    display["CE Vega"] = df["CE_VEGA"].round(4)
-
-    display["CE Rho"] = df["CE_RHO"].round(4)
+    display["CE LTP"] = _display_series(df["CE_LTP"])
+    display["CE OI"] = _display_series(df["CE_OI"])
+    display["CE Volume"] = _display_series(df["CE_VOLUME"])
+    display["CE IV"] = _display_series(df["CE_IV"], 4)
+    display["CE Δ"] = _display_series(df["CE_DELTA"], 2)
+    display["CE Γ"] = _display_series(df["CE_GAMMA"], 4)
+    display["CE Θ"] = _display_series(df["CE_THETA"], 4)
+    display["CE Vega"] = _display_series(df["CE_VEGA"], 4)
+    display["CE Rho"] = _display_series(df["CE_RHO"], 4)
 
     display["Strike"] = df["Strike"]
 
     display["Level"] = display["Strike"].apply(
-
-        lambda x: _get_level(
-
-            x,
-
-            analytics
-
-        )
-
+        lambda x: _get_level(x, analytics)
     )
 
-    display["PE Γ"] = df["PE_GAMMA"].round(4)
+    display["PE Γ"] = _display_series(df["PE_GAMMA"], 4)
+    display["PE Δ"] = _display_series(df["PE_DELTA"], 2)
+    display["PE Θ"] = _display_series(df["PE_THETA"], 4)
+    display["PE Vega"] = _display_series(df["PE_VEGA"], 4)
+    display["PE Rho"] = _display_series(df["PE_RHO"], 4)
+    display["PE IV"] = _display_series(df["PE_IV"], 4)
+    display["PE Volume"] = _display_series(df["PE_VOLUME"])
+    display["PE OI"] = _display_series(df["PE_OI"])
+    display["PE LTP"] = _display_series(df["PE_LTP"])
 
-    display["PE Δ"] = df["PE_DELTA"].round(2)
-
-    display["PE Θ"] = df["PE_THETA"].round(4)
-
-    display["PE Vega"] = df["PE_VEGA"].round(4)
-
-    display["PE Rho"] = df["PE_RHO"].round(4)
-
-    display["PE IV"] = df["PE_IV"].round(4)
-
-    display["PE Volume"] = df["PE_VOLUME"]
-
-    display["PE OI"] = df["PE_OI"]
-
-    display["PE LTP"] = df["PE_LTP"]
-
-    atm = _find_atm(
-
-        display,
-
-        ctx.spot
-
-    )
+    atm = _find_atm(display, ctx.spot)
 
     styled = display.style.apply(
-
         _highlight_rows,
-
         axis=1,
-
-        atm=atm
-
+        atm=atm,
     )
 
     st.dataframe(
-
         styled,
-
         hide_index=True,
-
         use_container_width=True,
-
-        height=430
-
+        height=430,
     )
