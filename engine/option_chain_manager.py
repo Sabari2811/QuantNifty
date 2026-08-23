@@ -1,4 +1,8 @@
+from datetime import datetime, timezone
+
 import pandas as pd
+
+from core.data_provenance import AcquisitionProvenance
 
 
 class OptionChainManager:
@@ -83,8 +87,30 @@ class OptionChainManager:
         # Fetch live quotes
         # ---------------------------------------------------
 
+        acquired_at = datetime.now(timezone.utc)
+
         quotes = self.provider.get_quotes(
             security_ids
+        )
+
+        missing_ids = {
+            security_id
+            for security_id in security_ids
+            if f"NFO_{security_id}" not in quotes
+        }
+
+        provenance = AcquisitionProvenance(
+            source="INDMoney option quotes",
+            acquired_at=acquired_at,
+            expected_count=len(security_ids),
+            received_count=len(security_ids) - len(missing_ids),
+            missing_count=len(missing_ids),
+            freshness_verified=False,
+            reasons=(
+                ("provider_quote_timestamp_unavailable",)
+                if quotes
+                else ("no_option_quotes_received",)
+            ),
         )
 
         rows = []
@@ -125,4 +151,7 @@ class OptionChainManager:
 
             })
 
-        return pd.DataFrame(rows)
+        result = pd.DataFrame(rows)
+        result.attrs["data_provenance"] = provenance
+
+        return result

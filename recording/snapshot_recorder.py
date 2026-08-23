@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from dataclasses import asdict, is_dataclass
+from datetime import date, datetime
 
 import pandas as pd
 
@@ -235,6 +236,17 @@ class SnapshotRecorder:
             runtime
         )
 
+    @staticmethod
+    def _json_default(value):
+
+        if is_dataclass(value):
+            return asdict(value)
+
+        if isinstance(value, (datetime, date)):
+            return value.isoformat()
+
+        return str(value)
+
     def _save_json(self, path, obj):
 
         if obj is None:
@@ -267,7 +279,7 @@ class SnapshotRecorder:
                 obj,
                 fp,
                 indent=4,
-                default=str
+                default=self._json_default
             )
 
         print("=========================================\n")
@@ -283,7 +295,19 @@ class SnapshotRecorder:
         if df.empty:
             return
 
-        df.to_parquet(
+        # pandas serializes DataFrame.attrs as JSON when writing
+        # parquet. Runtime provenance contains frozen dataclasses and
+        # datetime values, so normalize attrs on a shallow dataframe
+        # copy before persistence. The source dataframe is left intact.
+        serializable = df.copy(deep=False)
+        serializable.attrs = json.loads(
+            json.dumps(
+                df.attrs,
+                default=self._json_default,
+            )
+        )
+
+        serializable.to_parquet(
             path,
             index=False
         )

@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+from core.data_provenance import RuntimeDataProvenance
+
 
 @dataclass
 class RuntimeContext:
@@ -44,6 +46,14 @@ class RuntimeContext:
     greeks_df: Any = None
 
     candles: Any = None
+
+    # ==========================================================
+    # DATA PROVENANCE
+    # ==========================================================
+
+    data_provenance: RuntimeDataProvenance = field(
+        default_factory=RuntimeDataProvenance
+    )
 
     # ==========================================================
     # ANALYTICS
