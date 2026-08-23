@@ -36,13 +36,8 @@ class RuntimeManager:
     ):
 
         if cls._instance is None:
-
             cls._instance = super().__new__(cls)
-
-            cls._instance._initialize(
-                mode,
-                replay_session
-            )
+            cls._instance._initialize(mode, replay_session)
 
         return cls._instance
 
@@ -50,150 +45,69 @@ class RuntimeManager:
     # Initialization
     # ==========================================================
 
-    def _initialize(
-        self,
-        mode,
-        replay_session
-    ):
-
+    def _initialize(self, mode, replay_session):
         self.mode = mode
-
-        #
-        # Composition Root
-        #
-        # Creates long-lived application dependencies once.
-        #
-
         self.composition = CompositionRoot()
-
-        #
-        # Provider
-        #
-
-        self.provider = self._create_provider(
-            mode,
-            replay_session
-        )
-
-        #
-        # Live Engine
-        #
-        # Inject CompositionRoot-owned dependencies.
-        #
+        self.provider = self._create_provider(mode, replay_session)
 
         self.engine = LiveEngine(
             provider=self.provider,
-            intelligence_service=(
-                self.composition.intelligence_service
-            ),
-            paper_broker=(
-                self.composition.paper_broker
-            ),
-            trade_pipeline=(
-                self.composition.trade_pipeline
-            ),
+            intelligence_service=self.composition.intelligence_service,
+            paper_broker=self.composition.paper_broker,
+            trade_pipeline=self.composition.trade_pipeline,
         )
         self.scheduler = Scheduler()
-
         self.running = False
-
         self.thread = None
 
     # ==========================================================
     # Provider Factory
     # ==========================================================
 
-    def _create_provider(
-        self,
-        mode,
-        replay_session
-    ):
-
+    def _create_provider(self, mode, replay_session):
         if mode == RuntimeMode.LIVE:
-
             return INDMoneyProvider()
 
-        if mode in (
-
-            RuntimeMode.REPLAY_FAST,
-
-            RuntimeMode.REPLAY_RECOMPUTE
-
-        ):
-
+        if mode in (RuntimeMode.REPLAY_FAST, RuntimeMode.REPLAY_RECOMPUTE):
             if replay_session is None:
-
-                raise ValueError(
-                    "ReplaySession is required."
-                )
-
+                raise ValueError("ReplaySession is required.")
             return SimulationProvider(
-
                 replay_source=replay_session,
-
-                runtime_mode=mode
-
+                runtime_mode=mode,
             )
 
-        raise ValueError(
-            f"Unsupported runtime mode: {mode}"
-        )
+        raise ValueError(f"Unsupported runtime mode: {mode}")
 
     # ==========================================================
     # Runtime
     # ==========================================================
 
-    def start(
-        self,
-        interval=30
-    ):
-
+    def start(self, interval=30):
         if self.running:
-
             print("Runtime already running.")
-
             return
 
         self.running = True
-
         self.thread = threading.Thread(
-
             target=self.scheduler.start,
-
             kwargs={
-
                 "callback": self.engine.run_cycle,
-
-                "interval": interval
-
+                "interval": interval,
             },
-
-            daemon=True
-
+            daemon=True,
         )
-
         self.thread.start()
-
-        print(
-            f"Runtime started ({self.mode.value})."
-        )
+        print(f"Runtime started ({self.mode.value}).")
 
     def stop(self):
-
         if not self.running:
-
             return
 
         self.running = False
-
         self.scheduler.stop()
 
         if self.thread is not None:
-
-            self.thread.join(
-                timeout=2
-            )
-
+            self.thread.join(timeout=2)
             self.thread = None
 
         print("Runtime stopped.")
@@ -202,22 +116,20 @@ class RuntimeManager:
     # Helpers
     # ==========================================================
 
-    def run_once(self):
-
+    def run_once(self, symbol=None):
+        """Run one canonical runtime cycle for the requested symbol."""
+        if symbol:
+            self.engine.ctx.symbol = symbol
         return self.engine.run_cycle()
 
     def get_context(self):
-
         return self.engine.ctx
 
     def get_engine(self):
-
         return self.engine
 
     def get_provider(self):
-
         return self.provider
 
     def is_running(self):
-
         return self.running
