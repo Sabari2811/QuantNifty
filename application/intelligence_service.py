@@ -173,6 +173,76 @@ class IntelligenceService:
 
         return RegimeState()
 
+    @staticmethod
+    def _build_data_quality(runtime_context) -> DataQuality:
+        """Derive quality from captured acquisition provenance.
+
+        This is intentionally observational: it does not block execution.
+        """
+
+        provenance = getattr(
+            runtime_context,
+            "data_provenance",
+            None,
+        )
+
+        if provenance is None:
+            return DataQuality(
+                score=0.0,
+                incomplete=True,
+                reasons=("data_provenance_missing",),
+            )
+
+        acquisitions = tuple(
+            item
+            for item in (
+                provenance.spot,
+                provenance.option_chain,
+                provenance.candles,
+            )
+            if item is not None
+        )
+
+        if not acquisitions:
+            return DataQuality(
+                score=0.0,
+                incomplete=True,
+                reasons=("no_acquisition_provenance",),
+            )
+
+        score = 100.0
+        reasons = []
+        incomplete = False
+
+        for item in acquisitions:
+            if not item.complete:
+                incomplete = True
+                reasons.append(
+                    f"incomplete:{item.source}"
+                )
+
+            if item.expected_count > 0:
+                coverage = (
+                    item.received_count
+                    / item.expected_count
+                )
+                score = min(score, 100.0 * coverage)
+
+            if not item.freshness_verified:
+                reasons.append(
+                    f"freshness_unverified:{item.source}"
+                )
+
+            reasons.extend(item.reasons)
+
+        return DataQuality(
+            score=max(0.0, min(100.0, score)),
+            stale=False,
+            incomplete=incomplete,
+            invalid=False,
+            reasons=tuple(dict.fromkeys(reasons)),
+        )
+
     # ==========================================================
     # Synthesis → Result helpers
     # ==========================================================
@@ -319,20 +389,9 @@ class IntelligenceService:
         runtime_context,
     ) -> IntelligenceResult:
 
-        # ======================================================
-        # 1. Current market fingerprint
-        # ======================================================
-
         record = self._feature_extractor.extract(
             runtime_context
         )
-
-        # ======================================================
-        # 2. Historical evidence
-        #
-        # IMPORTANT:
-        # Current observation is NOT yet in memory.
-        # ======================================================
 
         historical_evidence = (
             self._evidence_engine.analyze(
@@ -340,10 +399,6 @@ class IntelligenceService:
                 self._market_memory,
             )
         )
-
-        # ======================================================
-        # 3. Runtime analytics → EvidenceItem[]
-        # ======================================================
 
         evidence_items = (
             self._evidence_adapter.extract(
@@ -355,27 +410,15 @@ class IntelligenceService:
             )
         )
 
-        # ======================================================
-        # 4. EvidenceItem[] → FamilyEvidence[]
-        # ======================================================
-
         families = (
             self._family_aggregator.aggregate(
                 evidence_items
             )
         )
 
-        # ======================================================
-        # 5. Resolve authoritative regime
-        # ======================================================
-
         regime_state = self._resolve_regime(
             runtime_context
         )
-
-        # ======================================================
-        # 6. C5 synthesis
-        # ======================================================
 
         decision = getattr(
             runtime_context,
@@ -396,17 +439,9 @@ class IntelligenceService:
                 )
             )
 
-        # ======================================================
-        # 7. Store current observation AFTER historical
-        # ======================================================
-
         self._market_memory.add(
             record
         )
-
-        # ======================================================
-        # 8. Existing confidence contract
-        # ======================================================
 
         confidence_before = record.confidence
 
@@ -419,27 +454,11 @@ class IntelligenceService:
             ),
         )
 
-        # ======================================================
-        # 9. Recommendation
-        #
-        # C5 does not replace DecisionEngine.
-        # Existing historical recommendation remains the
-        # primary recommendation source.
-        # ======================================================
-
         recommendation = (
             historical_evidence.recommendation
             if historical_evidence.recommendation
             else record.signal
         )
-
-        # ======================================================
-        # 10. C5 outputs
-        # ======================================================
-
-        # ======================================================
-        # 10. C5 outputs
-        # ======================================================
 
         if synthesis is not None:
 
@@ -487,9 +506,6 @@ class IntelligenceService:
 
         else:
 
-            # C5 requires a Decision. Preserve the
-            # historical IntelligenceService contract
-            # when no decision is available.
             cross_family = None
 
             direction = "NEUTRAL"
@@ -506,10 +522,6 @@ class IntelligenceService:
                 families,
                 None,
             )
-
-        # ======================================================
-        # 11. Result
-        # ======================================================
 
         return IntelligenceResult(
             record=record,
@@ -570,5 +582,9 @@ class IntelligenceService:
                 item.reason
                 for item in evidence_items
                 if item.reason
+            ),
+
+            data_quality=self._build_data_quality(
+                runtime_context
             ),
         )
