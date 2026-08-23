@@ -3,64 +3,33 @@ from runtime.runtime_manager import RuntimeManager
 
 class LiveService:
     """
-    Bridge between the UI and the QuantNifty runtime.
+    Compatibility adapter for legacy UI pages.
 
-    Ensures the first market cycle is executed before
-    the dashboard attempts to consume RuntimeContext.
+    This service does not own market-data acquisition. It delegates
+    every operation to the single canonical RuntimeManager so legacy
+    pages cannot create a second runtime/data path.
     """
 
     def __init__(self):
-
         self.runtime = RuntimeManager()
 
-    # ==========================================================
-    # GET CURRENT CONTEXT
-    # ==========================================================
-
     def get_context(self):
-
+        """Return the canonical RuntimeContext, running one cycle if needed."""
         ctx = self.runtime.get_context()
 
-        # ------------------------------------------------------
-        # First dashboard request
-        # RuntimeContext.timestamp defaults to ""
-        # so we check for any falsy value.
-        # ------------------------------------------------------
-
         if not ctx.timestamp:
-
             ctx = self.runtime.run_once()
 
         return ctx
 
-    # ==========================================================
-    # MANUAL REFRESH
-    # ==========================================================
-
     def refresh(self):
-        """
-        Executes one complete market cycle.
-
-        Used by:
-            - CLI
-            - Testing
-            - Manual Refresh button
-        """
-
+        """Execute one canonical market cycle."""
         return self.runtime.run_once()
 
-    # ==========================================================
-    # START BACKGROUND RUNTIME
-    # ==========================================================
-
     def start(self):
-
+        """Start the canonical runtime scheduler."""
         self.runtime.start()
 
-    # ==========================================================
-    # STOP BACKGROUND RUNTIME
-    # ==========================================================
-
     def stop(self):
-
+        """Stop the canonical runtime scheduler."""
         self.runtime.stop()
