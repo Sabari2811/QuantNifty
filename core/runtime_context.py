@@ -7,22 +7,10 @@ from core.data_provenance import RuntimeDataProvenance
 @dataclass
 class RuntimeContext:
     """
-    Carries all runtime information
-    through the QuantNifty runtime.
+    Carries all runtime information through the QuantNifty runtime.
 
-    Shared by
-
-        LiveEngine
-            ↓
-        Analytics Pipeline
-            ↓
-        Decision Engine
-            ↓
-        Intelligence Layer
-            ↓
-        Paper Trading
-            ↓
-        Dashboard
+    Shared by LiveEngine, Analytics Pipeline, Decision Engine,
+    Intelligence Layer, Paper Trading, and Dashboard.
     """
 
     # ==========================================================
@@ -30,11 +18,9 @@ class RuntimeContext:
     # ==========================================================
 
     symbol: str = "NIFTY"
-
+    strike_levels: int = 5
     spot: float = 0.0
-
     expiry: str = ""
-
     timestamp: str = ""
 
     # ==========================================================
@@ -42,9 +28,7 @@ class RuntimeContext:
     # ==========================================================
 
     option_chain: Any = None
-
     greeks_df: Any = None
-
     candles: Any = None
 
     # ==========================================================
@@ -60,9 +44,7 @@ class RuntimeContext:
     # ==========================================================
 
     analytics: dict = field(default_factory=dict)
-
     features: dict = field(default_factory=dict)
-
     regime: Any = None
 
     # ==========================================================
@@ -70,11 +52,8 @@ class RuntimeContext:
     # ==========================================================
 
     snapshot: Any = None
-
     decision: Any = None
-
     explanation: Any = None
-
     intelligence: Any = None
 
     # ==========================================================
@@ -82,21 +61,12 @@ class RuntimeContext:
     # ==========================================================
 
     portfolio: Any = None
-
     position: Any = None
-
     last_trade: Any = None
-
     journal: Any = None
-
     performance: Any = None
-
-    # Risk Manager State
-
     risk_state: Any = None
-
     trade_status: str = ""
-
     trade_block_reason: str = ""
 
     # ==========================================================
@@ -104,5 +74,4 @@ class RuntimeContext:
     # ==========================================================
 
     runtime_status: str = "READY"
-
     cycle_no: int = 0
