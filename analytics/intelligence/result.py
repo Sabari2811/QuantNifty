@@ -40,44 +40,27 @@ class EvidenceItem:
 
     source_family: str
     feature: str
-
     direction: Direction = "NEUTRAL"
-
     strength: float = 0.0
     confidence: float = 0.0
     freshness: float = 100.0
     independence: float = 1.0
-
     reason: str = ""
 
     def __post_init__(self) -> None:
-
-        for name in (
-            "strength",
-            "confidence",
-            "freshness",
-        ):
+        for name in ("strength", "confidence", "freshness"):
             value = getattr(self, name)
-
             if not 0.0 <= value <= 100.0:
-                raise ValueError(
-                    f"{name} must be between 0 and 100"
-                )
+                raise ValueError(f"{name} must be between 0 and 100")
 
         if not 0.0 <= self.independence <= 1.0:
-            raise ValueError(
-                "independence must be between 0 and 1"
-            )
+            raise ValueError("independence must be between 0 and 1")
 
         if not self.source_family.strip():
-            raise ValueError(
-                "source_family must not be empty"
-            )
+            raise ValueError("source_family must not be empty")
 
         if not self.feature.strip():
-            raise ValueError(
-                "feature must not be empty"
-            )
+            raise ValueError("feature must not be empty")
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,15 +70,12 @@ class EvidenceSummary:
     bullish_count: int = 0
     bearish_count: int = 0
     neutral_count: int = 0
-
     independent_count: int = 0
     correlated_count: int = 0
-
     confluence_score: float = 0.0
     conflict_score: float = 0.0
 
     def __post_init__(self) -> None:
-
         for name in (
             "bullish_count",
             "bearish_count",
@@ -104,20 +84,12 @@ class EvidenceSummary:
             "correlated_count",
         ):
             if getattr(self, name) < 0:
-                raise ValueError(
-                    f"{name} cannot be negative"
-                )
+                raise ValueError(f"{name} cannot be negative")
 
-        for name in (
-            "confluence_score",
-            "conflict_score",
-        ):
+        for name in ("confluence_score", "conflict_score"):
             value = getattr(self, name)
-
             if not 0.0 <= value <= 100.0:
-                raise ValueError(
-                    f"{name} must be between 0 and 100"
-                )
+                raise ValueError(f"{name} must be between 0 and 100")
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,21 +97,14 @@ class RegimeState:
     """Current market regime and transition information."""
 
     regime: Regime = "UNKNOWN"
-
     previous_regime: Regime = "UNKNOWN"
-
     transition: bool = False
-
     transition_reason: str = ""
-
     confidence: float = 0.0
 
     def __post_init__(self) -> None:
-
         if not 0.0 <= self.confidence <= 100.0:
-            raise ValueError(
-                "regime confidence must be between 0 and 100"
-            )
+            raise ValueError("regime confidence must be between 0 and 100")
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,52 +112,40 @@ class Scenario:
     """One plausible market scenario."""
 
     name: str
-
     direction: Direction = "NEUTRAL"
-
     probability: float = 0.0
-
     trigger: str = ""
-
     invalidation: str = ""
-
     rationale: str = ""
 
     def __post_init__(self) -> None:
-
         if not self.name.strip():
-            raise ValueError(
-                "scenario name must not be empty"
-            )
-
+            raise ValueError("scenario name must not be empty")
         if not 0.0 <= self.probability <= 100.0:
-            raise ValueError(
-                "probability must be between 0 and 100"
-            )
+            raise ValueError("scenario probability must be between 0 and 100")
 
 
 @dataclass(frozen=True, slots=True)
 class DataQuality:
-    """Quality gate for data used by Intelligence."""
+    """Quality state for data used by Intelligence.
+
+    ``freshness_verified`` is deliberately separate from ``stale``:
+    an unverified timestamp is not evidence that data is fresh, but it
+    is also not evidence that the data is stale. This prevents an
+    unverified freshness state from being silently represented as
+    healthy/fresh while preserving the existing execution policy.
+    """
 
     score: float = 100.0
-
     stale: bool = False
-
     incomplete: bool = False
-
     invalid: bool = False
-
-    reasons: tuple[str, ...] = field(
-        default_factory=tuple
-    )
+    freshness_verified: bool = False
+    reasons: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
-
         if not 0.0 <= self.score <= 100.0:
-            raise ValueError(
-                "data quality score must be between 0 and 100"
-            )
+            raise ValueError("data quality score must be between 0 and 100")
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,94 +158,31 @@ class IntelligenceResult:
     and final intelligence metrics.
     """
 
-    # ==========================================================
-    # Existing application contract
-    # ==========================================================
-
     record: TradeIntelligenceRecord
-
     evidence: HistoricalEvidence
-
     recommendation: str
-
     confidence_before: float
-
     confidence_after: float
-
     explanation: str
 
-    # ==========================================================
-    # R2-005 intelligence state
-    # ==========================================================
-
     timestamp: datetime | None = None
-
     direction: Direction = "NEUTRAL"
-
     conviction: float = 0.0
-
     opportunity_quality: float = 0.0
-
     execution_quality: float = 0.0
-
     risk_quality: float = 0.0
 
-    # ==========================================================
-    # Evidence
-    # ==========================================================
-
-    evidence_items: tuple[EvidenceItem, ...] = field(
-        default_factory=tuple
-    )
-
-    evidence_summary: EvidenceSummary = field(
-        default_factory=EvidenceSummary
-    )
-
-    # ==========================================================
-    # Regime
-    # ==========================================================
-
-    regime: RegimeState = field(
-        default_factory=RegimeState
-    )
-
-    # ==========================================================
-    # Scenarios
-    # ==========================================================
-
+    evidence_items: tuple[EvidenceItem, ...] = field(default_factory=tuple)
+    evidence_summary: EvidenceSummary = field(default_factory=EvidenceSummary)
+    regime: RegimeState = field(default_factory=RegimeState)
     primary_scenario: Scenario | None = None
-
     alternative_scenario: Scenario | None = None
-
-    # ==========================================================
-    # Invalidation / Reasons
-    # ==========================================================
-
-    invalidation: tuple[str, ...] = field(
-        default_factory=tuple
-    )
-
-    reasons: tuple[str, ...] = field(
-        default_factory=tuple
-    )
-
-    # ==========================================================
-    # Data Quality
-    # ==========================================================
-
-    data_quality: DataQuality = field(
-        default_factory=DataQuality
-    )
-
-    # ==========================================================
-    # Contract
-    # ==========================================================
-
+    invalidation: tuple[str, ...] = field(default_factory=tuple)
+    reasons: tuple[str, ...] = field(default_factory=tuple)
+    data_quality: DataQuality = field(default_factory=DataQuality)
     contract_version: str = "R2-005-A"
 
     def __post_init__(self) -> None:
-
         for name in (
             "confidence_before",
             "confidence_after",
@@ -302,13 +192,8 @@ class IntelligenceResult:
             "risk_quality",
         ):
             value = getattr(self, name)
-
             if not 0.0 <= value <= 100.0:
-                raise ValueError(
-                    f"{name} must be between 0 and 100"
-                )
+                raise ValueError(f"{name} must be between 0 and 100")
 
         if not self.contract_version.strip():
-            raise ValueError(
-                "contract_version must not be empty"
-            )
+            raise ValueError("contract_version must not be empty")
