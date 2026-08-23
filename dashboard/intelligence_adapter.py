@@ -38,11 +38,11 @@ def adapt_intelligence(result: IntelligenceResult | None) -> dict | None:
     else:
         quality_status = "ACCEPTABLE"
 
-    freshness_status = (
-        "VERIFIED"
-        if quality.freshness_verified
-        else "UNVERIFIED"
-    )
+    # Some legacy/test doubles predate the explicit freshness_verified field.
+    # Missing provenance must remain UNVERIFIED; never infer freshness from
+    # acquisition time or from the quality score.
+    freshness_verified = getattr(quality, "freshness_verified", False)
+    freshness_status = "VERIFIED" if freshness_verified else "UNVERIFIED"
 
     evidence = result.evidence
     summary = result.evidence_summary
@@ -97,7 +97,7 @@ def adapt_intelligence(result: IntelligenceResult | None) -> dict | None:
             "score": quality.score,
             "status": quality_status,
             "freshness_status": freshness_status,
-            "freshness_verified": quality.freshness_verified,
+            "freshness_verified": freshness_verified,
             "stale": quality.stale,
             "incomplete": quality.incomplete,
             "invalid": quality.invalid,
