@@ -183,6 +183,10 @@ class DataQuality:
 
     invalid: bool = False
 
+    # True only when acquisition freshness was explicitly verified.
+    # False means freshness is unverified, not that the data is stale.
+    freshness_verified: bool = False
+
     reasons: tuple[str, ...] = field(
         default_factory=tuple
     )

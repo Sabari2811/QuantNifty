@@ -178,6 +178,8 @@ class IntelligenceService:
         """Derive quality from captured acquisition provenance.
 
         This is intentionally observational: it does not block execution.
+        Freshness verification is represented explicitly; an unverified
+        freshness state is not silently treated as fresh or stale.
         """
 
         provenance = getattr(
@@ -190,6 +192,7 @@ class IntelligenceService:
             return DataQuality(
                 score=0.0,
                 incomplete=True,
+                freshness_verified=False,
                 reasons=("data_provenance_missing",),
             )
 
@@ -207,12 +210,14 @@ class IntelligenceService:
             return DataQuality(
                 score=0.0,
                 incomplete=True,
+                freshness_verified=False,
                 reasons=("no_acquisition_provenance",),
             )
 
         score = 100.0
         reasons = []
         incomplete = False
+        freshness_verified = True
 
         for item in acquisitions:
             if not item.complete:
@@ -229,6 +234,7 @@ class IntelligenceService:
                 score = min(score, 100.0 * coverage)
 
             if not item.freshness_verified:
+                freshness_verified = False
                 reasons.append(
                     f"freshness_unverified:{item.source}"
                 )
@@ -240,6 +246,7 @@ class IntelligenceService:
             stale=False,
             incomplete=incomplete,
             invalid=False,
+            freshness_verified=freshness_verified,
             reasons=tuple(dict.fromkeys(reasons)),
         )
 
