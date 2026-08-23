@@ -6,6 +6,10 @@ from models.dealer_data import DealerData
 from dashboard.services.market_service import MarketService
 from runtime.runtime_manager import RuntimeManager
 
+from dashboard.intelligence_adapter import (
+    adapt_intelligence,
+    )
+
 
 class DashboardController:
 
@@ -104,6 +108,10 @@ class DashboardController:
             risk=analytics["risk"],
 
             analytics=analytics,
+
+            intelligence=adapt_intelligence(
+                ctx.intelligence
+            ),
 
             option_chain=data["option_chain"],
 

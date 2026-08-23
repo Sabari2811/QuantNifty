@@ -127,9 +127,19 @@ def show(ctx):
 
     display["CE OI"] = df["CE_OI"]
 
+    display["CE Volume"] = df["CE_VOLUME"]
+
+    display["CE IV"] = df["CE_IV"].round(4)
+
     display["CE Δ"] = df["CE_DELTA"].round(2)
 
     display["CE Γ"] = df["CE_GAMMA"].round(4)
+
+    display["CE Θ"] = df["CE_THETA"].round(4)
+
+    display["CE Vega"] = df["CE_VEGA"].round(4)
+
+    display["CE Rho"] = df["CE_RHO"].round(4)
 
     display["Strike"] = df["Strike"]
 
@@ -148,6 +158,16 @@ def show(ctx):
     display["PE Γ"] = df["PE_GAMMA"].round(4)
 
     display["PE Δ"] = df["PE_DELTA"].round(2)
+
+    display["PE Θ"] = df["PE_THETA"].round(4)
+
+    display["PE Vega"] = df["PE_VEGA"].round(4)
+
+    display["PE Rho"] = df["PE_RHO"].round(4)
+
+    display["PE IV"] = df["PE_IV"].round(4)
+
+    display["PE Volume"] = df["PE_VOLUME"]
 
     display["PE OI"] = df["PE_OI"]
 

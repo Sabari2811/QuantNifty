@@ -16,6 +16,7 @@ class FakeAnalyticsPipeline:
         greeks_df,
         spot_price,
         candles,
+        previous_greeks_df=None,
     ):
         self.called = True
 

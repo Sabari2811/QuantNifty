@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from core.runtime_context import RuntimeContext
+from core.logger import logger
 
 from decision.explanation_engine import ExplanationEngine
 
@@ -46,6 +47,9 @@ class LiveEngine:
 
         self.ctx = RuntimeContext()
 
+        # Previous market snapshot used for delta-based OI flow.
+        self._previous_greeks_df = None
+
         self.provider = provider
 
         #
@@ -84,10 +88,7 @@ class LiveEngine:
 
     def _initialize(self):
 
-        print()
-        print("=" * 70)
-        print("INITIALIZING QUANTNIFTY")
-        print("=" * 70)
+        logger.info("INITIALIZING QUANTNIFTY")
 
         if self.provider is None:
 
@@ -117,17 +118,11 @@ class LiveEngine:
         self.candle_manager = CandleManager()
 
         self.market_pipeline = MarketDataPipeline(
-
             provider=self.provider,
-
             instrument=self.instrument,
-
             market=self.market,
-
             chain_manager=self.chain_manager,
-
             candle_manager=self.candle_manager
-
         )
 
         self.pipeline = AnalyticsPipeline()
@@ -166,11 +161,8 @@ class LiveEngine:
             self.risk_manager = RiskManager()
 
             self.trade_pipeline = TradeExecutionPipeline(
-
                 paper_broker=self.paper_broker,
-
                 risk_manager=self.risk_manager
-
             )
 
         else:
@@ -178,6 +170,7 @@ class LiveEngine:
             #
             # The injected pipeline is authoritative.
             #
+
             self.risk_manager = (
                 self.trade_pipeline.risk_manager
             )
@@ -192,8 +185,7 @@ class LiveEngine:
 
         self.ctx.runtime_status = "READY"
 
-        print()
-        print("Initialization Complete")
+        logger.info("Initialization Complete")
 
     # ==========================================================
     # GREEKS
@@ -207,19 +199,14 @@ class LiveEngine:
             self.ctx.expiry
         )
 
-        print()
-        print("=" * 70)
-        print("GREEKS DATAFRAME")
-        print("=" * 70)
-
-        print(
-            self.ctx.greeks_df.columns.tolist()
+        logger.info(
+            "GREEKS DATAFRAME | columns=%s",
+            self.ctx.greeks_df.columns.tolist(),
         )
 
-        print()
-
-        print(
-            self.ctx.greeks_df.head()
+        logger.debug(
+            "GREEKS DATAFRAME | head=\n%s",
+            self.ctx.greeks_df.head().to_string(),
         )
 
     # ==========================================================
@@ -236,27 +223,19 @@ class LiveEngine:
     def _is_replay_fast(self):
 
         return (
-
             self._is_replay()
-
             and
-
             self.provider.runtime_mode
             == RuntimeMode.REPLAY_FAST
-
         )
 
     def _is_replay_recompute(self):
 
         return (
-
             self._is_replay()
-
             and
-
             self.provider.runtime_mode
             == RuntimeMode.REPLAY_RECOMPUTE
-
         )
 
     # ==========================================================
@@ -269,7 +248,12 @@ class LiveEngine:
             greeks_engine=self.greeks.greeks,
             greeks_df=self.ctx.greeks_df,
             spot_price=self.ctx.spot,
-            candles=self.ctx.candles
+            candles=self.ctx.candles,
+            previous_greeks_df=getattr(
+                self,
+                "_previous_greeks_df",
+                None,
+            ),
         )
 
         # ------------------------------------------------------
@@ -306,13 +290,9 @@ class LiveEngine:
         # ------------------------------------------------------
 
         self.ctx.explanation = self.explanation_engine.build(
-
             decision=self.ctx.decision,
-
             regime=self.ctx.regime,
-
             snapshot=self.ctx.snapshot
-
         )
 
         # ------------------------------------------------------
@@ -412,6 +392,12 @@ class LiveEngine:
 
                 self._run_analytics()
 
+                # Preserve the successfully processed snapshot
+                # for delta-based OI analysis on the next cycle.
+                self._previous_greeks_df = self.ctx.greeks_df.copy(
+                    deep=True
+                )
+
             # --------------------------------------------------
             # Snapshot Recording
             # --------------------------------------------------
@@ -426,12 +412,9 @@ class LiveEngine:
 
         except Exception as e:
 
-            print()
-            print("=" * 70)
-            print("LIVE ENGINE ERROR")
-            print("=" * 70)
-
-            print(e)
+            logger.exception(
+                "LIVE ENGINE ERROR"
+            )
 
             self.ctx.runtime_status = "ERROR"
 
@@ -460,10 +443,7 @@ class LiveEngine:
 
     def run(self):
 
-        print()
-        print("=" * 70)
-        print("LIVE ENGINE STARTED")
-        print("=" * 70)
+        logger.info("LIVE ENGINE STARTED")
 
         ctx = self.run_cycle()
 

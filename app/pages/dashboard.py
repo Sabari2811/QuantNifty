@@ -12,6 +12,7 @@ from app.components.ai_decision_card import show as ai_decision
 from app.components.trade_plan_card import show as trade_plan
 from app.components.market_intelligence_card import show as market_intelligence
 from app.components.live_option_chain import show as live_option_chain
+from app.components.intelligence_card import show as intelligence
 
 
 def show():
@@ -86,10 +87,10 @@ def show():
 
     # ==========================================================
     # ROW 3
-    # Market Intelligence
+    # Intelligence
     # ==========================================================
 
-    market_intelligence(ctx.explanation)
+    intelligence(ctx)
 
     st.divider()
 

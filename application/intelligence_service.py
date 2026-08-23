@@ -14,6 +14,7 @@ from analytics.intelligence.synthesis.orchestration.engine import (
 )
 
 from analytics.intelligence.result import (
+    DataQuality,
     EvidenceSummary,
     RegimeState,
     Scenario,
@@ -124,7 +125,6 @@ class IntelligenceService:
             regime,
             dict,
         ):
-
             return RegimeState(
                 regime=str(
                     regime.get(
@@ -166,7 +166,6 @@ class IntelligenceService:
             regime,
             str,
         ):
-
             return RegimeState(
                 regime=regime,
                 confidence=0.0,
@@ -376,12 +375,6 @@ class IntelligenceService:
 
         # ======================================================
         # 6. C5 synthesis
-        #
-        # C5 requires an existing Decision object because
-        # OpportunityQualityEngine evaluates decision.trade.
-        #
-        # Historical intelligence must remain usable even
-        # when no Decision exists yet.
         # ======================================================
 
         decision = getattr(
@@ -393,7 +386,6 @@ class IntelligenceService:
         synthesis = None
 
         if decision is not None:
-
             synthesis = (
                 self._synthesis_engine.synthesize(
                     families=families,
@@ -406,7 +398,6 @@ class IntelligenceService:
 
         # ======================================================
         # 7. Store current observation AFTER historical
-        #    validation
         # ======================================================
 
         self._market_memory.add(
@@ -432,6 +423,8 @@ class IntelligenceService:
         # 9. Recommendation
         #
         # C5 does not replace DecisionEngine.
+        # Existing historical recommendation remains the
+        # primary recommendation source.
         # ======================================================
 
         recommendation = (
@@ -442,9 +435,10 @@ class IntelligenceService:
 
         # ======================================================
         # 10. C5 outputs
-        #
-        # When no Decision exists, C5 synthesis is unavailable.
-        # The rest of the IntelligenceResult remains valid.
+        # ======================================================
+
+        # ======================================================
+        # 10. C5 outputs
         # ======================================================
 
         if synthesis is not None:
@@ -452,7 +446,6 @@ class IntelligenceService:
             cross_family = synthesis.cross_family
 
             conviction = synthesis.conviction
-
             opportunity = synthesis.opportunity
 
             primary_scenario = self._build_scenario(
@@ -487,18 +480,17 @@ class IntelligenceService:
                 or 0.0
             )
 
-            evidence_summary = (
-                self._build_evidence_summary(
-                    families,
-                    cross_family,
-                )
+            evidence_summary = self._build_evidence_summary(
+                families,
+                cross_family,
             )
 
         else:
 
-            primary_scenario = None
-
-            alternative_scenario = None
+            # C5 requires a Decision. Preserve the
+            # historical IntelligenceService contract
+            # when no decision is available.
+            cross_family = None
 
             direction = "NEUTRAL"
 
@@ -506,62 +498,20 @@ class IntelligenceService:
 
             opportunity_score = 0.0
 
-            evidence_summary = EvidenceSummary(
-                bullish_count=sum(
-                    family.bullish_count
-                    for family in families
-                ),
-                bearish_count=sum(
-                    family.bearish_count
-                    for family in families
-                ),
-                neutral_count=sum(
-                    1
-                    for family in families
-                    if family.direction == "NEUTRAL"
-                ),
-                independent_count=sum(
-                    1
-                    for family in families
-                    if family.confidence > 0.0
-                ),
-                correlated_count=max(
-                    0,
-                    sum(
-                        family.evidence_count
-                        for family in families
-                    )
-                    - sum(
-                        1
-                        for family in families
-                        if family.confidence > 0.0
-                    ),
-                ),
+            primary_scenario = None
+
+            alternative_scenario = None
+
+            evidence_summary = self._build_evidence_summary(
+                families,
+                None,
             )
 
         # ======================================================
-        # 11. Invalidation
-        # ======================================================
-
-        invalidation = ()
-
-        if primary_scenario is not None:
-
-            invalidation = tuple(
-                item.strip()
-                for item in (
-                    primary_scenario.invalidation
-                    or ""
-                ).split(";")
-                if item.strip()
-            )
-
-        # ======================================================
-        # 12. Result
+        # 11. Result
         # ======================================================
 
         return IntelligenceResult(
-
             record=record,
 
             evidence=historical_evidence,
@@ -604,7 +554,17 @@ class IntelligenceService:
 
             alternative_scenario=alternative_scenario,
 
-            invalidation=invalidation,
+            invalidation=(
+                tuple(
+                    item
+                    for item in (
+                        primary_scenario.invalidation
+                        if primary_scenario is not None
+                        else ""
+                    ).split(";")
+                    if item.strip()
+                )
+            ),
 
             reasons=tuple(
                 item.reason

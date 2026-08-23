@@ -1,8 +1,11 @@
 import os
+
 import requests
 from dotenv import load_dotenv
 
 from providers.base_provider import BaseProvider
+from core.logger import logger
+
 
 load_dotenv()
 
@@ -13,10 +16,15 @@ class INDMoneyProvider(BaseProvider):
 
         self.base_url = "https://api.indstocks.com"
 
-        self.token = os.getenv("INDSTOCKS_API_TOKEN")
+        self.token = os.getenv(
+            "INDSTOCKS_API_TOKEN"
+        )
 
         if not self.token:
-            raise Exception("INDSTOCKS_API_TOKEN not found in .env")
+
+            raise Exception(
+                "INDSTOCKS_API_TOKEN not found in .env"
+            )
 
         self.headers = {
             "Authorization": self.token,
@@ -29,11 +37,13 @@ class INDMoneyProvider(BaseProvider):
 
     def connect(self):
 
-        print("=" * 60)
-        print("CONNECTING TO INDMONEY")
-        print("=" * 60)
+        logger.info(
+            "CONNECTING TO INDMONEY"
+        )
 
-        print("✓ API Token Loaded")
+        logger.info(
+            "INDMoney API Token Loaded"
+        )
 
         return True
 
@@ -43,7 +53,9 @@ class INDMoneyProvider(BaseProvider):
 
     def get_profile(self):
 
-        url = f"{self.base_url}/user/profile"
+        url = (
+            f"{self.base_url}/user/profile"
+        )
 
         response = requests.get(
             url,
@@ -51,20 +63,31 @@ class INDMoneyProvider(BaseProvider):
             timeout=30
         )
 
-        print(f"Status Code : {response.status_code}")
+        logger.info(
+            "INDMoney PROFILE | status=%s",
+            response.status_code,
+        )
 
         try:
+
             return response.json()
+
         except Exception:
+
             return response.text
 
     # ==========================================================
     # SINGLE OPTION QUOTE
     # ==========================================================
 
-    def get_quote(self, security_id):
+    def get_quote(
+        self,
+        security_id
+    ):
 
-        security_id = int(security_id)
+        security_id = int(
+            security_id
+        )
 
         url = (
             f"{self.base_url}/market/quotes/full"
@@ -82,17 +105,24 @@ class INDMoneyProvider(BaseProvider):
         data = response.json()
 
         if data.get("status") != "success":
+
             return None
 
-        return data["data"].get(f"NFO_{security_id}")
+        return data["data"].get(
+            f"NFO_{security_id}"
+        )
 
     # ==========================================================
     # MULTIPLE OPTION QUOTES
     # ==========================================================
 
-    def get_quotes(self, security_ids):
+    def get_quotes(
+        self,
+        security_ids
+    ):
 
         if not security_ids:
+
             return {}
 
         ids = []
@@ -100,28 +130,33 @@ class INDMoneyProvider(BaseProvider):
         for sid in security_ids:
 
             if sid is None:
+
                 continue
 
             sid = int(sid)
 
             if sid not in ids:
+
                 ids.append(sid)
 
-        print()
-        print("=" * 70)
-        print("OPTION QUOTE REQUEST")
-        print("=" * 70)
-
-        print("Security IDs")
-        print(ids)
+        logger.info(
+            "OPTION QUOTE REQUEST | security_ids=%s",
+            ids,
+        )
 
         quotes = {}
 
         batch_size = 10
 
-        for start in range(0, len(ids), batch_size):
+        for start in range(
+            0,
+            len(ids),
+            batch_size
+        ):
 
-            batch = ids[start:start + batch_size]
+            batch = ids[
+                start:start + batch_size
+            ]
 
             scrip_codes = ",".join(
                 f"NFO_{sid}"
@@ -133,10 +168,11 @@ class INDMoneyProvider(BaseProvider):
                 f"?scrip-codes={scrip_codes}"
             )
 
-            print()
-            print("--------------------------------------------")
-            print("Request")
-            print(url)
+            logger.info(
+                "OPTION QUOTE REQUEST | batch=%s | url=%s",
+                batch,
+                url,
+            )
 
             response = requests.get(
                 url,
@@ -144,24 +180,40 @@ class INDMoneyProvider(BaseProvider):
                 timeout=30
             )
 
-            print("Status :", response.status_code)
+            logger.info(
+                "OPTION QUOTE RESPONSE | status=%s",
+                response.status_code,
+            )
 
             if response.status_code != 200:
 
-                print("Batch Failed")
-                print(response.text)
+                logger.error(
+                    "OPTION QUOTE BATCH FAILED | status=%s | response=%s",
+                    response.status_code,
+                    response.text,
+                )
 
                 continue
 
             data = response.json()
 
             if data.get("status") != "success":
+
+                logger.warning(
+                    "OPTION QUOTE API FAILURE | response=%s",
+                    data,
+                )
+
                 continue
 
-            quotes.update(data["data"])
+            quotes.update(
+                data["data"]
+            )
 
-        print()
-        print("Quotes Received :", len(quotes))
+        logger.info(
+            "OPTION QUOTE COMPLETE | quotes_received=%s",
+            len(quotes),
+        )
 
         return quotes
 
@@ -169,9 +221,14 @@ class INDMoneyProvider(BaseProvider):
     # INDEX QUOTE BY SECURITY ID
     # ==========================================================
 
-    def get_index_quote_by_id(self, security_id):
+    def get_index_quote_by_id(
+        self,
+        security_id
+    ):
 
-        security_id = int(security_id)
+        security_id = int(
+            security_id
+        )
 
         url = (
             f"{self.base_url}/market/quotes/full"
@@ -189,6 +246,7 @@ class INDMoneyProvider(BaseProvider):
         data = response.json()
 
         if data.get("status") != "success":
+
             return None
 
         return data["data"].get(
@@ -199,14 +257,21 @@ class INDMoneyProvider(BaseProvider):
     # INDEX QUOTE
     # ==========================================================
 
-    def get_index_quote(self, index_name):
+    def get_index_quote(
+        self,
+        index_name
+    ):
 
-        from engine.instrument_manager import InstrumentManager
+        from engine.instrument_manager import (
+            InstrumentManager
+        )
 
         instrument = InstrumentManager()
 
-        security_id = instrument.get_index_security_id(
-            index_name
+        security_id = (
+            instrument.get_index_security_id(
+                index_name
+            )
         )
 
         if security_id is None:
@@ -223,28 +288,27 @@ class INDMoneyProvider(BaseProvider):
     # EXTRACT PRICE
     # ==========================================================
 
-    def _extract_price(self, quote):
+    def _extract_price(
+        self,
+        quote
+    ):
 
         if quote is None:
+
             return None
 
         for key in (
-
             "live_price",
-
             "ltp",
-
             "LTP",
-
             "last_price",
-
             "lastPrice",
-
-            "close"
-
+            "close",
         ):
 
-            value = quote.get(key)
+            value = quote.get(
+                key
+            )
 
             if value is not None:
 
@@ -256,7 +320,10 @@ class INDMoneyProvider(BaseProvider):
     # LIVE SPOT PRICE
     # ==========================================================
 
-    def get_spot_price(self, symbol):
+    def get_spot_price(
+        self,
+        symbol
+    ):
 
         symbol = symbol.upper()
 
@@ -289,90 +356,54 @@ class INDMoneyProvider(BaseProvider):
         if price is None:
 
             raise Exception(
-
-                f"Unable to extract spot price.\nResponse : {quote}"
-
+                f"Unable to extract spot price.\n"
+                f"Response : {quote}"
             )
 
         return price
+
     # ==========================================================
     # HISTORICAL DATA
     # ==========================================================
 
     def get_historical_data(
-
         self,
-
         scrip_code,
-
         interval,
-
         start_time,
-
         end_time
-
     ):
-
         """
         Fetch historical OHLC candles.
-
-        Example:
-
-            scrip_code = "NIDX_26000"
-            interval   = "5"
-            start_time = "2026-07-10T09:15:00"
-            end_time   = "2026-07-10T15:30:00"
-
-        Supported intervals (per INDStocks API):
-
-            1
-            3
-            5
-            10
-            15
-            30
-            60
-            D
-            W
-            M
         """
 
         url = (
-
             f"{self.base_url}/market/historical/{interval}"
-
         )
 
         params = {
-
-        "scrip-codes": scrip_code,
-
-        "start_time": start_time,
-
-        "end_time": end_time
-
+            "scrip-codes": scrip_code,
+            "start_time": start_time,
+            "end_time": end_time
         }
 
-        print()
-        print("=" * 70)
-        print("HISTORICAL DATA REQUEST")
-        print("=" * 70)
-        print("URL :", url)
-        print("Params :", params)
-
-        response = requests.get(
-
+        logger.info(
+            "HISTORICAL DATA REQUEST | url=%s | params=%s",
             url,
-
-            headers=self.headers,
-
-            params=params,
-
-            timeout=30
-
+            params,
         )
 
-        print("Status :", response.status_code)
+        response = requests.get(
+            url,
+            headers=self.headers,
+            params=params,
+            timeout=30
+        )
+
+        logger.info(
+            "HISTORICAL DATA RESPONSE | status=%s",
+            response.status_code,
+        )
 
         # ------------------------------------------------------
         # HTTP Error
@@ -380,11 +411,11 @@ class INDMoneyProvider(BaseProvider):
 
         if response.status_code != 200:
 
-            print()
-            print("=" * 70)
-            print("ERROR RESPONSE")
-            print("=" * 70)
-            print(response.text)
+            logger.error(
+                "HISTORICAL DATA HTTP ERROR | status=%s | response=%s",
+                response.status_code,
+                response.text,
+            )
 
             return []
 
@@ -398,28 +429,14 @@ class INDMoneyProvider(BaseProvider):
 
         except Exception:
 
-            print()
-            print("=" * 70)
-            print("INVALID JSON")
-            print("=" * 70)
-            print(response.text)
+            logger.exception(
+                "HISTORICAL DATA INVALID JSON"
+            )
 
-            return []
-        # ------------------------------------------------------
-        # Parse JSON
-        # ------------------------------------------------------
-
-        try:
-
-            data = response.json()
-
-        except Exception:
-
-            print()
-            print("=" * 70)
-            print("INVALID JSON")
-            print("=" * 70)
-            print(response.text)
+            logger.debug(
+                "HISTORICAL DATA RAW RESPONSE | %s",
+                response.text,
+            )
 
             return []
 
@@ -427,13 +444,15 @@ class INDMoneyProvider(BaseProvider):
         # Success Check
         # ------------------------------------------------------
 
-        if not data.get("success", False):
+        if not data.get(
+            "success",
+            False
+        ):
 
-            print()
-            print("=" * 70)
-            print("API ERROR")
-            print("=" * 70)
-            print(data)
+            logger.error(
+                "HISTORICAL DATA API ERROR | response=%s",
+                data,
+            )
 
             return []
 
@@ -449,27 +468,40 @@ class INDMoneyProvider(BaseProvider):
 
             return []
 
-        if "candles" not in data["data"][scrip_code]:
+        if (
+            "candles"
+            not in data["data"][scrip_code]
+        ):
 
             return []
 
-        candles = data["data"][scrip_code]["candles"]
+        candles = data[
+            "data"
+        ][scrip_code]["candles"]
 
-        print()
-        print("Candles Returned :", len(candles))
+        logger.info(
+            "HISTORICAL DATA COMPLETE | candles=%s",
+            len(candles),
+        )
 
         return candles
+
     # ==========================================================
     # OPTION CHAIN
     # ==========================================================
 
-    def get_option_chain(self, *args, **kwargs):
+    def get_option_chain(
+        self,
+        *args,
+        **kwargs
+    ):
         """
         Not required.
 
         QuantNifty builds the option chain through
         OptionChainManager using get_quotes().
         """
+
         raise NotImplementedError(
             "Use OptionChainManager.get_live_option_chain()"
         )
@@ -478,7 +510,11 @@ class INDMoneyProvider(BaseProvider):
     # PLACE ORDER
     # ==========================================================
 
-    def place_order(self, *args, **kwargs):
+    def place_order(
+        self,
+        *args,
+        **kwargs
+    ):
 
         raise NotImplementedError(
             "Order placement will be implemented in Sprint 38."

@@ -21,6 +21,7 @@ import streamlit as st
 from config.settings import PROVIDER
 from dashboard.dashboard_controller import DashboardController
 from dashboard.components import institutional_score_card
+from dashboard.components import intelligence_card
 
 from dashboard.components import (
 
@@ -164,6 +165,14 @@ market_banner.render(dashboard)
 market_regime.render(dashboard)
 
 runtime_card.render(dashboard)
+
+# ==========================================================
+# INTELLIGENCE
+# ==========================================================
+
+intelligence_card.render(
+    dashboard.intelligence
+)
 
 # ==========================================================
 # SIGNAL

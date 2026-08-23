@@ -25,7 +25,6 @@ from analytics.gamma.gamma_exposure import GammaExposureEngine
 from analytics.gamma.gamma_flip import GammaFlipDetector
 from analytics.gamma.gamma_wall import GammaWallDetector
 
-
 from analytics.oi.oi_flow_engine import OIFlowEngine
 
 from analytics.iv.iv_skew_analyzer import IVSkewAnalyzer
@@ -42,6 +41,8 @@ from analytics.liquidity.liquidity_wall_engine import LiquidityWallEngine
 from analytics.liquidity.liquidity_void_engine import LiquidityVoidEngine
 from analytics.liquidity.absorption_engine import AbsorptionEngine
 from analytics.liquidity.order_imbalance_engine import OrderImbalanceEngine
+
+from core.logger import logger
 
 
 class AnalyticsPipeline:
@@ -148,18 +149,14 @@ class AnalyticsPipeline:
     # ==========================================================
     # MAIN PIPELINE
     # ==========================================================
+
     def run(
-
         self,
-
         greeks_engine,
-
         greeks_df,
-
         spot_price,
-    
-        candles=None
-
+        candles=None,
+        previous_greeks_df=None,
     ):
 
         # =====================================================
@@ -200,22 +197,18 @@ class AnalyticsPipeline:
 
         greeks_df, vanna_summary = self.vanna.calculate(
             greeks_df,
-        spot_price
+            spot_price
         )
 
         greeks_df, charm_summary = self.charm.calculate(
             greeks_df,
-        spot_price
+            spot_price
         )
 
         dealer_flow = self.dealer_flow.analyze(
-
-        delta_summary,
-
-        vanna_summary,
-
-        charm_summary
-
+            delta_summary,
+            vanna_summary,
+            charm_summary
         )
 
         # =====================================================
@@ -225,24 +218,33 @@ class AnalyticsPipeline:
         liquidity = self.liquidity.analyze(
             greeks_df
         )
+
         # =====================================================
         # OI
         # =====================================================
 
         oi_result = self.oi.analyze(
-            greeks_df
+            greeks_df,
+            previous_greeks_df,
         )
 
-        print("\n========== OI RESULT ==========")
-        print(oi_result["summary"])
-        print("\nColumns:")
-        print(oi_result["table"].columns.tolist())
-        print("===============================\n")
+        logger.info(
+            "OI RESULT | summary=%s",
+            oi_result["summary"],
+        )
 
-        # Updated greeks dataframe (contains CE_FLOW / PE_FLOW)
+        logger.debug(
+            "OI RESULT | columns=%s",
+            oi_result["table"].columns.tolist(),
+        )
+
+        # Updated greeks dataframe
+        # (contains CE_FLOW / PE_FLOW)
+
         greeks_df = oi_result["table"]
 
         # OI analytics (summary + table)
+
         oi = oi_result
 
         # =====================================================
@@ -274,12 +276,12 @@ class AnalyticsPipeline:
             greeks_df
         )
 
-       
-
+        # =====================================================
         # ATR
+        # =====================================================
 
         atr = self.atr.analyze(
-        greeks_df
+            greeks_df
         )
 
         volatility = self.volatility.analyze(
@@ -291,10 +293,10 @@ class AnalyticsPipeline:
         )
 
         market_structure = self.market_structure.analyze(
-        greeks_df,
-        dealer,
-        pcr,
-        expected_move
+            greeks_df,
+            dealer,
+            pcr,
+            expected_move
         )
 
         # =====================================================
@@ -310,17 +312,11 @@ class AnalyticsPipeline:
         else:
 
             technical = {
-
                 "atr": {},
-
                 "ema": {},
-
                 "rsi": {},
-
                 "vwap": {},
-
                 "adx": {}
-
             }
 
         # =====================================================
@@ -328,18 +324,12 @@ class AnalyticsPipeline:
         # =====================================================
 
         probability = self.probability.calculate(
-
             dealer,
-
             market_structure,
-
             pcr,
-
             skew,
-
             technical
-
-            )
+        )
 
         # =====================================================
         # Signal
@@ -356,30 +346,18 @@ class AnalyticsPipeline:
         # =====================================================
 
         institutional_score = self.score_engine.calculate(
-
-        dealer=dealer,
-
-        dealer_flow=dealer_flow,
-
-        liquidity=liquidity,
-
-        market_structure=market_structure,
-
-        pcr=pcr,
-
-        expected_move=expected_move,
-
-        iv_skew=skew,
-
-        iv_smile=smile,
-
-        atr=atr,
-
-        signal=signal,
-
-        spot=spot_price
-
-        )   
+            dealer=dealer,
+            dealer_flow=dealer_flow,
+            liquidity=liquidity,
+            market_structure=market_structure,
+            pcr=pcr,
+            expected_move=expected_move,
+            iv_skew=skew,
+            iv_smile=smile,
+            atr=atr,
+            signal=signal,
+            spot=spot_price
+        )
 
         # =====================================================
         # Smart Strike
@@ -459,14 +437,12 @@ class AnalyticsPipeline:
         # =====================================================
         # Output
         # =====================================================
+
         market_map = self.market_map.build(
-
             analytics={
-
                 "dealer": dealer,
 
                 "gamma_levels": {
-
                     "gamma_flip": flip.get(
                         "gamma_flip",
                         "-"
@@ -486,19 +462,17 @@ class AnalyticsPipeline:
                         "put_wall",
                         "-"
                     )
-
                 },
 
                 "expected_move": expected_move,
 
                 "max_pain": max_pain
-
             },
 
             spot=spot_price
 
         )
-                
+
         return {
 
             "context": context,
