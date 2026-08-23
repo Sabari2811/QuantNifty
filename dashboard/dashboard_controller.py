@@ -14,12 +14,11 @@ class DashboardController:
         self.runtime = RuntimeManager()
 
     def load(self, symbol, levels):
-        # The dashboard selection becomes the authoritative runtime symbol.
-        # `levels` remains part of the public UI contract; the canonical
-        # runtime currently owns its strike selection policy.
-        del levels
-
-        ctx = self.runtime.run_once(symbol=symbol)
+        """Load dashboard data from one canonical runtime cycle."""
+        ctx = self.runtime.run_once(
+            symbol=symbol,
+            levels=levels,
+        )
         analytics = ctx.analytics or {}
         dealer_analytics = analytics.get("dealer", {})
 
