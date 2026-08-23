@@ -3,146 +3,70 @@ from config.settings import PROVIDER
 from models.dashboard_data import DashboardData
 from models.dealer_data import DealerData
 
-from dashboard.services.market_service import MarketService
 from runtime.runtime_manager import RuntimeManager
-
-from dashboard.intelligence_adapter import (
-    adapt_intelligence,
-    )
+from dashboard.intelligence_adapter import adapt_intelligence
 
 
 class DashboardController:
+    """Build DashboardData exclusively from the canonical runtime context."""
 
     def __init__(self):
-
-        self.market = MarketService()
-
-        # Shared Runtime (Singleton)
         self.runtime = RuntimeManager()
 
-    # ======================================================
-    # Load Dashboard
-    # ======================================================
+    def load(self, symbol, levels):
+        # The dashboard selection becomes the authoritative runtime symbol.
+        # `levels` remains part of the public UI contract; the canonical
+        # runtime currently owns its strike selection policy.
+        del levels
 
-    def load(
-        self,
-        symbol,
-        levels
-    ):
-
-        data = self.market.get_dashboard_data(
-            symbol,
-            levels
-        )
-
-        analytics = data["analytics"]
-
-        # ==================================================
-        # Dealer
-        # ==================================================
+        ctx = self.runtime.run_once(symbol=symbol)
+        analytics = ctx.analytics or {}
+        dealer_analytics = analytics.get("dealer", {})
 
         dealer = DealerData(
-
-            dealer_gamma=analytics["dealer"]["dealer_gamma"],
-
-            market_mode=analytics["dealer"]["market_mode"],
-
-            support=analytics["dealer"]["support"],
-
-            resistance=analytics["dealer"]["resistance"],
-
-            gamma_flip=analytics["dealer"]["gamma_flip"],
-
-            gamma_wall=analytics["dealer"]["gamma_wall"],
-
-            expected_volatility=analytics["dealer"]["expected_volatility"],
-
-            mean_reversion_probability=analytics["dealer"]["mean_reversion_probability"],
-
-            breakout_probability=analytics["dealer"]["breakout_probability"],
-
-            total_gex=analytics["dealer"]["total_gex"]
-
-        )
-
-        # ==================================================
-        # Runtime Context
-        # ==================================================
-
-        ctx = self.runtime.get_context()
-
-        # ==================================================
-        # Dashboard
-        # ==================================================
-
-        dashboard = DashboardData(
-
-            provider=PROVIDER,
-
-            symbol=symbol,
-
-            spot=data["spot"],
-
-            expiry=data["expiry"],
-
-            dealer=dealer,
-
-            dealer_flow=analytics["dealer_flow"],
-
-            expected_move=analytics["expected_move"],
-
-            max_pain=analytics["max_pain"],
-
-            pcr=analytics["pcr"],
-
-            market_structure=analytics["market_structure"],
-
-            liquidity=analytics["liquidity"],
-
-            probability=analytics["probability"],
-
-            signal=analytics["signal"],
-
-            trade_plan=analytics["trade_plan"],
-
-            risk=analytics["risk"],
-
-            analytics=analytics,
-
-            intelligence=adapt_intelligence(
-                ctx.intelligence
+            dealer_gamma=dealer_analytics.get("dealer_gamma"),
+            market_mode=dealer_analytics.get("market_mode"),
+            support=dealer_analytics.get("support"),
+            resistance=dealer_analytics.get("resistance"),
+            gamma_flip=dealer_analytics.get("gamma_flip"),
+            gamma_wall=dealer_analytics.get("gamma_wall"),
+            expected_volatility=dealer_analytics.get("expected_volatility"),
+            mean_reversion_probability=dealer_analytics.get(
+                "mean_reversion_probability"
             ),
-
-            option_chain=data["option_chain"],
-
-            institutional_score=analytics["institutional_score"],
-
-            greeks=data["greeks"],
-
-            # ==================================================
-            # Runtime
-            # ==================================================
-
-            portfolio=ctx.portfolio,
-
-            position=ctx.position,
-
-            last_trade=ctx.last_trade,
-
-            journal=ctx.journal,
-
-            statistics=ctx.statistics,
-
-            risk_state=ctx.risk_state,
-
-            trade_status=ctx.trade_status,
-
-            trade_block_reason=ctx.trade_block_reason,
-
-            runtime_status=ctx.runtime_status,
-
-            cycle_no=ctx.cycle_no
-
+            breakout_probability=dealer_analytics.get("breakout_probability"),
+            total_gex=dealer_analytics.get("total_gex"),
         )
 
-        return dashboard
+        return DashboardData(
+            provider=PROVIDER,
+            symbol=ctx.symbol,
+            spot=ctx.spot,
+            expiry=ctx.expiry,
+            dealer=dealer,
+            dealer_flow=analytics.get("dealer_flow", {}),
+            expected_move=analytics.get("expected_move", {}),
+            max_pain=analytics.get("max_pain", {}),
+            pcr=analytics.get("pcr", {}),
+            market_structure=analytics.get("market_structure", {}),
+            liquidity=analytics.get("liquidity", {}),
+            probability=analytics.get("probability", {}),
+            signal=analytics.get("signal", {}),
+            trade_plan=analytics.get("trade_plan", {}),
+            risk=analytics.get("risk", {}),
+            analytics=analytics,
+            intelligence=adapt_intelligence(ctx.intelligence),
+            option_chain=ctx.option_chain,
+            institutional_score=analytics.get("institutional_score", {}),
+            greeks=ctx.greeks_df,
+            portfolio=ctx.portfolio,
+            position=ctx.position,
+            last_trade=ctx.last_trade,
+            journal=ctx.journal,
+            statistics=getattr(ctx, "statistics", {}),
+            risk_state=ctx.risk_state,
+            trade_status=ctx.trade_status,
+            trade_block_reason=ctx.trade_block_reason,
+            runtime_status=ctx.runtime_status,
+            cycle_no=ctx.cycle_no,
+        )
