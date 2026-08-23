@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
+from core.data_provenance import AcquisitionProvenance, RuntimeDataProvenance
 from providers.simulation_provider import SimulationProvider
 
 
@@ -66,6 +67,20 @@ class MarketDataPipeline:
 
         ctx.explanation = snapshot.explanation
 
+        ctx.data_provenance = RuntimeDataProvenance(
+            option_chain=ctx.option_chain.attrs.get("data_provenance"),
+            candles=None,
+            spot=AcquisitionProvenance(
+                source="simulation snapshot spot",
+                acquired_at=datetime.now(timezone.utc),
+                expected_count=1,
+                received_count=1,
+                missing_count=0,
+                freshness_verified=False,
+                reasons=("simulation_snapshot",),
+            ),
+        )
+
         #
         # Historical candles are already part of analytics
         # during replay.
@@ -78,8 +93,22 @@ class MarketDataPipeline:
 
     def _fetch_spot(self, ctx):
 
+        acquired_at = datetime.now(timezone.utc)
+
         ctx.spot = self.market.get_spot_price(
             ctx.symbol
+        )
+
+        ctx.data_provenance = RuntimeDataProvenance(
+            spot=AcquisitionProvenance(
+                source="INDMoney index quote",
+                acquired_at=acquired_at,
+                expected_count=1,
+                received_count=1 if ctx.spot is not None else 0,
+                missing_count=0 if ctx.spot is not None else 1,
+                freshness_verified=False,
+                reasons=("provider_quote_timestamp_unavailable",),
+            )
         )
 
     def _fetch_option_chain(self, ctx):
@@ -94,11 +123,23 @@ class MarketDataPipeline:
             5
         )
 
+        ctx.data_provenance = RuntimeDataProvenance(
+            spot=ctx.data_provenance.spot,
+            option_chain=ctx.option_chain.attrs.get(
+                "data_provenance"
+            ),
+        )
+
     def _fetch_historical_candles(self, ctx):
 
         security_id = self.instrument.get_index_security_id(
-            "NIFTY 50"
+            ctx.symbol
         )
+
+        if security_id is None:
+            raise ValueError(
+                f"Index security ID not found for symbol: {ctx.symbol}"
+            )
 
         scrip_code = self.instrument.get_scrip_code(
             "NIDX",
@@ -123,6 +164,22 @@ class MarketDataPipeline:
 
         ctx.candles = self.candle_manager.to_dataframe(
             candles
+        )
+
+        ctx.data_provenance = RuntimeDataProvenance(
+            spot=ctx.data_provenance.spot,
+            option_chain=ctx.data_provenance.option_chain,
+            candles=AcquisitionProvenance(
+                source=f"INDMoney historical candles:{scrip_code}",
+                acquired_at=end.replace(tzinfo=timezone.utc),
+                expected_count=1,
+                received_count=1 if len(ctx.candles) > 0 else 0,
+                missing_count=0 if len(ctx.candles) > 0 else 1,
+                freshness_verified=False,
+                reasons=(
+                    "provider_candle_timestamp_not_used_for_freshness",
+                ),
+            ),
         )
 
     # ==========================================================
