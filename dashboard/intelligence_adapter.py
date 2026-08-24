@@ -29,10 +29,21 @@ def adapt_intelligence(result: IntelligenceResult | None) -> dict | None:
 
     quality = result.data_quality
     quality_reasons = tuple(getattr(quality, "reasons", ()))
+    integrity_invalid = any(
+        reason.startswith("integrity_invalid:")
+        for reason in quality_reasons
+    )
     integrity_suspect = any(
         reason.startswith("integrity_suspect:")
         for reason in quality_reasons
     )
+
+    if integrity_invalid:
+        integrity_status = "INVALID"
+    elif integrity_suspect:
+        integrity_status = "SUSPECT"
+    else:
+        integrity_status = "UNVERIFIED"
 
     if quality.invalid:
         quality_status = "INVALID"
@@ -107,8 +118,13 @@ def adapt_intelligence(result: IntelligenceResult | None) -> dict | None:
         "evidence": evidence_summary,
         "historical_evidence": historical_evidence,
         "data_quality": {
+            # `score` is the canonical acquisition coverage score. It is
+            # exposed separately from integrity so a perfect coverage score
+            # cannot be mistaken for perfect data integrity.
             "score": quality.score,
+            "coverage_score": quality.score,
             "status": quality_status,
+            "integrity_status": integrity_status,
             "freshness_status": freshness_status,
             "freshness_verified": freshness_verified,
             "stale": quality.stale,
