@@ -45,14 +45,10 @@ def test_runtime_provenance_complete_when_all_required_inputs_are_complete():
 
 
 def test_provider_timestamp_round_trips_without_loss():
-    provider_timestamp = datetime(
-        2026, 8, 24, 10, 5, tzinfo=timezone.utc
-    )
+    provider_timestamp = datetime(2026, 8, 24, 10, 5, tzinfo=timezone.utc)
     original = AcquisitionProvenance(
         source="historical",
-        acquired_at=datetime(
-            2026, 8, 24, 10, 6, tzinfo=timezone.utc
-        ),
+        acquired_at=datetime(2026, 8, 24, 10, 6, tzinfo=timezone.utc),
         provider_timestamp=provider_timestamp,
         expected_count=1,
         received_count=1,
@@ -109,6 +105,7 @@ def test_integrity_fields_round_trip_without_changing_freshness():
 
     restored = AcquisitionProvenance.from_dict({
         "source": original.source,
+        "acquired_at": original.acquired_at.isoformat(),
         "expected_count": original.expected_count,
         "received_count": original.received_count,
         "missing_count": original.missing_count,
@@ -146,14 +143,8 @@ def test_data_quality_is_derived_from_runtime_provenance():
     assert quality.score == 80.0
     assert quality.incomplete is True
     assert quality.stale is False
-    assert any(
-        reason.startswith("incomplete:options")
-        for reason in quality.reasons
-    )
-    assert any(
-        reason.startswith("freshness_unverified:options")
-        for reason in quality.reasons
-    )
+    assert any(reason.startswith("incomplete:options") for reason in quality.reasons)
+    assert any(reason.startswith("freshness_unverified:options") for reason in quality.reasons)
 
 
 def test_data_quality_marks_invalid_integrity_separately_from_freshness():
