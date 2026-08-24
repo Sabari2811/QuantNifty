@@ -1,7 +1,11 @@
 import numpy as np
 import pandas as pd
 
-from app.components.live_option_chain import _display_series, _provenance_message
+from app.components.live_option_chain import (
+    _display_series,
+    _format_missing,
+    _provenance_message,
+)
 
 
 def test_display_series_preserves_real_zero_and_marks_missing_as_na():
@@ -13,6 +17,13 @@ def test_display_series_preserves_real_zero_and_marks_missing_as_na():
     assert result.iloc[0] == 0.0
     assert pd.isna(result.iloc[1])
     assert result.iloc[2] == 12.5
+
+
+def test_missing_value_formatter_shows_dash_and_preserves_zero():
+    assert _format_missing(np.nan) == "—"
+    assert _format_missing(None) == "—"
+    assert _format_missing(0.0) == 0.0
+    assert _format_missing(12.5) == 12.5
 
 
 def test_provenance_message_identifies_incomplete_acquisition():
