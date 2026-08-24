@@ -1,6 +1,8 @@
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 from core.data_provenance import AcquisitionProvenance, RuntimeDataProvenance
+from core.quote_integrity import assess_option_chain
 from providers.simulation_provider import SimulationProvider
 
 
@@ -55,9 +57,30 @@ class MarketDataPipeline:
             ctx.spot,
             ctx.strike_levels,
         )
+
+        option_provenance = ctx.option_chain.attrs.get("data_provenance")
+        if option_provenance is None:
+            option_provenance = AcquisitionProvenance(
+                source="INDMoney option quotes",
+                expected_count=len(ctx.option_chain),
+                received_count=len(ctx.option_chain),
+                missing_count=0,
+                freshness_verified=False,
+                reasons=("provider_quote_timestamp_unavailable",),
+            )
+
+        integrity = assess_option_chain(ctx.option_chain, ctx.spot)
+        option_provenance = replace(
+            option_provenance,
+            integrity_status=integrity.status,
+            integrity_reasons=integrity.reasons,
+        )
+        ctx.option_chain.attrs["quote_integrity"] = integrity.as_dict()
+        ctx.option_chain.attrs["data_provenance"] = option_provenance
+
         ctx.data_provenance = RuntimeDataProvenance(
             spot=ctx.data_provenance.spot,
-            option_chain=ctx.option_chain.attrs.get("data_provenance"),
+            option_chain=option_provenance,
         )
 
     @staticmethod
