@@ -268,17 +268,24 @@ class IntelligenceService:
             conviction_score = float(
                 getattr(conviction, "conviction", 0.0) or 0.0
             )
+
             opportunity_score = float(
-                getattr(opportunity, "quality", 0.0) or 0.0
+                getattr(opportunity, "score", 0.0) or 0.0
             )
+
+            evidence_summary = self._build_evidence_summary(
+                families,
+                cross_family,
+            )
+
         else:
+            cross_family = None
             direction = "NEUTRAL"
             conviction_score = 0.0
             opportunity_score = 0.0
             primary_scenario = None
             alternative_scenario = None
-
-        data_quality = self._build_data_quality(runtime_context)
+            evidence_summary = self._build_evidence_summary(families, None)
 
         return IntelligenceResult(
             record=record,
@@ -287,18 +294,26 @@ class IntelligenceService:
             confidence_before=confidence_before,
             confidence_after=confidence_after,
             explanation=historical_evidence.explanation,
-            timestamp=getattr(runtime_context, "timestamp", None),
+            timestamp=record.timestamp,
             direction=direction,
-            conviction=conviction_score,
-            opportunity_quality=opportunity_score,
-            execution_quality=0.0,
-            risk_quality=0.0,
-            evidence_items=tuple(evidence_items),
-            evidence_summary=self._build_evidence_summary(families, cross_family)
-            if synthesis is not None
-            else EvidenceSummary(),
+            conviction=max(0.0, min(100.0, conviction_score)),
+            opportunity_quality=max(0.0, min(100.0, opportunity_score)),
+            evidence_items=evidence_items,
+            evidence_summary=evidence_summary,
             regime=regime_state,
             primary_scenario=primary_scenario,
             alternative_scenario=alternative_scenario,
-            data_quality=data_quality,
+            invalidation=(
+                tuple(
+                    item
+                    for item in (
+                        primary_scenario.invalidation
+                        if primary_scenario is not None
+                        else ""
+                    ).split(";")
+                    if item.strip()
+                )
+            ),
+            reasons=tuple(item.reason for item in evidence_items if item.reason),
+            data_quality=self._build_data_quality(runtime_context),
         )
