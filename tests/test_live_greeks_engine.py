@@ -4,9 +4,6 @@ from engine.live_greeks_engine import LiveGreeksEngine
 
 
 def test_live_greeks_preserves_chain_and_marks_invalid_contract_missing():
-    # Use premiums that are known to be consistent with a solvable Black-Scholes
-    # IV for the selected long-dated expiry. The second CE is deliberately
-    # missing and must remain unavailable rather than becoming zero.
     option_chain = pd.DataFrame(
         [
             {
@@ -41,8 +38,8 @@ def test_live_greeks_preserves_chain_and_marks_invalid_contract_missing():
     )
 
     assert len(result) == len(option_chain)
-    assert result.loc[1, "CE_IV"] is None
-    assert result.loc[1, "CE_DELTA"] is None
+    assert pd.isna(result.loc[1, "CE_IV"])
+    assert pd.isna(result.loc[1, "CE_DELTA"])
     assert pd.notna(result.loc[0, "CE_IV"])
     assert pd.notna(result.loc[0, "PE_IV"])
 
