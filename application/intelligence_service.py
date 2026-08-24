@@ -215,6 +215,8 @@ class IntelligenceService:
         )
 
     def analyze(self, runtime_context) -> IntelligenceResult:
+        data_quality = self._build_data_quality(runtime_context)
+
         record = self._feature_extractor.extract(runtime_context)
 
         historical_evidence = self._evidence_engine.analyze(
@@ -266,8 +268,6 @@ class IntelligenceService:
             direction = getattr(cross_family, "direction", "NEUTRAL")
 
             # ConvictionResult exposes the canonical score as `conviction`.
-            # Do not read a non-existent `score` attribute, which silently
-            # converts every real conviction value to the default 0.0.
             conviction_score = float(
                 getattr(conviction, "conviction", 0.0) or 0.0
             )
@@ -289,6 +289,18 @@ class IntelligenceService:
             primary_scenario = None
             alternative_scenario = None
             evidence_summary = self._build_evidence_summary(families, None)
+
+        # INVALID market data is a hard intelligence gate.  We retain the
+        # diagnostic evidence, but do not expose a directional conviction,
+        # opportunity score, or scenario derived from data that failed the
+        # integrity contract.
+        if data_quality.invalid:
+            recommendation = "WAIT"
+            direction = "NEUTRAL"
+            conviction_score = 0.0
+            opportunity_score = 0.0
+            primary_scenario = None
+            alternative_scenario = None
 
         return IntelligenceResult(
             record=record,
@@ -318,5 +330,5 @@ class IntelligenceService:
                 )
             ),
             reasons=tuple(item.reason for item in evidence_items if item.reason),
-            data_quality=self._build_data_quality(runtime_context),
+            data_quality=data_quality,
         )
