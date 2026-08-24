@@ -65,12 +65,12 @@ def render(intelligence):
         st.warning("Freshness: UNVERIFIED — provider quote timestamp is unavailable.")
 
     if integrity == "SUSPECT":
-        st.error("Data integrity: SUSPECT — option quote validation flagged an issue.")
+        st.warning("Data integrity: SUSPECT — option quote validation flagged an issue.")
     elif integrity == "UNVERIFIED":
         st.info("Data integrity: UNVERIFIED — no integrity failure was detected.")
 
     if reasons:
-        with st.expander("View data-quality details"):
+        with st.expander("View data-quality details", expanded=False):
             for reason in _compact_provenance_reasons(reasons):
                 st.write(f"• {reason}")
 
