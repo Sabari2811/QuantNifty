@@ -36,6 +36,9 @@ class _Instrument:
     def get_scrip_code(self, segment, security_id):
         return "NIDX_40000001"
 
+    def get_nearest_weekly_expiry(self, symbol):
+        return "08/25/2026 14:00"
+
 
 class _CandleManager:
     def to_dataframe(self, candles):
