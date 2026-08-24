@@ -13,13 +13,14 @@ class AcquisitionProvenance:
     acquired_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
-    provider_timestamp: datetime | None = None
     expected_count: int = 0
     received_count: int = 0
     missing_count: int = 0
     freshness_verified: bool = False
     freshness_seconds: float | None = None
     reasons: tuple[str, ...] = ()
+    # Kept last so existing positional construction remains compatible.
+    provider_timestamp: datetime | None = None
 
     def __post_init__(self) -> None:
         if self.expected_count < 0:
@@ -66,7 +67,6 @@ class AcquisitionProvenance:
         return cls(
             source=str(value.get("source", "")),
             acquired_at=acquired_at,
-            provider_timestamp=provider_timestamp,
             expected_count=int(value.get("expected_count", 0)),
             received_count=int(value.get("received_count", 0)),
             missing_count=int(value.get("missing_count", 0)),
@@ -77,6 +77,7 @@ class AcquisitionProvenance:
                 else float(value["freshness_seconds"])
             ),
             reasons=tuple(value.get("reasons", ())),
+            provider_timestamp=provider_timestamp,
         )
 
 
