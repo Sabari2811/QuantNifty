@@ -1,6 +1,9 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pandas as pd
+
+from core.data_provenance import RuntimeDataProvenance
 from engine.market_data_pipeline import MarketDataPipeline
 
 
@@ -36,7 +39,7 @@ class _Instrument:
 
 class _CandleManager:
     def to_dataframe(self, candles):
-        return SimpleNamespace(__len__=lambda self: len(candles))
+        return pd.DataFrame(candles)
 
 
 def _pipeline():
@@ -61,20 +64,24 @@ def test_provider_candle_timestamp_is_extracted_as_utc():
     assert result == datetime.fromtimestamp(1787566200, tz=timezone.utc)
 
 
-def test_provider_candle_timestamp_is_verified_when_not_in_future():
+def test_historical_acquisition_records_provider_timestamp_and_freshness():
     pipeline = _pipeline()
     ctx = SimpleNamespace(
         symbol="NIFTY",
-        data_provenance=SimpleNamespace(spot=None, option_chain=None),
+        data_provenance=RuntimeDataProvenance(),
     )
 
-    # Exercise the timestamp/provenance contract without depending on a live clock.
-    candles = _Provider().get_historical_data()
-    provider_timestamp = pipeline._provider_candle_timestamp(candles)
+    pipeline._fetch_historical_candles(ctx)
 
-    assert provider_timestamp is not None
-    assert provider_timestamp.tzinfo == timezone.utc
-    assert provider_timestamp <= datetime.now(timezone.utc)
+    provenance = ctx.data_provenance.candles
+    assert provenance is not None
+    assert provenance.provider_timestamp == datetime(
+        2026, 8, 24, 10, 5, tzinfo=timezone.utc
+    )
+    assert provenance.freshness_verified is True
+    assert provenance.freshness_seconds is not None
+    assert provenance.freshness_seconds >= 0
+    assert provenance.reasons == ("provider_candle_timestamp",)
 
 
 def test_missing_provider_candle_timestamp_is_unverified():
