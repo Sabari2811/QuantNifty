@@ -36,13 +36,14 @@ def _get_level(strike, analytics):
 # ==========================================================
 
 def _display_series(series, decimals=None):
-    """Return the explicit display representation used by UI tests."""
+    """Keep the transport/display Series numeric; preserve missing data as NA."""
 
     values = pd.to_numeric(series, errors="coerce")
 
-    return values.map(
-        lambda value: _format_series_value(value, decimals)
-    ).astype("string")
+    if decimals is not None:
+        values = values.round(decimals)
+
+    return values
 
 
 def _format_series_value(value, decimals=None):
@@ -63,18 +64,9 @@ def _format_series_value(value, decimals=None):
 
 
 def _format_numeric_value(value, decimals=None):
-    """Format a numeric scalar for dataframe transport/rendering."""
+    """Format a numeric scalar for dataframe rendering."""
 
-    if pd.isna(value):
-        return "—"
-
-    if decimals is not None:
-        return f"{float(value):.{decimals}f}"
-
-    if float(value).is_integer():
-        return f"{float(value):.0f}"
-
-    return f"{float(value):g}"
+    return _format_series_value(value, decimals)
 
 
 def _format_missing(value):
@@ -190,7 +182,7 @@ def show(ctx):
     )
 
     for source, column, decimals in numeric_columns:
-        display[column] = pd.to_numeric(df[source], errors="coerce")
+        display[column] = _display_series(df[source], decimals)
         display_decimals[column] = decimals
 
     display["Strike"] = pd.to_numeric(df["Strike"], errors="coerce")
