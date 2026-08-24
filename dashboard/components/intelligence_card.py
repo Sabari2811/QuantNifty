@@ -31,8 +31,8 @@ def render(intelligence):
     c5, c6, c7, c8 = st.columns(4)
     c5.metric("Regime", _value(regime, "regime"))
     c6.metric("Regime Confidence", f"{float(_value(regime, 'confidence', 0.0)):.1f}%")
-    c7.metric("Data Quality", f"{float(_value(quality, 'score', 0.0)):.1f}/100")
-    c8.metric("Quality State", _value(quality, "status"))
+    c7.metric("Data Coverage", f"{float(_value(quality, 'coverage_score', _value(quality, 'score', 0.0))):.1f}/100")
+    c8.metric("Integrity", _value(quality, "integrity_status", _value(quality, "status")))
 
     freshness = _value(quality, "freshness_status")
     if freshness == "VERIFIED":
