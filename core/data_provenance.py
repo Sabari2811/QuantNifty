@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +39,34 @@ class AcquisitionProvenance:
             and self.missing_count == 0
         )
 
+    @classmethod
+    def from_dict(cls, value: dict[str, Any] | None) -> "AcquisitionProvenance | None":
+        if value is None:
+            return None
+
+        acquired_at = value.get("acquired_at")
+        if isinstance(acquired_at, str):
+            acquired_at = datetime.fromisoformat(
+                acquired_at.replace("Z", "+00:00")
+            )
+        elif acquired_at is None:
+            acquired_at = datetime.now(timezone.utc)
+
+        return cls(
+            source=str(value.get("source", "")),
+            acquired_at=acquired_at,
+            expected_count=int(value.get("expected_count", 0)),
+            received_count=int(value.get("received_count", 0)),
+            missing_count=int(value.get("missing_count", 0)),
+            freshness_verified=bool(value.get("freshness_verified", False)),
+            freshness_seconds=(
+                None
+                if value.get("freshness_seconds") is None
+                else float(value["freshness_seconds"])
+            ),
+            reasons=tuple(value.get("reasons", ())),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class RuntimeDataProvenance:
@@ -56,3 +85,13 @@ class RuntimeDataProvenance:
         )
         present = tuple(item for item in acquisitions if item is not None)
         return bool(present) and all(item.complete for item in present)
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any] | None) -> "RuntimeDataProvenance":
+        if not value:
+            return cls()
+        return cls(
+            option_chain=AcquisitionProvenance.from_dict(value.get("option_chain")),
+            candles=AcquisitionProvenance.from_dict(value.get("candles")),
+            spot=AcquisitionProvenance.from_dict(value.get("spot")),
+        )
