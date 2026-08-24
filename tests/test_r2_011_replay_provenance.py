@@ -1,11 +1,13 @@
 import json
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from core.data_provenance import (
     AcquisitionProvenance,
     RuntimeDataProvenance,
 )
 from recording.snapshot_manifest import SnapshotManifest
+from recording.snapshot_recorder import SnapshotRecorder
 from simulation.replay_loader import ReplayLoader
 
 
@@ -44,43 +46,32 @@ def _provenance():
     )
 
 
-def test_runtime_provenance_round_trips_without_semantic_loss(tmp_path):
-    original = _provenance()
-
-    encoded = {
+def _runtime_payload(provenance):
+    return {
         "data_provenance": {
-            "spot": {
-                "source": original.spot.source,
-                "acquired_at": original.spot.acquired_at.isoformat(),
-                "expected_count": original.spot.expected_count,
-                "received_count": original.spot.received_count,
-                "missing_count": original.spot.missing_count,
-                "freshness_verified": original.spot.freshness_verified,
-                "freshness_seconds": original.spot.freshness_seconds,
-                "reasons": list(original.spot.reasons),
-            },
-            "option_chain": {
-                "source": original.option_chain.source,
-                "acquired_at": original.option_chain.acquired_at.isoformat(),
-                "expected_count": original.option_chain.expected_count,
-                "received_count": original.option_chain.received_count,
-                "missing_count": original.option_chain.missing_count,
-                "freshness_verified": original.option_chain.freshness_verified,
-                "freshness_seconds": original.option_chain.freshness_seconds,
-                "reasons": list(original.option_chain.reasons),
-            },
-            "candles": {
-                "source": original.candles.source,
-                "acquired_at": original.candles.acquired_at.isoformat(),
-                "expected_count": original.candles.expected_count,
-                "received_count": original.candles.received_count,
-                "missing_count": original.candles.missing_count,
-                "freshness_verified": original.candles.freshness_verified,
-                "freshness_seconds": original.candles.freshness_seconds,
-                "reasons": list(original.candles.reasons),
-            },
+            name: {
+                "source": item.source,
+                "acquired_at": item.acquired_at.isoformat(),
+                "expected_count": item.expected_count,
+                "received_count": item.received_count,
+                "missing_count": item.missing_count,
+                "freshness_verified": item.freshness_verified,
+                "freshness_seconds": item.freshness_seconds,
+                "reasons": list(item.reasons),
+            }
+            for name, item in (
+                ("spot", provenance.spot),
+                ("option_chain", provenance.option_chain),
+                ("candles", provenance.candles),
+            )
+            if item is not None
         }
     }
+
+
+def test_runtime_provenance_round_trips_without_semantic_loss(tmp_path):
+    original = _provenance()
+    encoded = _runtime_payload(original)
 
     path = tmp_path / "runtime.json"
     path.write_text(json.dumps(encoded), encoding="utf-8")
@@ -90,6 +81,42 @@ def test_runtime_provenance_round_trips_without_semantic_loss(tmp_path):
     )
 
     assert restored == original
+
+
+def test_snapshot_recorder_to_replay_loader_preserves_provenance(tmp_path):
+    original = _provenance()
+    ctx = SimpleNamespace(
+        timestamp="24-Aug-2026 04:55:15",
+        cycle_no=1,
+        symbol="NIFTY",
+        spot=24252.0,
+        expiry="25-Aug-2026",
+        runtime_status="IDLE",
+        regime="TRENDING",
+        trade_status="WAIT",
+        trade_block_reason="",
+        data_provenance=original,
+        analytics={},
+        decision=None,
+        explanation=None,
+        option_chain=None,
+        greeks_df=None,
+    )
+
+    recorder = SnapshotRecorder(root=tmp_path)
+    recorder.save(ctx)
+    folder = tmp_path / "24-Aug-2026" / "000001_04-55-15"
+
+    snapshot = ReplayLoader().load(folder)
+
+    assert snapshot.data_provenance == original
+    assert snapshot.data_provenance.spot.freshness_verified is True
+    assert snapshot.data_provenance.spot.freshness_seconds == 1.25
+    assert snapshot.data_provenance.option_chain.received_count == 20
+    assert snapshot.data_provenance.option_chain.missing_count == 2
+    assert snapshot.data_provenance.candles.reasons == (
+        "provider_candle_timestamp_not_used_for_freshness",
+    )
 
 
 def test_replay_loader_restores_canonical_provenance(tmp_path):
@@ -102,38 +129,7 @@ def test_replay_loader_restores_canonical_provenance(tmp_path):
         "timestamp": "24-Aug-2026 04:55:15",
         "cycle_no": 1,
         "symbol": "NIFTY",
-        "data_provenance": {
-            "spot": {
-                "source": original.spot.source,
-                "acquired_at": original.spot.acquired_at.isoformat(),
-                "expected_count": original.spot.expected_count,
-                "received_count": original.spot.received_count,
-                "missing_count": original.spot.missing_count,
-                "freshness_verified": original.spot.freshness_verified,
-                "freshness_seconds": original.spot.freshness_seconds,
-                "reasons": list(original.spot.reasons),
-            },
-            "option_chain": {
-                "source": original.option_chain.source,
-                "acquired_at": original.option_chain.acquired_at.isoformat(),
-                "expected_count": original.option_chain.expected_count,
-                "received_count": original.option_chain.received_count,
-                "missing_count": original.option_chain.missing_count,
-                "freshness_verified": original.option_chain.freshness_verified,
-                "freshness_seconds": original.option_chain.freshness_seconds,
-                "reasons": list(original.option_chain.reasons),
-            },
-            "candles": {
-                "source": original.candles.source,
-                "acquired_at": original.candles.acquired_at.isoformat(),
-                "expected_count": original.candles.expected_count,
-                "received_count": original.candles.received_count,
-                "missing_count": original.candles.missing_count,
-                "freshness_verified": original.candles.freshness_verified,
-                "freshness_seconds": original.candles.freshness_seconds,
-                "reasons": list(original.candles.reasons),
-            },
-        },
+        **_runtime_payload(original),
     }
     (folder / "runtime.json").write_text(json.dumps(runtime), encoding="utf-8")
 
