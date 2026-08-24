@@ -21,6 +21,10 @@ class AcquisitionProvenance:
     reasons: tuple[str, ...] = ()
     # Kept last so existing positional construction remains compatible.
     provider_timestamp: datetime | None = None
+    # Separate from freshness: integrity is about whether received values
+    # are structurally/pricing-consistent, not whether they are fresh.
+    integrity_status: str = "UNVERIFIED"
+    integrity_reasons: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.expected_count < 0:
@@ -33,6 +37,15 @@ class AcquisitionProvenance:
             raise ValueError("received_count cannot exceed expected_count")
         if self.freshness_seconds is not None and self.freshness_seconds < 0:
             raise ValueError("freshness_seconds cannot be negative")
+        if self.integrity_status not in {
+            "UNVERIFIED",
+            "VALID",
+            "SUSPECT",
+            "INVALID",
+        }:
+            raise ValueError(
+                "integrity_status must be UNVERIFIED, VALID, SUSPECT, or INVALID"
+            )
 
     @property
     def complete(self) -> bool:
@@ -78,6 +91,8 @@ class AcquisitionProvenance:
             ),
             reasons=tuple(value.get("reasons", ())),
             provider_timestamp=provider_timestamp,
+            integrity_status=str(value.get("integrity_status", "UNVERIFIED")),
+            integrity_reasons=tuple(value.get("integrity_reasons", ())),
         )
 
 
