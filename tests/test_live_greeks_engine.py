@@ -4,16 +4,19 @@ from engine.live_greeks_engine import LiveGreeksEngine
 
 
 def test_live_greeks_preserves_chain_and_marks_invalid_contract_missing():
+    # Use premiums that are known to be consistent with a solvable Black-Scholes
+    # IV for the selected long-dated expiry. The second CE is deliberately
+    # missing and must remain unavailable rather than becoming zero.
     option_chain = pd.DataFrame(
         [
             {
                 "Strike": 25000,
                 "CE_ID": 111,
-                "CE_LTP": 300,
+                "CE_LTP": 1589,
                 "CE_OI": 45000,
                 "CE_VOLUME": 1200,
                 "PE_ID": 222,
-                "PE_LTP": 280,
+                "PE_LTP": 1534,
                 "PE_OI": 43000,
                 "PE_VOLUME": 900,
             },
@@ -24,7 +27,7 @@ def test_live_greeks_preserves_chain_and_marks_invalid_contract_missing():
                 "CE_OI": 39000,
                 "CE_VOLUME": 950,
                 "PE_ID": 444,
-                "PE_LTP": 165,
+                "PE_LTP": 1584,
                 "PE_OI": 47000,
                 "PE_VOLUME": 1300,
             },
@@ -48,10 +51,10 @@ def test_live_greeks_does_not_mutate_input():
     option_chain = pd.DataFrame(
         [{
             "Strike": 25000,
-            "CE_LTP": 300,
+            "CE_LTP": 1589,
             "CE_OI": 45000,
             "CE_VOLUME": 1200,
-            "PE_LTP": 280,
+            "PE_LTP": 1534,
             "PE_OI": 43000,
             "PE_VOLUME": 900,
         }]
