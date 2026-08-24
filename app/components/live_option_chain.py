@@ -36,14 +36,9 @@ def _get_level(strike, analytics):
 # ==========================================================
 
 def _display_series(series, decimals=None):
-    """Round numeric observations while preserving missing values as NA.
+    """Preserve numeric dtype; style missing values as '—' at render time."""
 
-    Missing-value glyphs are applied only by the table formatter. Keeping
-    missing observations as NA here preserves numeric pandas dtypes and avoids
-    Arrow serialization failures when Streamlit renders the dataframe.
-    """
-
-    values = series.copy()
+    values = pd.to_numeric(series, errors="coerce")
 
     if decimals is not None:
         values = values.round(decimals)
@@ -145,7 +140,7 @@ def show(ctx):
     display["CE Vega"] = _display_series(df["CE_VEGA"], 4)
     display["CE Rho"] = _display_series(df["CE_RHO"], 4)
 
-    display["Strike"] = df["Strike"]
+    display["Strike"] = pd.to_numeric(df["Strike"], errors="coerce")
 
     display["Level"] = display["Strike"].apply(
         lambda x: _get_level(x, analytics)
@@ -163,12 +158,17 @@ def show(ctx):
 
     atm = _find_atm(display, ctx.spot)
 
-    styled = display.style.apply(
+    styled = display.style.format(
+        subset=[
+            column
+            for column in display.columns
+            if column != "Level"
+        ],
+        na_rep="—",
+    ).apply(
         _highlight_rows,
         axis=1,
         atm=atm,
-    ).format(
-        na_rep="—",
     )
 
     st.dataframe(
