@@ -44,6 +44,39 @@ def test_runtime_provenance_complete_when_all_required_inputs_are_complete():
     assert runtime.complete is True
 
 
+def test_provider_timestamp_round_trips_without_loss():
+    provider_timestamp = datetime(
+        2026, 8, 24, 10, 5, tzinfo=timezone.utc
+    )
+    original = AcquisitionProvenance(
+        source="historical",
+        acquired_at=datetime(
+            2026, 8, 24, 10, 6, tzinfo=timezone.utc
+        ),
+        provider_timestamp=provider_timestamp,
+        expected_count=1,
+        received_count=1,
+        missing_count=0,
+        freshness_verified=True,
+        freshness_seconds=60.0,
+        reasons=("provider_candle_timestamp",),
+    )
+
+    restored = AcquisitionProvenance.from_dict({
+        "source": original.source,
+        "acquired_at": original.acquired_at.isoformat(),
+        "provider_timestamp": original.provider_timestamp.isoformat(),
+        "expected_count": original.expected_count,
+        "received_count": original.received_count,
+        "missing_count": original.missing_count,
+        "freshness_verified": original.freshness_verified,
+        "freshness_seconds": original.freshness_seconds,
+        "reasons": list(original.reasons),
+    })
+
+    assert restored == original
+
+
 def test_data_quality_is_derived_from_runtime_provenance():
     class Context:
         data_provenance = RuntimeDataProvenance(
