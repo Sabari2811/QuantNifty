@@ -36,14 +36,19 @@ def _get_level(strike, analytics):
 # ==========================================================
 
 def _display_series(series, decimals=None):
-    """Format missing observations without hiding legitimate zeroes."""
+    """Round numeric observations while preserving missing values as NA.
+
+    Missing-value glyphs are applied only by the table formatter. Keeping
+    missing observations as NA here preserves numeric pandas dtypes and avoids
+    Arrow serialization failures when Streamlit renders the dataframe.
+    """
 
     values = series.copy()
 
     if decimals is not None:
         values = values.round(decimals)
 
-    return values.where(values.notna(), "—")
+    return values
 
 
 def _provenance_message(ctx):
@@ -162,6 +167,8 @@ def show(ctx):
         _highlight_rows,
         axis=1,
         atm=atm,
+    ).format(
+        na_rep="—",
     )
 
     st.dataframe(
