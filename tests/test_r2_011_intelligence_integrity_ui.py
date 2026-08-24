@@ -53,6 +53,8 @@ def test_suspect_integrity_is_not_presented_as_acceptable():
     payload = adapt_intelligence(_result("SUSPECT"))
 
     assert payload["data_quality"]["status"] == "SUSPECT"
+    assert payload["data_quality"]["integrity_status"] == "SUSPECT"
+    assert payload["data_quality"]["coverage_score"] == 100.0
     assert payload["data_quality"]["freshness_status"] == "UNVERIFIED"
     assert "integrity_suspect:options" in payload["data_quality"]["reasons"]
 
@@ -61,4 +63,6 @@ def test_unverified_without_integrity_issue_remains_acceptable():
     payload = adapt_intelligence(_result("UNVERIFIED"))
 
     assert payload["data_quality"]["status"] == "ACCEPTABLE"
+    assert payload["data_quality"]["integrity_status"] == "UNVERIFIED"
+    assert payload["data_quality"]["coverage_score"] == 100.0
     assert payload["data_quality"]["freshness_status"] == "UNVERIFIED"
