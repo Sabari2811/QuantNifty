@@ -9,11 +9,11 @@ def test_live_greeks_preserves_chain_and_marks_invalid_contract_missing():
             {
                 "Strike": 25000,
                 "CE_ID": 111,
-                "CE_LTP": 150,
+                "CE_LTP": 300,
                 "CE_OI": 45000,
                 "CE_VOLUME": 1200,
                 "PE_ID": 222,
-                "PE_LTP": 140,
+                "PE_LTP": 280,
                 "PE_OI": 43000,
                 "PE_VOLUME": 900,
             },
@@ -48,10 +48,10 @@ def test_live_greeks_does_not_mutate_input():
     option_chain = pd.DataFrame(
         [{
             "Strike": 25000,
-            "CE_LTP": 150,
+            "CE_LTP": 300,
             "CE_OI": 45000,
             "CE_VOLUME": 1200,
-            "PE_LTP": 140,
+            "PE_LTP": 280,
             "PE_OI": 43000,
             "PE_VOLUME": 900,
         }]
