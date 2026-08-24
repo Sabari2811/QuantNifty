@@ -32,14 +32,6 @@ def show(ctx):
         if decision.signal.name == Signal.WAIT.value:
 
             st.info("No trade generated for the current market conditions.")
-
-            if decision.reasons:
-
-                st.markdown("**Reasons**")
-
-                for reason in decision.reasons:
-                    st.write(f"• {reason}")
-
             return
 
         # --------------------------------------------------
