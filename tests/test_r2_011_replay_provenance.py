@@ -1,0 +1,163 @@
+import json
+from datetime import datetime, timezone
+
+from core.data_provenance import (
+    AcquisitionProvenance,
+    RuntimeDataProvenance,
+)
+from recording.snapshot_manifest import SnapshotManifest
+from simulation.replay_loader import ReplayLoader
+
+
+def _provenance():
+    return RuntimeDataProvenance(
+        spot=AcquisitionProvenance(
+            source="INDMoney index quote",
+            acquired_at=datetime(2026, 8, 24, 4, 55, 12, 123456, tzinfo=timezone.utc),
+            expected_count=1,
+            received_count=1,
+            missing_count=0,
+            freshness_verified=True,
+            freshness_seconds=1.25,
+            reasons=("provider_timestamp",),
+        ),
+        option_chain=AcquisitionProvenance(
+            source="INDMoney option quotes",
+            acquired_at=datetime(2026, 8, 24, 4, 55, 13, 654321, tzinfo=timezone.utc),
+            expected_count=22,
+            received_count=20,
+            missing_count=2,
+            freshness_verified=False,
+            freshness_seconds=None,
+            reasons=("two_contracts_missing", "provider_timestamp_unavailable"),
+        ),
+        candles=AcquisitionProvenance(
+            source="INDMoney historical candles:NIDX_40000001",
+            acquired_at=datetime(2026, 8, 24, 4, 55, 14, tzinfo=timezone.utc),
+            expected_count=225,
+            received_count=225,
+            missing_count=0,
+            freshness_verified=False,
+            freshness_seconds=None,
+            reasons=("provider_candle_timestamp_not_used_for_freshness",),
+        ),
+    )
+
+
+def test_runtime_provenance_round_trips_without_semantic_loss(tmp_path):
+    original = _provenance()
+
+    encoded = {
+        "data_provenance": {
+            "spot": {
+                "source": original.spot.source,
+                "acquired_at": original.spot.acquired_at.isoformat(),
+                "expected_count": original.spot.expected_count,
+                "received_count": original.spot.received_count,
+                "missing_count": original.spot.missing_count,
+                "freshness_verified": original.spot.freshness_verified,
+                "freshness_seconds": original.spot.freshness_seconds,
+                "reasons": list(original.spot.reasons),
+            },
+            "option_chain": {
+                "source": original.option_chain.source,
+                "acquired_at": original.option_chain.acquired_at.isoformat(),
+                "expected_count": original.option_chain.expected_count,
+                "received_count": original.option_chain.received_count,
+                "missing_count": original.option_chain.missing_count,
+                "freshness_verified": original.option_chain.freshness_verified,
+                "freshness_seconds": original.option_chain.freshness_seconds,
+                "reasons": list(original.option_chain.reasons),
+            },
+            "candles": {
+                "source": original.candles.source,
+                "acquired_at": original.candles.acquired_at.isoformat(),
+                "expected_count": original.candles.expected_count,
+                "received_count": original.candles.received_count,
+                "missing_count": original.candles.missing_count,
+                "freshness_verified": original.candles.freshness_verified,
+                "freshness_seconds": original.candles.freshness_seconds,
+                "reasons": list(original.candles.reasons),
+            },
+        }
+    }
+
+    path = tmp_path / "runtime.json"
+    path.write_text(json.dumps(encoded), encoding="utf-8")
+
+    restored = RuntimeDataProvenance.from_dict(
+        json.loads(path.read_text(encoding="utf-8"))["data_provenance"]
+    )
+
+    assert restored == original
+
+
+def test_replay_loader_restores_canonical_provenance(tmp_path):
+    original = _provenance()
+    folder = tmp_path / "snapshot"
+    folder.mkdir()
+    SnapshotManifest().save(folder)
+
+    runtime = {
+        "timestamp": "24-Aug-2026 04:55:15",
+        "cycle_no": 1,
+        "symbol": "NIFTY",
+        "data_provenance": {
+            "spot": {
+                "source": original.spot.source,
+                "acquired_at": original.spot.acquired_at.isoformat(),
+                "expected_count": original.spot.expected_count,
+                "received_count": original.spot.received_count,
+                "missing_count": original.spot.missing_count,
+                "freshness_verified": original.spot.freshness_verified,
+                "freshness_seconds": original.spot.freshness_seconds,
+                "reasons": list(original.spot.reasons),
+            },
+            "option_chain": {
+                "source": original.option_chain.source,
+                "acquired_at": original.option_chain.acquired_at.isoformat(),
+                "expected_count": original.option_chain.expected_count,
+                "received_count": original.option_chain.received_count,
+                "missing_count": original.option_chain.missing_count,
+                "freshness_verified": original.option_chain.freshness_verified,
+                "freshness_seconds": original.option_chain.freshness_seconds,
+                "reasons": list(original.option_chain.reasons),
+            },
+            "candles": {
+                "source": original.candles.source,
+                "acquired_at": original.candles.acquired_at.isoformat(),
+                "expected_count": original.candles.expected_count,
+                "received_count": original.candles.received_count,
+                "missing_count": original.candles.missing_count,
+                "freshness_verified": original.candles.freshness_verified,
+                "freshness_seconds": original.candles.freshness_seconds,
+                "reasons": list(original.candles.reasons),
+            },
+        },
+    }
+    (folder / "runtime.json").write_text(json.dumps(runtime), encoding="utf-8")
+
+    snapshot = ReplayLoader().load(folder)
+
+    assert snapshot.data_provenance == original
+    assert snapshot.data_provenance.spot.freshness_verified is True
+    assert snapshot.data_provenance.spot.freshness_seconds == 1.25
+    assert snapshot.data_provenance.option_chain.reasons == (
+        "two_contracts_missing",
+        "provider_timestamp_unavailable",
+    )
+
+
+def test_replay_loader_preserves_missing_provenance_as_empty_contract(tmp_path):
+    folder = tmp_path / "legacy_snapshot"
+    folder.mkdir()
+    SnapshotManifest().save(folder)
+    (folder / "runtime.json").write_text(
+        json.dumps({"timestamp": "24-Aug-2026 04:55:15"}),
+        encoding="utf-8",
+    )
+
+    snapshot = ReplayLoader().load(folder)
+
+    assert snapshot.data_provenance == RuntimeDataProvenance()
+    assert snapshot.data_provenance.complete is False
