@@ -4,13 +4,14 @@ import pandas as pd
 from app.components.live_option_chain import _display_series, _provenance_message
 
 
-def test_display_series_preserves_real_zero_and_marks_missing():
+def test_display_series_preserves_real_zero_and_marks_missing_as_na():
     values = pd.Series([0.0, np.nan, 12.5])
 
     result = _display_series(values, 2)
 
+    assert pd.api.types.is_numeric_dtype(result)
     assert result.iloc[0] == 0.0
-    assert result.iloc[1] == "—"
+    assert pd.isna(result.iloc[1])
     assert result.iloc[2] == 12.5
 
 
