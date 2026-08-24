@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from analytics.intelligence.result import IntelligenceResult
+from analytics.intelligence.result import (
+    EvidenceSummary,
+    IntelligenceResult,
+)
+from analytics.intelligence.evidence.models import HistoricalEvidence
 
 
 def _scenario_payload(scenario):
@@ -22,6 +26,10 @@ def adapt_intelligence(result: IntelligenceResult | None) -> dict | None:
 
     This adapter is observational only. It does not recalculate scores,
     change execution policy, or infer freshness from acquisition time.
+
+    Legacy/test doubles may omit newer R2-005 fields. Missing optional
+    presentation data is represented as an empty payload; no intelligence,
+    freshness, or quality values are inferred.
     """
 
     if result is None:
@@ -38,14 +46,13 @@ def adapt_intelligence(result: IntelligenceResult | None) -> dict | None:
     else:
         quality_status = "ACCEPTABLE"
 
-    # Some legacy/test doubles predate the explicit freshness_verified field.
     # Missing provenance must remain UNVERIFIED; never infer freshness from
     # acquisition time or from the quality score.
     freshness_verified = getattr(quality, "freshness_verified", False)
     freshness_status = "VERIFIED" if freshness_verified else "UNVERIFIED"
 
-    evidence = result.evidence
-    summary = result.evidence_summary
+    evidence = getattr(result, "evidence", None) or HistoricalEvidence()
+    summary = getattr(result, "evidence_summary", None) or EvidenceSummary()
 
     return {
         "contract_version": result.contract_version,
