@@ -7,7 +7,7 @@ class _Provider:
     def get_quotes(self, security_ids):
         return {
             "NFO_101": {
-                "live_price": 100,
+                "live_price": 90,
                 "open_interest": 1000,
                 "volume": 100,
             },
@@ -48,7 +48,7 @@ def test_live_option_chain_attaches_integrity_without_changing_raw_values():
     )
 
     assert isinstance(result, pd.DataFrame)
-    assert result.loc[0, "CE_LTP"] == 100
+    assert result.loc[0, "CE_LTP"] == 90
     assert result.loc[0, "PE_LTP"] == 150
 
     provenance = result.attrs["data_provenance"]
