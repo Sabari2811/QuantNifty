@@ -77,6 +77,24 @@ def test_provider_timestamp_round_trips_without_loss():
     assert restored == original
 
 
+def test_provider_timestamp_field_is_append_only_for_positional_compatibility():
+    acquired_at = datetime(2026, 8, 24, 10, 6, tzinfo=timezone.utc)
+    provenance = AcquisitionProvenance(
+        "historical",
+        acquired_at,
+        1,
+        1,
+        0,
+        True,
+        60.0,
+        ("provider_candle_timestamp",),
+    )
+
+    assert provenance.expected_count == 1
+    assert provenance.received_count == 1
+    assert provenance.provider_timestamp is None
+
+
 def test_data_quality_is_derived_from_runtime_provenance():
     class Context:
         data_provenance = RuntimeDataProvenance(
