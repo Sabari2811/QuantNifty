@@ -8,6 +8,27 @@ def _value(data, key, default="-"):
     return default if value is None else value
 
 
+def _compact_provenance_reasons(reasons):
+    """Turn canonical provenance reasons into short, human-readable details."""
+    labels = {
+        "provider_quote_timestamp_unavailable": "Quote timestamp unavailable",
+        "provider_candle_timestamp": "Provider candle timestamp available",
+        "freshness_unverified:INDMoney index quote": "Index quote freshness unverified",
+        "freshness_unverified:INDMoney option quotes": "Option quote freshness unverified",
+        "integrity_suspect:INDMoney option quotes": "Option quote integrity suspect",
+        "ce_ltp_below_intrinsic": "CE LTP below intrinsic value",
+    }
+
+    compact = []
+    seen = set()
+    for reason in reasons or ():
+        text = labels.get(str(reason), str(reason))
+        if text not in seen:
+            compact.append(text)
+            seen.add(text)
+    return compact
+
+
 def render(intelligence):
     """Render canonical IntelligenceResult data without recomputation."""
 
@@ -35,18 +56,22 @@ def render(intelligence):
     c8.metric("Integrity", _value(quality, "integrity_status", _value(quality, "status")))
 
     freshness = _value(quality, "freshness_status")
+    integrity = _value(quality, "integrity_status", _value(quality, "status"))
+    reasons = _value(quality, "reasons", ())
+
     if freshness == "VERIFIED":
         st.success("Freshness: VERIFIED")
     else:
-        st.warning(
-            "Freshness: UNVERIFIED — this is not the same as stale. "
-            "The current provider does not supply a usable quote timestamp."
-        )
+        st.warning("Freshness: UNVERIFIED — provider quote timestamp is unavailable.")
 
-    reasons = _value(quality, "reasons", ())
+    if integrity == "SUSPECT":
+        st.error("Data integrity: SUSPECT — option quote validation flagged an issue.")
+    elif integrity == "UNVERIFIED":
+        st.info("Data integrity: UNVERIFIED — no integrity failure was detected.")
+
     if reasons:
-        with st.expander("Data-quality provenance"):
-            for reason in reasons:
+        with st.expander("View data-quality details"):
+            for reason in _compact_provenance_reasons(reasons):
                 st.write(f"• {reason}")
 
     primary = _value(intelligence, "primary_scenario")
