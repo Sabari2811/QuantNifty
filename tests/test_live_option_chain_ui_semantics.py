@@ -8,15 +8,24 @@ from app.components.live_option_chain import (
 )
 
 
-def test_display_series_preserves_real_zero_and_marks_missing_as_na():
+def test_display_series_preserves_zero_and_renders_missing_as_dash():
     values = pd.Series([0.0, np.nan, 12.5])
 
     result = _display_series(values, 2)
 
-    assert pd.api.types.is_numeric_dtype(result)
-    assert result.iloc[0] == 0.0
-    assert pd.isna(result.iloc[1])
-    assert result.iloc[2] == 12.5
+    assert result.iloc[0] == "0.00"
+    assert result.iloc[1] == "—"
+    assert result.iloc[2] == "12.50"
+
+
+def test_display_series_formats_integer_like_values_without_decimal_noise():
+    values = pd.Series([5939365.0, 0.0, np.nan])
+
+    result = _display_series(values)
+
+    assert result.iloc[0] == "5939365"
+    assert result.iloc[1] == "0"
+    assert result.iloc[2] == "—"
 
 
 def test_missing_value_formatter_shows_dash_and_preserves_zero():
