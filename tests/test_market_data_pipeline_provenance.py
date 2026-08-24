@@ -42,14 +42,45 @@ class _CandleManager:
         return pd.DataFrame(candles)
 
 
-def _pipeline():
+class _ChainManager:
+    def __init__(self, chain):
+        self.chain = chain
+
+    def get_live_option_chain(self, symbol, spot, strike_levels):
+        return self.chain.copy()
+
+
+def _pipeline(chain=None):
     return MarketDataPipeline(
         provider=_Provider(),
         instrument=_Instrument(),
         market=None,
-        chain_manager=None,
+        chain_manager=_ChainManager(chain) if chain is not None else None,
         candle_manager=_CandleManager(),
     )
+
+
+def _valid_chain():
+    return pd.DataFrame([
+        {
+            "Strike": 25000,
+            "CE_ID": 111,
+            "CE_LTP": 150,
+            "CE_OI": 45000,
+            "CE_VOLUME": 1200,
+            "PE_ID": 222,
+            "PE_LTP": 140,
+            "PE_OI": 43000,
+            "PE_VOLUME": 900,
+        }
+    ])
+
+
+def _suspect_chain():
+    chain = _valid_chain()
+    chain.loc[0, "Strike"] = 24900
+    chain.loc[0, "CE_LTP"] = 120
+    return chain
 
 
 def test_provider_candle_timestamp_is_extracted_as_utc():
@@ -88,3 +119,42 @@ def test_missing_provider_candle_timestamp_is_unverified():
     pipeline = _pipeline()
 
     assert pipeline._provider_candle_timestamp([{"o": 1, "h": 2}]) is None
+
+
+def test_live_option_integrity_is_attached_to_runtime_provenance():
+    pipeline = _pipeline(_suspect_chain())
+    ctx = SimpleNamespace(
+        symbol="NIFTY",
+        spot=25050.0,
+        strike_levels=1,
+        data_provenance=RuntimeDataProvenance(
+            spot=SimpleNamespace(source="spot")
+        ),
+    )
+
+    pipeline._fetch_option_chain(ctx)
+
+    provenance = ctx.data_provenance.option_chain
+    assert provenance is not None
+    assert provenance.integrity_status == "SUSPECT"
+    assert "ce_ltp_below_intrinsic" in provenance.integrity_reasons
+    assert ctx.option_chain.attrs["quote_integrity"]["status"] == "SUSPECT"
+
+
+def test_valid_live_option_chain_is_marked_valid_in_runtime_provenance():
+    pipeline = _pipeline(_valid_chain())
+    ctx = SimpleNamespace(
+        symbol="NIFTY",
+        spot=25050.0,
+        strike_levels=1,
+        data_provenance=RuntimeDataProvenance(
+            spot=SimpleNamespace(source="spot")
+        ),
+    )
+
+    pipeline._fetch_option_chain(ctx)
+
+    provenance = ctx.data_provenance.option_chain
+    assert provenance is not None
+    assert provenance.integrity_status == "VALID"
+    assert provenance.integrity_reasons == ()
