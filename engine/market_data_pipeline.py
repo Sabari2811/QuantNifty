@@ -60,6 +60,26 @@ class MarketDataPipeline:
             option_chain=ctx.option_chain.attrs.get("data_provenance"),
         )
 
+    @staticmethod
+    def _provider_candle_timestamp(candles):
+        """Return the newest provider candle timestamp as an aware UTC datetime."""
+        timestamps = []
+        for candle in candles or []:
+            value = candle.get("ts") if isinstance(candle, dict) else None
+            if value is None:
+                continue
+            try:
+                timestamp = float(value)
+                # Provider documentation defines candle ts in epoch seconds.
+                # Accept milliseconds defensively if a provider response changes.
+                if timestamp > 1_000_000_000_000:
+                    timestamp /= 1000.0
+                timestamps.append(datetime.fromtimestamp(timestamp, tz=timezone.utc))
+            except (TypeError, ValueError, OverflowError, OSError):
+                continue
+
+        return max(timestamps) if timestamps else None
+
     def _fetch_historical_candles(self, ctx):
         security_id = self.instrument.get_index_security_id(ctx.symbol)
         if security_id is None:
@@ -68,7 +88,7 @@ class MarketDataPipeline:
             )
 
         scrip_code = self.instrument.get_scrip_code("NIDX", security_id)
-        end = datetime.now()
+        end = datetime.now(timezone.utc)
         start = end - timedelta(days=5)
 
         candles = self.provider.get_historical_data(
@@ -79,19 +99,38 @@ class MarketDataPipeline:
         )
 
         ctx.candles = self.candle_manager.to_dataframe(candles)
+
+        provider_timestamp = self._provider_candle_timestamp(candles)
+        if provider_timestamp is None:
+            freshness_verified = False
+            freshness_seconds = None
+            freshness_reasons = (
+                "provider_candle_timestamp_unavailable",
+            )
+        elif provider_timestamp > end:
+            freshness_verified = False
+            freshness_seconds = None
+            freshness_reasons = (
+                "provider_candle_timestamp_in_future",
+            )
+        else:
+            freshness_verified = True
+            freshness_seconds = (end - provider_timestamp).total_seconds()
+            freshness_reasons = ("provider_candle_timestamp",)
+
         ctx.data_provenance = RuntimeDataProvenance(
             spot=ctx.data_provenance.spot,
             option_chain=ctx.data_provenance.option_chain,
             candles=AcquisitionProvenance(
                 source=f"INDMoney historical candles:{scrip_code}",
-                acquired_at=end.replace(tzinfo=timezone.utc),
+                acquired_at=end,
+                provider_timestamp=provider_timestamp,
                 expected_count=1,
                 received_count=1 if len(ctx.candles) > 0 else 0,
                 missing_count=0 if len(ctx.candles) > 0 else 1,
-                freshness_verified=False,
-                reasons=(
-                    "provider_candle_timestamp_not_used_for_freshness",
-                ),
+                freshness_verified=freshness_verified,
+                freshness_seconds=freshness_seconds,
+                reasons=freshness_reasons,
             ),
         )
 
