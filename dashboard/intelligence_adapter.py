@@ -22,20 +22,17 @@ def _scenario_payload(scenario):
 
 
 def adapt_intelligence(result: IntelligenceResult | None) -> dict | None:
-    """Adapt the canonical IntelligenceResult into a UI-safe dictionary.
-
-    This adapter is observational only. It does not recalculate scores,
-    change execution policy, or infer freshness from acquisition time.
-
-    Legacy/test doubles may omit newer R2-005 fields. Missing optional
-    presentation data is represented as an empty payload; no intelligence,
-    freshness, or quality values are inferred.
-    """
+    """Adapt the canonical IntelligenceResult into a UI-safe dictionary."""
 
     if result is None:
         return None
 
     quality = result.data_quality
+    quality_reasons = tuple(getattr(quality, "reasons", ()))
+    integrity_suspect = any(
+        reason.startswith("integrity_suspect:")
+        for reason in quality_reasons
+    )
 
     if quality.invalid:
         quality_status = "INVALID"
@@ -43,6 +40,8 @@ def adapt_intelligence(result: IntelligenceResult | None) -> dict | None:
         quality_status = "STALE"
     elif quality.incomplete:
         quality_status = "INCOMPLETE"
+    elif integrity_suspect:
+        quality_status = "SUSPECT"
     else:
         quality_status = "ACCEPTABLE"
 
@@ -115,6 +114,6 @@ def adapt_intelligence(result: IntelligenceResult | None) -> dict | None:
             "stale": quality.stale,
             "incomplete": quality.incomplete,
             "invalid": quality.invalid,
-            "reasons": quality.reasons,
+            "reasons": quality_reasons,
         },
     }
