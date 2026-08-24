@@ -46,6 +46,12 @@ def _display_series(series, decimals=None):
     return values
 
 
+def _format_missing(value):
+    """Render missing numeric observations without changing dataframe dtype."""
+
+    return "—" if pd.isna(value) else value
+
+
 def _provenance_message(ctx):
     """Return a UI warning when acquisition provenance is incomplete."""
 
@@ -158,13 +164,13 @@ def show(ctx):
 
     atm = _find_atm(display, ctx.spot)
 
+    numeric_columns = [
+        column
+        for column in display.columns
+        if column != "Level"
+    ]
     styled = display.style.format(
-        subset=[
-            column
-            for column in display.columns
-            if column != "Level"
-        ],
-        na_rep="—",
+        formatter={column: _format_missing for column in numeric_columns},
     ).apply(
         _highlight_rows,
         axis=1,
