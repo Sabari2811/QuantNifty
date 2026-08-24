@@ -21,9 +21,36 @@ class GreeksEngine:
     # -------------------------------------------------------
 
     def get_time_to_expiry(self, expiry):
-        """Return exact fractional years until expiry using total seconds."""
+        """Return exact fractional years until expiry using total seconds.
+
+        Expiry values can arrive from different provider/instrument layers in
+        either day-first (DD/MM/YYYY) or month-first (MM/DD/YYYY) form. Both
+        are accepted here and normalized to a datetime before the calculation
+        so a provider formatting difference cannot silently invalidate every
+        live Greek.
+        """
         if isinstance(expiry, str):
-            expiry = datetime.strptime(expiry, "%d/%m/%Y %H:%M")
+            parsed = None
+            parse_errors = []
+            for fmt in (
+                "%d/%m/%Y %H:%M",
+                "%m/%d/%Y %H:%M",
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d %H:%M",
+            ):
+                try:
+                    parsed = datetime.strptime(expiry, fmt)
+                    break
+                except ValueError as exc:
+                    parse_errors.append(exc)
+
+            if parsed is None:
+                raise ValueError(
+                    "Unsupported expiry format; expected DD/MM/YYYY HH:MM, "
+                    "MM/DD/YYYY HH:MM, or ISO datetime"
+                ) from parse_errors[-1]
+
+            expiry = parsed
 
         if not isinstance(expiry, datetime):
             raise TypeError("expiry must be a datetime or supported expiry string")
