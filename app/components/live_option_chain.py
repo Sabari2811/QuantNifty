@@ -36,18 +36,29 @@ def _get_level(strike, analytics):
 # ==========================================================
 
 def _display_series(series, decimals=None):
-    """Preserve numeric dtype; style missing values as '—' at render time."""
+    """Return a deterministic UI representation with explicit missing values."""
 
     values = pd.to_numeric(series, errors="coerce")
 
-    if decimals is not None:
-        values = values.round(decimals)
+    def render(value):
+        if pd.isna(value):
+            return "—"
 
-    return values
+        number = float(value)
+
+        if decimals is not None:
+            return f"{number:.{decimals}f}"
+
+        if number.is_integer():
+            return f"{number:.0f}"
+
+        return f"{number:g}"
+
+    return values.map(render).astype("string")
 
 
 def _format_missing(value):
-    """Render missing numeric observations without changing dataframe dtype."""
+    """Render a missing scalar as a visible dash without changing real values."""
 
     return "—" if pd.isna(value) else value
 
@@ -164,14 +175,7 @@ def show(ctx):
 
     atm = _find_atm(display, ctx.spot)
 
-    numeric_columns = [
-        column
-        for column in display.columns
-        if column != "Level"
-    ]
-    styled = display.style.format(
-        formatter={column: _format_missing for column in numeric_columns},
-    ).apply(
+    styled = display.style.apply(
         _highlight_rows,
         axis=1,
         atm=atm,
@@ -180,6 +184,6 @@ def show(ctx):
     st.dataframe(
         styled,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         height=430,
     )
