@@ -5,7 +5,9 @@ from app.components.live_option_chain import (
     _display_series,
     _format_missing,
     _format_series_value,
+    _highlight_rows,
     _provenance_message,
+    _sort_option_chain,
 )
 
 
@@ -71,3 +73,28 @@ def test_provenance_message_is_absent_when_acquisition_is_complete():
         data_provenance = Provenance()
 
     assert _provenance_message(Context()) is None
+
+
+def test_sort_option_chain_is_stable_and_descending_by_strike():
+    display = pd.DataFrame(
+        {
+            "Strike": [23800, 24200, 24000, 24200, 23900],
+            "Level": ["", "🟡 Gamma Flip", "", "", ""],
+        },
+    )
+
+    result = _sort_option_chain(display)
+
+    assert result["Strike"].tolist() == [24200, 24200, 24000, 23900, 23800]
+    assert result["Level"].tolist()[0] == "🟡 Gamma Flip"
+
+
+def test_highlighted_rows_use_dark_text_for_contrast():
+    row = pd.Series({"Strike": 24300, "Level": "🔴 Call Wall"})
+
+    styles = _highlight_rows(row, atm=24200)
+
+    assert len(styles) == 2
+    assert "background-color:#F4C7CC" in styles[0]
+    assert "color:#111827" in styles[0]
+    assert "font-weight:600" in styles[0]
