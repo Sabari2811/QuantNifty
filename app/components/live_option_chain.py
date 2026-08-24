@@ -36,14 +36,43 @@ def _get_level(strike, analytics):
 # ==========================================================
 
 def _display_series(series, decimals=None):
-    """Format missing observations without hiding legitimate zeroes."""
+    """Keep the transport/display Series numeric; preserve missing data as NA."""
 
-    values = series.copy()
+    values = pd.to_numeric(series, errors="coerce")
 
     if decimals is not None:
         values = values.round(decimals)
 
-    return values.where(values.notna(), "—")
+    return values
+
+
+def _format_series_value(value, decimals=None):
+    """Format a numeric scalar for the visible option-chain table."""
+
+    if pd.isna(value):
+        return "—"
+
+    number = float(value)
+
+    if decimals is not None:
+        return f"{number:.{decimals}f}"
+
+    if number.is_integer():
+        return f"{number:.0f}"
+
+    return f"{number:g}"
+
+
+def _format_numeric_value(value, decimals=None):
+    """Format a numeric scalar for dataframe rendering."""
+
+    return _format_series_value(value, decimals)
+
+
+def _format_missing(value):
+    """Render a missing scalar as a visible dash without changing real values."""
+
+    return "—" if pd.isna(value) else value
 
 
 def _provenance_message(ctx):
@@ -129,44 +158,63 @@ def show(ctx):
     analytics = ctx.analytics or {}
 
     display = pd.DataFrame()
+    display_decimals = {}
 
-    display["CE LTP"] = _display_series(df["CE_LTP"])
-    display["CE OI"] = _display_series(df["CE_OI"])
-    display["CE Volume"] = _display_series(df["CE_VOLUME"])
-    display["CE IV"] = _display_series(df["CE_IV"], 4)
-    display["CE Δ"] = _display_series(df["CE_DELTA"], 2)
-    display["CE Γ"] = _display_series(df["CE_GAMMA"], 4)
-    display["CE Θ"] = _display_series(df["CE_THETA"], 4)
-    display["CE Vega"] = _display_series(df["CE_VEGA"], 4)
-    display["CE Rho"] = _display_series(df["CE_RHO"], 4)
+    numeric_columns = (
+        ("CE_LTP", "CE LTP", None),
+        ("CE_OI", "CE OI", None),
+        ("CE_VOLUME", "CE Volume", None),
+        ("CE_IV", "CE IV", 4),
+        ("CE_DELTA", "CE Δ", 2),
+        ("CE_GAMMA", "CE Γ", 4),
+        ("CE_THETA", "CE Θ", 4),
+        ("CE_VEGA", "CE Vega", 4),
+        ("CE_RHO", "CE Rho", 4),
+        ("PE_GAMMA", "PE Γ", 4),
+        ("PE_DELTA", "PE Δ", 2),
+        ("PE_THETA", "PE Θ", 4),
+        ("PE_VEGA", "PE Vega", 4),
+        ("PE_RHO", "PE Rho", 4),
+        ("PE_IV", "PE IV", 4),
+        ("PE_VOLUME", "PE Volume", None),
+        ("PE_OI", "PE OI", None),
+        ("PE_LTP", "PE LTP", None),
+    )
 
-    display["Strike"] = df["Strike"]
+    for source, column, decimals in numeric_columns:
+        display[column] = _display_series(df[source], decimals)
+        display_decimals[column] = decimals
+
+    display["Strike"] = pd.to_numeric(df["Strike"], errors="coerce")
 
     display["Level"] = display["Strike"].apply(
         lambda x: _get_level(x, analytics)
     )
 
-    display["PE Γ"] = _display_series(df["PE_GAMMA"], 4)
-    display["PE Δ"] = _display_series(df["PE_DELTA"], 2)
-    display["PE Θ"] = _display_series(df["PE_THETA"], 4)
-    display["PE Vega"] = _display_series(df["PE_VEGA"], 4)
-    display["PE Rho"] = _display_series(df["PE_RHO"], 4)
-    display["PE IV"] = _display_series(df["PE_IV"], 4)
-    display["PE Volume"] = _display_series(df["PE_VOLUME"])
-    display["PE OI"] = _display_series(df["PE_OI"])
-    display["PE LTP"] = _display_series(df["PE_LTP"])
-
     atm = _find_atm(display, ctx.spot)
 
-    styled = display.style.apply(
-        _highlight_rows,
-        axis=1,
-        atm=atm,
+    formatter = {
+        column: (
+            lambda value, decimals=decimals:
+            _format_numeric_value(value, decimals)
+        )
+        for column, decimals in display_decimals.items()
+    }
+    formatter["Strike"] = lambda value: _format_numeric_value(value)
+
+    styled = (
+        display.style
+        .format(formatter=formatter)
+        .apply(
+            _highlight_rows,
+            axis=1,
+            atm=atm,
+        )
     )
 
     st.dataframe(
         styled,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         height=430,
     )

@@ -12,7 +12,8 @@ from app.components.ai_decision_card import show as ai_decision
 from app.components.trade_plan_card import show as trade_plan
 from app.components.market_intelligence_card import show as market_intelligence
 from app.components.live_option_chain import show as live_option_chain
-from app.components.intelligence_card import show as intelligence
+from dashboard.components.intelligence_card import render as intelligence
+from dashboard.intelligence_adapter import adapt_intelligence
 
 
 def show():
@@ -90,7 +91,7 @@ def show():
     # Intelligence
     # ==========================================================
 
-    intelligence(ctx)
+    intelligence(adapt_intelligence(ctx.intelligence))
 
     st.divider()
 
