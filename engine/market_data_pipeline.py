@@ -30,19 +30,7 @@ class MarketDataPipeline:
         ctx.analytics = snapshot.analytics
         ctx.decision = snapshot.decision
         ctx.explanation = snapshot.explanation
-        ctx.data_provenance = RuntimeDataProvenance(
-            option_chain=ctx.option_chain.attrs.get("data_provenance"),
-            candles=None,
-            spot=AcquisitionProvenance(
-                source="simulation snapshot spot",
-                acquired_at=datetime.now(timezone.utc),
-                expected_count=1,
-                received_count=1,
-                missing_count=0,
-                freshness_verified=False,
-                reasons=("simulation_snapshot",),
-            ),
-        )
+        ctx.data_provenance = snapshot.data_provenance
         ctx.candles = None
 
     def _fetch_spot(self, ctx):
