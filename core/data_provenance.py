@@ -13,6 +13,7 @@ class AcquisitionProvenance:
     acquired_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+    provider_timestamp: datetime | None = None
     expected_count: int = 0
     received_count: int = 0
     missing_count: int = 0
@@ -52,9 +53,20 @@ class AcquisitionProvenance:
         elif acquired_at is None:
             acquired_at = datetime.now(timezone.utc)
 
+        provider_timestamp = value.get("provider_timestamp")
+        if isinstance(provider_timestamp, str):
+            provider_timestamp = datetime.fromisoformat(
+                provider_timestamp.replace("Z", "+00:00")
+            )
+        elif provider_timestamp is not None and not isinstance(
+            provider_timestamp, datetime
+        ):
+            provider_timestamp = None
+
         return cls(
             source=str(value.get("source", "")),
             acquired_at=acquired_at,
+            provider_timestamp=provider_timestamp,
             expected_count=int(value.get("expected_count", 0)),
             received_count=int(value.get("received_count", 0)),
             missing_count=int(value.get("missing_count", 0)),
