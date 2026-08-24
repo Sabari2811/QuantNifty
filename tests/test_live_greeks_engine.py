@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import pandas as pd
 
 from engine.live_greeks_engine import LiveGreeksEngine
@@ -42,6 +44,37 @@ def test_live_greeks_preserves_chain_and_marks_invalid_contract_missing():
     assert pd.isna(result.loc[1, "CE_DELTA"])
     assert pd.notna(result.loc[0, "CE_IV"])
     assert pd.notna(result.loc[0, "PE_IV"])
+
+
+def test_live_greeks_accepts_provider_month_first_expiry():
+    option_chain = pd.DataFrame(
+        [
+            {
+                "Strike": 25000,
+                "CE_ID": 111,
+                "CE_LTP": 1589,
+                "CE_OI": 45000,
+                "CE_VOLUME": 1200,
+                "PE_ID": 222,
+                "PE_LTP": 1534,
+                "PE_OI": 43000,
+                "PE_VOLUME": 900,
+            }
+        ]
+    )
+
+    expiry = (datetime.now() + timedelta(days=30)).strftime("%m/%d/%Y %H:%M")
+
+    result = LiveGreeksEngine().calculate_chain_greeks(
+        option_chain=option_chain,
+        spot_price=25050,
+        expiry=expiry,
+    )
+
+    assert pd.notna(result.loc[0, "CE_IV"])
+    assert pd.notna(result.loc[0, "CE_DELTA"])
+    assert pd.notna(result.loc[0, "PE_IV"])
+    assert pd.notna(result.loc[0, "PE_DELTA"])
 
 
 def test_live_greeks_does_not_mutate_input():
