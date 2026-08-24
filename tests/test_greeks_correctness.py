@@ -73,6 +73,13 @@ def test_time_to_expiry_preserves_fractional_day():
     assert result == pytest.approx(1.5 / 365.0, rel=2e-4)
 
 
+def test_provider_month_first_expiry_format_is_supported():
+    engine = GreeksEngine()
+    expiry = (datetime.now() + timedelta(days=2)).strftime("%m/%d/%Y %H:%M")
+    result = engine.get_time_to_expiry(expiry)
+    assert result > 0
+
+
 def test_expired_expiry_is_rejected():
     with pytest.raises(ValueError, match="expiry must be in the future"):
         GreeksEngine().get_time_to_expiry(datetime.now() - timedelta(seconds=1))
