@@ -46,13 +46,46 @@ def adapt_intelligence(result: IntelligenceResult | None) -> dict | None:
     else:
         quality_status = "ACCEPTABLE"
 
-    # Missing provenance must remain UNVERIFIED; never infer freshness from
-    # acquisition time or from the quality score.
     freshness_verified = getattr(quality, "freshness_verified", False)
     freshness_status = "VERIFIED" if freshness_verified else "UNVERIFIED"
 
     evidence = getattr(result, "evidence", None) or HistoricalEvidence()
     summary = getattr(result, "evidence_summary", None) or EvidenceSummary()
+
+    historical_evidence = {
+        "similar_markets": evidence.similar_markets,
+        "average_similarity": evidence.average_similarity,
+        "best_similarity": evidence.best_similarity,
+        "win_rate": evidence.win_rate,
+        "average_pnl": evidence.average_pnl,
+        "average_holding_minutes": evidence.average_holding_minutes,
+        "target_probability": evidence.target_probability,
+        "stoploss_probability": evidence.stoploss_probability,
+        "breakeven_probability": evidence.breakeven_probability,
+        "recommendation": evidence.recommendation,
+        "confidence_adjustment": evidence.confidence_adjustment,
+        "explanation": evidence.explanation,
+    }
+
+    evidence_summary = {
+        "bullish_count": summary.bullish_count,
+        "bearish_count": summary.bearish_count,
+        "neutral_count": summary.neutral_count,
+        "independent_count": summary.independent_count,
+        "correlated_count": summary.correlated_count,
+        "confluence_score": summary.confluence_score,
+        "conflict_score": summary.conflict_score,
+    }
+
+    regime = {
+        "regime": result.regime.regime,
+        "previous_regime": result.regime.previous_regime,
+        "current": result.regime.regime,
+        "previous": result.regime.previous_regime,
+        "transition": result.regime.transition,
+        "transition_reason": result.regime.transition_reason,
+        "confidence": result.regime.confidence,
+    }
 
     return {
         "contract_version": result.contract_version,
@@ -66,40 +99,14 @@ def adapt_intelligence(result: IntelligenceResult | None) -> dict | None:
         "execution_quality": result.execution_quality,
         "risk_quality": result.risk_quality,
         "explanation": result.explanation,
-        "regime": {
-            "regime": result.regime.regime,
-            "previous_regime": result.regime.previous_regime,
-            "transition": result.regime.transition,
-            "transition_reason": result.regime.transition_reason,
-            "confidence": result.regime.confidence,
-        },
+        "regime": regime,
         "primary_scenario": _scenario_payload(result.primary_scenario),
         "alternative_scenario": _scenario_payload(result.alternative_scenario),
         "invalidation": result.invalidation,
         "reasons": result.reasons,
-        "evidence_summary": {
-            "bullish_count": summary.bullish_count,
-            "bearish_count": summary.bearish_count,
-            "neutral_count": summary.neutral_count,
-            "independent_count": summary.independent_count,
-            "correlated_count": summary.correlated_count,
-            "confluence_score": summary.confluence_score,
-            "conflict_score": summary.conflict_score,
-        },
-        "historical_evidence": {
-            "similar_markets": evidence.similar_markets,
-            "average_similarity": evidence.average_similarity,
-            "best_similarity": evidence.best_similarity,
-            "win_rate": evidence.win_rate,
-            "average_pnl": evidence.average_pnl,
-            "average_holding_minutes": evidence.average_holding_minutes,
-            "target_probability": evidence.target_probability,
-            "stoploss_probability": evidence.stoploss_probability,
-            "breakeven_probability": evidence.breakeven_probability,
-            "recommendation": evidence.recommendation,
-            "confidence_adjustment": evidence.confidence_adjustment,
-            "explanation": evidence.explanation,
-        },
+        "evidence_summary": evidence_summary,
+        "evidence": evidence_summary,
+        "historical_evidence": historical_evidence,
         "data_quality": {
             "score": quality.score,
             "status": quality_status,
