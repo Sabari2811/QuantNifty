@@ -136,6 +136,7 @@ class IntelligenceService:
         score = 100.0
         reasons = []
         incomplete = False
+        invalid = False
         freshness_verified = True
 
         for item in acquisitions:
@@ -151,13 +152,20 @@ class IntelligenceService:
                 freshness_verified = False
                 reasons.append(f"freshness_unverified:{item.source}")
 
+            if item.integrity_status == "INVALID":
+                invalid = True
+                reasons.append(f"integrity_invalid:{item.source}")
+            elif item.integrity_status == "SUSPECT":
+                reasons.append(f"integrity_suspect:{item.source}")
+
             reasons.extend(item.reasons)
+            reasons.extend(item.integrity_reasons)
 
         return DataQuality(
             score=max(0.0, min(100.0, score)),
             stale=False,
             incomplete=incomplete,
-            invalid=False,
+            invalid=invalid,
             freshness_verified=freshness_verified,
             reasons=tuple(dict.fromkeys(reasons)),
         )
@@ -260,24 +268,17 @@ class IntelligenceService:
             conviction_score = float(
                 getattr(conviction, "conviction", 0.0) or 0.0
             )
-
             opportunity_score = float(
-                getattr(opportunity, "score", 0.0) or 0.0
+                getattr(opportunity, "quality", 0.0) or 0.0
             )
-
-            evidence_summary = self._build_evidence_summary(
-                families,
-                cross_family,
-            )
-
         else:
-            cross_family = None
             direction = "NEUTRAL"
             conviction_score = 0.0
             opportunity_score = 0.0
             primary_scenario = None
             alternative_scenario = None
-            evidence_summary = self._build_evidence_summary(families, None)
+
+        data_quality = self._build_data_quality(runtime_context)
 
         return IntelligenceResult(
             record=record,
@@ -286,26 +287,18 @@ class IntelligenceService:
             confidence_before=confidence_before,
             confidence_after=confidence_after,
             explanation=historical_evidence.explanation,
-            timestamp=record.timestamp,
+            timestamp=getattr(runtime_context, "timestamp", None),
             direction=direction,
-            conviction=max(0.0, min(100.0, conviction_score)),
-            opportunity_quality=max(0.0, min(100.0, opportunity_score)),
-            evidence_items=evidence_items,
-            evidence_summary=evidence_summary,
+            conviction=conviction_score,
+            opportunity_quality=opportunity_score,
+            execution_quality=0.0,
+            risk_quality=0.0,
+            evidence_items=tuple(evidence_items),
+            evidence_summary=self._build_evidence_summary(families, cross_family)
+            if synthesis is not None
+            else EvidenceSummary(),
             regime=regime_state,
             primary_scenario=primary_scenario,
             alternative_scenario=alternative_scenario,
-            invalidation=(
-                tuple(
-                    item
-                    for item in (
-                        primary_scenario.invalidation
-                        if primary_scenario is not None
-                        else ""
-                    ).split(";")
-                    if item.strip()
-                )
-            ),
-            reasons=tuple(item.reason for item in evidence_items if item.reason),
-            data_quality=self._build_data_quality(runtime_context),
+            data_quality=data_quality,
         )
