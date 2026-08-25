@@ -32,6 +32,9 @@ class MarketDataPipeline:
         ctx.analytics = snapshot.analytics
         ctx.decision = snapshot.decision
         ctx.explanation = snapshot.explanation
+        ctx.intelligence = snapshot.intelligence
+        ctx.replay_expected_decision = snapshot.decision
+        ctx.replay_expected_intelligence = snapshot.intelligence
         ctx.data_provenance = snapshot.data_provenance
         ctx.candles = None
 
@@ -93,22 +96,17 @@ class MarketDataPipeline:
                 continue
             try:
                 timestamp = float(value)
-                # Provider documentation defines candle ts in epoch seconds.
-                # Accept milliseconds defensively if a provider response changes.
                 if timestamp > 1_000_000_000_000:
                     timestamp /= 1000.0
                 timestamps.append(datetime.fromtimestamp(timestamp, tz=timezone.utc))
             except (TypeError, ValueError, OverflowError, OSError):
                 continue
-
         return max(timestamps) if timestamps else None
 
     def _fetch_historical_candles(self, ctx):
         security_id = self.instrument.get_index_security_id(ctx.symbol)
         if security_id is None:
-            raise ValueError(
-                f"Index security ID not found for symbol: {ctx.symbol}"
-            )
+            raise ValueError(f"Index security ID not found for symbol: {ctx.symbol}")
 
         scrip_code = self.instrument.get_scrip_code("NIDX", security_id)
         end = datetime.now(timezone.utc)
@@ -122,20 +120,15 @@ class MarketDataPipeline:
         )
 
         ctx.candles = self.candle_manager.to_dataframe(candles)
-
         provider_timestamp = self._provider_candle_timestamp(candles)
         if provider_timestamp is None:
             freshness_verified = False
             freshness_seconds = None
-            freshness_reasons = (
-                "provider_candle_timestamp_unavailable",
-            )
+            freshness_reasons = ("provider_candle_timestamp_unavailable",)
         elif provider_timestamp > end:
             freshness_verified = False
             freshness_seconds = None
-            freshness_reasons = (
-                "provider_candle_timestamp_in_future",
-            )
+            freshness_reasons = ("provider_candle_timestamp_in_future",)
         else:
             freshness_verified = True
             freshness_seconds = (end - provider_timestamp).total_seconds()
