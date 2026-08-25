@@ -11,9 +11,7 @@ from simulation.replay_snapshot import ReplaySnapshot
 
 
 class ReplayLoader:
-    """
-    Loads a recorded snapshot from disk into a ReplaySnapshot.
-    """
+    """Loads a recorded snapshot from disk into a ReplaySnapshot."""
 
     def load(self, folder: str | Path) -> ReplaySnapshot:
         folder = Path(folder)
@@ -24,6 +22,7 @@ class ReplayLoader:
         snapshot.analytics = self._load_json(folder / manifest.analytics)
         snapshot.decision = self._load_json(folder / manifest.decision)
         snapshot.explanation = self._load_json(folder / manifest.explanation)
+        snapshot.intelligence = self._load_json(folder / manifest.intelligence)
         snapshot.option_chain = self._load_dataframe(folder / manifest.option_chain)
         snapshot.greeks = self._load_dataframe(folder / manifest.greeks)
         snapshot.data_provenance = RuntimeDataProvenance.from_dict(
