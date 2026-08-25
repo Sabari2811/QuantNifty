@@ -5,6 +5,8 @@ import pandas as pd
 
 from core.data_provenance import RuntimeDataProvenance
 from engine.market_data_pipeline import MarketDataPipeline
+from providers.simulation_provider import SimulationProvider
+from simulation.replay_snapshot import ReplaySnapshot
 
 
 class _Provider:
@@ -161,3 +163,49 @@ def test_valid_live_option_chain_is_marked_valid_in_runtime_provenance():
     assert provenance is not None
     assert provenance.integrity_status == "VALID"
     assert provenance.integrity_reasons == ()
+
+
+def test_replay_pipeline_consumes_current_snapshot_without_advancing():
+    snapshot = ReplaySnapshot(
+        runtime={
+            "timestamp": "2026-08-24T10:00:00+00:00",
+            "cycle_no": 7,
+            "symbol": "NIFTY",
+            "spot": 25050.0,
+        },
+        option_chain=_valid_chain(),
+        greeks=pd.DataFrame([{ "Strike": 25000, "CE_DELTA": 0.5 }]),
+        analytics={"regime": "RANGE"},
+        decision={"signal": "WAIT"},
+        explanation={"summary": "replay"},
+        data_provenance=RuntimeDataProvenance(
+            spot=SimpleNamespace(source="replay")
+        ),
+    )
+
+    class _ReplaySource:
+        def current(self):
+            return snapshot
+
+        def next(self):
+            raise AssertionError("Replay navigation must not occur in MarketDataPipeline")
+
+    provider = SimulationProvider(_ReplaySource())
+    pipeline = MarketDataPipeline(
+        provider=provider,
+        instrument=None,
+        market=None,
+        chain_manager=None,
+        candle_manager=None,
+    )
+    ctx = SimpleNamespace()
+
+    pipeline.run(ctx)
+
+    assert ctx.cycle_no == 7
+    assert ctx.symbol == "NIFTY"
+    assert ctx.spot == 25050.0
+    pd.testing.assert_frame_equal(ctx.option_chain, snapshot.option_chain)
+    pd.testing.assert_frame_equal(ctx.greeks_df, snapshot.greeks)
+    assert ctx.data_provenance is snapshot.data_provenance
+    assert ctx.candles is None
