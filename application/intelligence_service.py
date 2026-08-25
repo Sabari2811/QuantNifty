@@ -136,6 +136,7 @@ class IntelligenceService:
         score = 100.0
         reasons = []
         incomplete = False
+        invalid = False
         freshness_verified = True
 
         for item in acquisitions:
@@ -151,13 +152,23 @@ class IntelligenceService:
                 freshness_verified = False
                 reasons.append(f"freshness_unverified:{item.source}")
 
-            reasons.extend(item.reasons)
+            # Integrity metadata was introduced after the original provenance
+            # contract. Legacy provenance-like objects are treated as unverified.
+            integrity_status = getattr(item, "integrity_status", "UNVERIFIED")
+            if integrity_status == "INVALID":
+                invalid = True
+                reasons.append(f"integrity_invalid:{item.source}")
+            elif integrity_status == "SUSPECT":
+                reasons.append(f"integrity_suspect:{item.source}")
+
+            reasons.extend(getattr(item, "reasons", ()))
+            reasons.extend(getattr(item, "integrity_reasons", ()))
 
         return DataQuality(
             score=max(0.0, min(100.0, score)),
             stale=False,
             incomplete=incomplete,
-            invalid=False,
+            invalid=invalid,
             freshness_verified=freshness_verified,
             reasons=tuple(dict.fromkeys(reasons)),
         )
@@ -204,6 +215,8 @@ class IntelligenceService:
         )
 
     def analyze(self, runtime_context) -> IntelligenceResult:
+        data_quality = self._build_data_quality(runtime_context)
+
         record = self._feature_extractor.extract(runtime_context)
 
         historical_evidence = self._evidence_engine.analyze(
@@ -255,8 +268,6 @@ class IntelligenceService:
             direction = getattr(cross_family, "direction", "NEUTRAL")
 
             # ConvictionResult exposes the canonical score as `conviction`.
-            # Do not read a non-existent `score` attribute, which silently
-            # converts every real conviction value to the default 0.0.
             conviction_score = float(
                 getattr(conviction, "conviction", 0.0) or 0.0
             )
@@ -278,6 +289,18 @@ class IntelligenceService:
             primary_scenario = None
             alternative_scenario = None
             evidence_summary = self._build_evidence_summary(families, None)
+
+        # INVALID market data is a hard intelligence gate.  We retain the
+        # diagnostic evidence, but do not expose a directional conviction,
+        # opportunity score, or scenario derived from data that failed the
+        # integrity contract.
+        if data_quality.invalid:
+            recommendation = "WAIT"
+            direction = "NEUTRAL"
+            conviction_score = 0.0
+            opportunity_score = 0.0
+            primary_scenario = None
+            alternative_scenario = None
 
         return IntelligenceResult(
             record=record,
@@ -307,5 +330,5 @@ class IntelligenceService:
                 )
             ),
             reasons=tuple(item.reason for item in evidence_items if item.reason),
-            data_quality=self._build_data_quality(runtime_context),
+            data_quality=data_quality,
         )

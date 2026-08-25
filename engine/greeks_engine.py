@@ -1,4 +1,5 @@
 from datetime import datetime
+import math
 
 from vollib.black_scholes.implied_volatility import implied_volatility
 from vollib.black_scholes.greeks.analytical import (
@@ -20,17 +21,45 @@ class GreeksEngine:
     # -------------------------------------------------------
 
     def get_time_to_expiry(self, expiry):
+        """Return exact fractional years until expiry using total seconds.
 
+        Expiry values can arrive from different provider/instrument layers in
+        either day-first (DD/MM/YYYY) or month-first (MM/DD/YYYY) form. Both
+        are accepted here and normalized to a datetime before the calculation
+        so a provider formatting difference cannot silently invalidate every
+        live Greek.
+        """
         if isinstance(expiry, str):
-            expiry = datetime.strptime(
-                expiry,
-                "%d/%m/%Y %H:%M"
-            )
+            parsed = None
+            parse_errors = []
+            for fmt in (
+                "%d/%m/%Y %H:%M",
+                "%m/%d/%Y %H:%M",
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d %H:%M",
+            ):
+                try:
+                    parsed = datetime.strptime(expiry, fmt)
+                    break
+                except ValueError as exc:
+                    parse_errors.append(exc)
 
-        seconds = (expiry - datetime.now()).total_seconds()
+            if parsed is None:
+                raise ValueError(
+                    "Unsupported expiry format; expected DD/MM/YYYY HH:MM, "
+                    "MM/DD/YYYY HH:MM, or ISO datetime"
+                ) from parse_errors[-1]
+
+            expiry = parsed
+
+        if not isinstance(expiry, datetime):
+            raise TypeError("expiry must be a datetime or supported expiry string")
+
+        now = datetime.now(expiry.tzinfo) if expiry.tzinfo else datetime.now()
+        seconds = (expiry - now).total_seconds()
 
         if seconds <= 0:
-            seconds = 1
+            raise ValueError("expiry must be in the future")
 
         return seconds / (365 * 24 * 60 * 60)
 
@@ -48,92 +77,78 @@ class GreeksEngine:
         time_to_expiry=None,
         risk_free_rate=None
     ):
-
         if risk_free_rate is None:
             risk_free_rate = self.r
 
         if time_to_expiry is None:
-
             if expiry is None:
-                raise ValueError(
-                    "Either expiry or time_to_expiry must be provided."
-                )
-
+                raise ValueError("Either expiry or time_to_expiry must be provided.")
             time_to_expiry = self.get_time_to_expiry(expiry)
 
-        flag = "c" if option_type.upper() == "CE" else "p"
+        values = {
+            "option_price": option_price,
+            "spot_price": spot_price,
+            "strike_price": strike_price,
+            "time_to_expiry": time_to_expiry,
+            "risk_free_rate": risk_free_rate,
+        }
+        for name, value in values.items():
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{name} must be numeric") from exc
+            if not math.isfinite(numeric):
+                raise ValueError(f"{name} must be finite")
+
+        if float(option_price) <= 0:
+            raise ValueError("option_price must be positive")
+        if float(spot_price) <= 0:
+            raise ValueError("spot_price must be positive")
+        if float(strike_price) <= 0:
+            raise ValueError("strike_price must be positive")
+        if float(time_to_expiry) <= 0:
+            raise ValueError("time_to_expiry must be positive")
+
+        option_type = str(option_type).upper()
+        if option_type not in {"CE", "PE"}:
+            raise ValueError("option_type must be CE or PE")
+
+        flag = "c" if option_type == "CE" else "p"
 
         try:
-
             iv = implied_volatility(
                 option_price,
                 spot_price,
                 strike_price,
                 time_to_expiry,
                 risk_free_rate,
-                flag
+                flag,
             )
+        except Exception as exc:
+            raise ValueError(
+                "Unable to solve implied volatility for the supplied option inputs"
+            ) from exc
 
-            return {
-
-                "iv": iv,
-
-                "delta": delta(
-                    flag,
-                    spot_price,
-                    strike_price,
-                    time_to_expiry,
-                    risk_free_rate,
-                    iv
-                ),
-
-                "gamma": gamma(
-                    flag,
-                    spot_price,
-                    strike_price,
-                    time_to_expiry,
-                    risk_free_rate,
-                    iv
-                ),
-
-                "theta": theta(
-                    flag,
-                    spot_price,
-                    strike_price,
-                    time_to_expiry,
-                    risk_free_rate,
-                    iv
-                ),
-
-                "vega": vega(
-                    flag,
-                    spot_price,
-                    strike_price,
-                    time_to_expiry,
-                    risk_free_rate,
-                    iv
-                ),
-
-                "rho": rho(
-                    flag,
-                    spot_price,
-                    strike_price,
-                    time_to_expiry,
-                    risk_free_rate,
-                    iv
-                )
-
-            }
-
-        except Exception:
-
-            return {
-
-                "iv": None,
-                "delta": None,
-                "gamma": None,
-                "theta": None,
-                "vega": None,
-                "rho": None
-
-            }
+        return {
+            "iv": iv,
+            "delta": delta(
+                flag, spot_price, strike_price, time_to_expiry,
+                risk_free_rate, iv
+            ),
+            "gamma": gamma(
+                flag, spot_price, strike_price, time_to_expiry,
+                risk_free_rate, iv
+            ),
+            "theta": theta(
+                flag, spot_price, strike_price, time_to_expiry,
+                risk_free_rate, iv
+            ),
+            "vega": vega(
+                flag, spot_price, strike_price, time_to_expiry,
+                risk_free_rate, iv
+            ),
+            "rho": rho(
+                flag, spot_price, strike_price, time_to_expiry,
+                risk_free_rate, iv
+            ),
+        }

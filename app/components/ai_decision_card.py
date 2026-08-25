@@ -3,6 +3,43 @@ import streamlit as st
 from decision.constants import Signal
 
 
+_REASON_LABELS = {
+    "Dealers Long Gamma": "Long Gamma",
+    "Dealers Short Gamma": "Short Gamma",
+    "Positive Delta": "Positive Delta",
+    "Negative Delta": "Negative Delta",
+    "Positive Vanna": "Positive Vanna",
+    "Negative Vanna": "Negative Vanna",
+    "Above Support": "Above Support",
+    "Below Resistance": "Below Resistance",
+    "Institutional Absorption": "Institutional Absorption",
+    "Gamma Flip": "Gamma Flip",
+    "Positive GEX": "Positive GEX",
+    "Negative GEX": "Negative GEX",
+    "Inside Expected Move": "Inside Expected Move",
+    "Low Expected Volatility": "Low Volatility",
+    "High Expected Volatility": "High Volatility",
+    "Range Market": "Range Market",
+}
+
+
+def _compact_reasons(reasons, limit=3):
+    """Return a short, de-duplicated set of readable decision factors."""
+    compact = []
+    seen = set()
+
+    for reason in reasons or []:
+        label = _REASON_LABELS.get(reason, reason)
+        if label in seen:
+            continue
+        seen.add(label)
+        compact.append(label)
+        if len(compact) >= limit:
+            break
+
+    return compact
+
+
 def show(ctx):
 
     decision = ctx.decision
@@ -60,17 +97,10 @@ def show(ctx):
             )
 
         # --------------------------------------------------
-        # Reasons
+        # Key factors — compact, de-duplicated summary
         # --------------------------------------------------
 
-        st.write("Reasons")
+        factors = _compact_reasons(decision.reasons)
 
-        if decision.reasons:
-
-            for reason in decision.reasons:
-
-                st.write(f"• {reason}")
-
-        else:
-
-            st.write("No reasons available.")
+        if factors:
+            st.caption("Why: " + " • ".join(factors))

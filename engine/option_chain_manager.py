@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import pandas as pd
 
 from core.data_provenance import AcquisitionProvenance
+from core.quote_integrity import assess_option_chain
 
 
 class OptionChainManager:
@@ -99,20 +100,6 @@ class OptionChainManager:
             if f"NFO_{security_id}" not in quotes
         }
 
-        provenance = AcquisitionProvenance(
-            source="INDMoney option quotes",
-            acquired_at=acquired_at,
-            expected_count=len(security_ids),
-            received_count=len(security_ids) - len(missing_ids),
-            missing_count=len(missing_ids),
-            freshness_verified=False,
-            reasons=(
-                ("provider_quote_timestamp_unavailable",)
-                if quotes
-                else ("no_option_quotes_received",)
-            ),
-        )
-
         rows = []
 
         for contract in contracts:
@@ -152,6 +139,36 @@ class OptionChainManager:
             })
 
         result = pd.DataFrame(rows)
+
+        # ---------------------------------------------------
+        # Quote integrity
+        # ---------------------------------------------------
+        # Do not alter or clamp provider values.  The report is an
+        # observation layer that travels with the raw chain.
+        integrity = assess_option_chain(
+            result,
+            spot_price,
+        )
+
+        provenance_reasons = (
+            ("provider_quote_timestamp_unavailable",)
+            if quotes
+            else ("no_option_quotes_received",)
+        )
+
+        provenance = AcquisitionProvenance(
+            source="INDMoney option quotes",
+            acquired_at=acquired_at,
+            expected_count=len(security_ids),
+            received_count=len(security_ids) - len(missing_ids),
+            missing_count=len(missing_ids),
+            freshness_verified=False,
+            reasons=provenance_reasons,
+            integrity_status=integrity.status,
+            integrity_reasons=integrity.reasons,
+        )
+
         result.attrs["data_provenance"] = provenance
+        result.attrs["quote_integrity"] = integrity.as_dict()
 
         return result

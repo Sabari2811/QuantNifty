@@ -41,7 +41,7 @@ class _SynthesisEngine:
         return SimpleNamespace(
             cross_family=SimpleNamespace(direction="BULLISH"),
             conviction=SimpleNamespace(conviction=72.5),
-            opportunity=SimpleNamespace(score=0.0),
+            opportunity=SimpleNamespace(score=63.0),
             scenarios=SimpleNamespace(
                 primary=SimpleNamespace(
                     name="Upside continuation",
@@ -63,7 +63,7 @@ class _SynthesisEngine:
         )
 
 
-def _context():
+def _context(integrity_status="UNVERIFIED"):
     acquisition = SimpleNamespace(
         complete=True,
         source="test",
@@ -71,6 +71,8 @@ def _context():
         received_count=1,
         freshness_verified=False,
         reasons=(),
+        integrity_status=integrity_status,
+        integrity_reasons=("negative_ce_ltp",) if integrity_status == "INVALID" else (),
     )
 
     return SimpleNamespace(
@@ -91,8 +93,8 @@ def _context():
     )
 
 
-def test_intelligence_service_preserves_conviction_result_value():
-    service = IntelligenceService(
+def _service():
+    return IntelligenceService(
         feature_extractor=_FeatureExtractor(),
         market_memory=_MarketMemory(),
         evidence_engine=_EvidenceEngine(),
@@ -101,9 +103,24 @@ def test_intelligence_service_preserves_conviction_result_value():
         synthesis_engine=_SynthesisEngine(),
     )
 
-    result = service.analyze(_context())
+
+def test_intelligence_service_preserves_conviction_result_value():
+    result = _service().analyze(_context())
 
     assert result.direction == "BULLISH"
     assert result.conviction == 72.5
-    assert result.opportunity_quality == 0.0
+    assert result.opportunity_quality == 63.0
     assert result.primary_scenario.probability == 55.0
+
+
+def test_invalid_data_hard_gates_directional_intelligence():
+    result = _service().analyze(_context(integrity_status="INVALID"))
+
+    assert result.data_quality.invalid is True
+    assert result.direction == "NEUTRAL"
+    assert result.recommendation == "WAIT"
+    assert result.conviction == 0.0
+    assert result.opportunity_quality == 0.0
+    assert result.primary_scenario is None
+    assert result.alternative_scenario is None
+    assert "integrity_invalid:test" in result.data_quality.reasons

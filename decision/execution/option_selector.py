@@ -7,121 +7,50 @@ class OptionSelector:
     Selects the nearest option contract from the
     live Greeks dataframe.
 
-    Expected dataframe format:
-
-        Strike
-        CE_LTP
-        CE_OI
-        CE_IV
-        CE_DELTA
-        ...
-
-        PE_LTP
-        PE_OI
-        PE_IV
-        PE_DELTA
-        ...
+    Missing/unusable Greek values are not converted to zero. A contract
+    requiring Greeks is rejected when its required Greek is unavailable,
+    rather than silently creating a misleading trade contract.
     """
 
+    _GREEK_FIELDS = {
+        OptionType.CE.value: ("CE_IV", "CE_DELTA", "CE_GAMMA", "CE_THETA", "CE_VEGA"),
+        OptionType.PE.value: ("PE_IV", "PE_DELTA", "PE_GAMMA", "PE_THETA", "PE_VEGA"),
+    }
+
     def select(self, snapshot, strike, option_type):
-
         df = snapshot.greeks_df
-
-        # --------------------------------------------------
-        # Validate dataframe
-        # --------------------------------------------------
 
         if df is None or df.empty:
             return None
 
         option_type = option_type.upper()
 
-        if option_type not in (
-            OptionType.CE.value,
-            OptionType.PE.value,
-        ):
+        if option_type not in (OptionType.CE.value, OptionType.PE.value):
             return None
 
-        # --------------------------------------------------
-        # Find nearest strike
-        # --------------------------------------------------
-
         work = df.copy()
+        work["distance"] = (work["Strike"] - strike).abs()
+        row = work.sort_values("distance").iloc[0]
 
-        work["distance"] = (
-            work["Strike"] - strike
-        ).abs()
-
-        row = work.sort_values(
-            "distance"
-        ).iloc[0]
+        fields = self._GREEK_FIELDS[option_type]
+        if any(row.get(field) is None for field in fields):
+            return None
 
         strike = int(row["Strike"])
 
-        # ==================================================
-        # CE CONTRACT
-        # ==================================================
-
-        if option_type == OptionType.CE.value:
-
-            return OptionContract(
-
-                strike=strike,
-
-                option_type="CE",
-
-                expiry=str(row.get("Expiry", "")),
-
-                ltp=float(row.get("CE_LTP", 0)),
-
-                bid=float(row.get("CE_BID", 0)),
-
-                ask=float(row.get("CE_ASK", 0)),
-
-                volume=int(row.get("CE_VOLUME", 0)),
-
-                oi=int(row.get("CE_OI", 0)),
-
-                iv=float(row.get("CE_IV", 0)),
-
-                delta=float(row.get("CE_DELTA", 0)),
-
-                gamma=float(row.get("CE_GAMMA", 0)),
-
-                theta=float(row.get("CE_THETA", 0)),
-
-                vega=float(row.get("CE_VEGA", 0))
-            )
-
-        # ==================================================
-        # PE CONTRACT
-        # ==================================================
-
+        prefix = option_type
         return OptionContract(
-
             strike=strike,
-
-            option_type="PE",
-
+            option_type=option_type,
             expiry=str(row.get("Expiry", "")),
-
-            ltp=float(row.get("PE_LTP", 0)),
-
-            bid=float(row.get("PE_BID", 0)),
-
-            ask=float(row.get("PE_ASK", 0)),
-
-            volume=int(row.get("PE_VOLUME", 0)),
-
-            oi=int(row.get("PE_OI", 0)),
-
-            iv=float(row.get("PE_IV", 0)),
-
-            delta=float(row.get("PE_DELTA", 0)),
-
-            gamma=float(row.get("PE_GAMMA", 0)),
-
-            theta=float(row.get("PE_THETA", 0)),
-
-            vega=float(row.get("PE_VEGA", 0))
+            ltp=float(row.get(f"{prefix}_LTP", 0) or 0),
+            bid=float(row.get(f"{prefix}_BID", 0) or 0),
+            ask=float(row.get(f"{prefix}_ASK", 0) or 0),
+            volume=int(row.get(f"{prefix}_VOLUME", 0) or 0),
+            oi=int(row.get(f"{prefix}_OI", 0) or 0),
+            iv=float(row[f"{prefix}_IV"]),
+            delta=float(row[f"{prefix}_DELTA"]),
+            gamma=float(row[f"{prefix}_GAMMA"]),
+            theta=float(row[f"{prefix}_THETA"]),
+            vega=float(row[f"{prefix}_VEGA"]),
         )

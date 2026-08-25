@@ -21,93 +21,56 @@ class SimulationProvider(BaseProvider):
         replay_source: ReplaySource,
         runtime_mode: RuntimeMode = RuntimeMode.REPLAY_FAST
     ):
-
         self.source = replay_source
-
         self._runtime_mode = runtime_mode
-
-    # ==========================================================
-    # Runtime
-    # ==========================================================
 
     @property
     def runtime_mode(self):
-
         return self._runtime_mode
 
-    # ==========================================================
-    # Provider
-    # ==========================================================
-
     def connect(self):
-
         return True
 
-    # ==========================================================
-    # Snapshot
-    # ==========================================================
-
     def current_snapshot(self):
-
         return self.source.current()
 
-    # ==========================================================
-    # Live Provider Interface
-    # ==========================================================
-
     def get_spot_price(self, symbol=None):
-
         return self.current_snapshot().spot
 
     def get_option_chain(self, *args, **kwargs):
-
         return self.current_snapshot().option_chain.copy()
 
     def get_historical_data(self, *args, **kwargs):
-
         raise NotImplementedError(
             "Historical data unavailable in replay."
         )
 
-    # ==========================================================
-    # Snapshot Accessors
-    # ==========================================================
-
     def get_runtime(self):
-
         return self.current_snapshot().runtime
 
-    def get_greeks(self):
+    def get_data_provenance(self):
+        return self.current_snapshot().data_provenance
 
+    def get_greeks(self):
         return self.current_snapshot().greeks.copy()
 
     def get_analytics(self):
-
         return self.current_snapshot().analytics
 
     def get_decision(self):
-
         return self.current_snapshot().decision
 
     def get_explanation(self):
-
         return self.current_snapshot().explanation
-
-    # ==========================================================
-    # Convenience
-    # ==========================================================
 
     @property
     def timestamp(self):
-
         return self.current_snapshot().timestamp
 
     @property
     def cycle_no(self):
-
         return self.current_snapshot().cycle_no
 
     @property
     def symbol(self):
-
         return self.current_snapshot().symbol
