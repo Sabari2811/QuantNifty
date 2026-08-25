@@ -62,6 +62,11 @@ def _compare(expected, actual, path: str, mismatches: list[str], tolerance: floa
             _compare(left, right, f"{path}[{index}]", mismatches, tolerance)
         return
 
+    if expected is None or actual is None:
+        if expected is not actual:
+            mismatches.append(path or "root")
+        return
+
     if isinstance(expected, float) and isinstance(actual, (int, float)):
         if not isclose(expected, float(actual), rel_tol=tolerance, abs_tol=tolerance):
             mismatches.append(path or "root")
