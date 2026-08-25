@@ -90,23 +90,46 @@ class LiveEngine:
         return self._is_replay() and self.provider.runtime_mode == RuntimeMode.REPLAY_RECOMPUTE
 
     def _run_analytics(self):
-        self.ctx.analytics = self.pipeline.run(greeks_engine=self.greeks.greeks, greeks_df=self.ctx.greeks_df, spot_price=self.ctx.spot, candles=self.ctx.candles, previous_greeks_df=getattr(self, "_previous_greeks_df", None))
-        self.ctx.snapshot = MarketSnapshot().save(greeks_df=self.ctx.analytics["greeks"], spot=self.ctx.spot, analytics=self.ctx.analytics)
+        replay_recompute = self._is_replay_recompute()
+        self.ctx.analytics = self.pipeline.run(
+            greeks_engine=self.greeks.greeks,
+            greeks_df=self.ctx.greeks_df,
+            spot_price=self.ctx.spot,
+            candles=self.ctx.candles,
+            previous_greeks_df=getattr(self, "_previous_greeks_df", None),
+        )
+        self.ctx.snapshot = MarketSnapshot().save(
+            greeks_df=self.ctx.analytics["greeks"],
+            spot=self.ctx.spot,
+            analytics=self.ctx.analytics,
+        )
         regime = self.market_regime.analyze(self.ctx.snapshot)
         self.ctx.snapshot.regime = regime
         self.ctx.regime = regime
         self.ctx.decision = self.decision_engine.build(self.ctx.snapshot)
-        self.ctx.explanation = self.explanation_engine.build(decision=self.ctx.decision, regime=self.ctx.regime, snapshot=self.ctx.snapshot)
+        self.ctx.explanation = self.explanation_engine.build(
+            decision=self.ctx.decision,
+            regime=self.ctx.regime,
+            snapshot=self.ctx.snapshot,
+        )
+
         if self.intelligence_service is not None:
             self.ctx.intelligence = self.intelligence_service.analyze(self.ctx)
-        if self._is_replay_recompute():
+
+        if replay_recompute:
             expected_decision = getattr(self.ctx, "replay_expected_decision", None)
             expected_intelligence = getattr(self.ctx, "replay_expected_intelligence", None)
             actual_intelligence = getattr(self.ctx, "intelligence", None)
             if expected_decision is not None and expected_intelligence:
-                self.ctx.replay_equivalence = compare_replay_outputs(expected_decision, self.ctx.decision, expected_intelligence, actual_intelligence)
+                self.ctx.replay_equivalence = compare_replay_outputs(
+                    expected_decision,
+                    self.ctx.decision,
+                    expected_intelligence,
+                    actual_intelligence,
+                )
             else:
                 self.ctx.replay_equivalence = None
+
         self.trade_pipeline.execute(self.ctx)
 
     def run_cycle(self):
