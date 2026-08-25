@@ -9,57 +9,17 @@ from core.data_provenance import RuntimeDataProvenance
 
 @dataclass(slots=True)
 class ReplaySnapshot:
-    """
-    Represents ONE recorded market cycle.
-
-    This object is the bridge between:
-
-        SnapshotRecorder
-
-            ↓
-
-        ReplayLoader
-
-            ↓
-
-        SimulationProvider
-
-            ↓
-
-        LiveEngine
-    """
-
-    # ======================================================
-    # Metadata
-    # ======================================================
+    """Represents ONE recorded market cycle."""
 
     runtime: dict = field(default_factory=dict)
-
     analytics: dict = field(default_factory=dict)
-
     decision: dict = field(default_factory=dict)
-
     explanation: dict = field(default_factory=dict)
+    intelligence: dict = field(default_factory=dict)
+    data_provenance: RuntimeDataProvenance = field(default_factory=RuntimeDataProvenance)
 
-    data_provenance: RuntimeDataProvenance = field(
-        default_factory=RuntimeDataProvenance
-    )
-
-    # ======================================================
-    # DataFrames
-    # ======================================================
-
-    option_chain: pd.DataFrame = field(
-        default_factory=pd.DataFrame
-    )
-
-    greeks: pd.DataFrame = field(
-        default_factory=pd.DataFrame
-    )
-
-    # ======================================================
-    # Convenience Properties
-    # ======================================================
+    option_chain: pd.DataFrame = field(default_factory=pd.DataFrame)
+    greeks: pd.DataFrame = field(default_factory=pd.DataFrame)
 
     @property
     def timestamp(self):
