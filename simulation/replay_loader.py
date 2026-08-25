@@ -39,10 +39,16 @@ class ReplayLoader:
 
     @staticmethod
     def _restore_intelligence(payload: dict) -> IntelligenceResult | dict:
-        """Restore canonical IntelligenceResult while preserving legacy payloads."""
+        """Restore canonical IntelligenceResult while preserving partial/legacy payloads."""
         if not payload:
             return {}
-        return ReplayLoader._from_typed_dataclass(payload, IntelligenceResult)
+        try:
+            return ReplayLoader._from_typed_dataclass(payload, IntelligenceResult)
+        except (TypeError, ValueError, KeyError):
+            # Older/unit-test artifacts may intentionally contain only a subset
+            # of IntelligenceResult fields. Preserve those payloads verbatim;
+            # a real canonical artifact is fully typed and will restore above.
+            return payload
 
     @staticmethod
     def _from_typed_dataclass(payload: Any, target_type: Any) -> Any:
