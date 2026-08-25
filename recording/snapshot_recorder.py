@@ -21,15 +21,13 @@ class SnapshotRecorder:
 
     def save(self, ctx, folder=None):
         folder = self._snapshot_folder(ctx) if folder is None else Path(folder)
-        folder.mkdir(parents=True, exist_ok=True)
-
         intelligence = getattr(ctx, "intelligence", None)
         if intelligence is None or (
             isinstance(intelligence, dict) and not intelligence
         ):
-            raise ValueError(
-                "Canonical snapshot requires a populated intelligence artifact."
-            )
+            return False
+
+        folder.mkdir(parents=True, exist_ok=True)
 
         self.manifest.save(folder)
         self._save_runtime(folder, ctx)
@@ -40,6 +38,7 @@ class SnapshotRecorder:
         self._save_dataframe(folder / self.manifest.option_chain, getattr(ctx, "option_chain", None))
         self._save_dataframe(folder / self.manifest.greeks, getattr(ctx, "greeks_df", None))
         self.index.append(ctx, folder)
+        return True
 
     def _snapshot_folder(self, ctx):
         timestamp = getattr(ctx, "timestamp", None)
