@@ -12,20 +12,7 @@ from recording.snapshot_manifest import SnapshotManifest
 
 
 class SnapshotRecorder:
-    """
-    Records one complete QuantNifty market snapshot.
-
-    Folder Structure
-    ----------------
-    data/snapshots/<date>/<cycle>/
-        manifest.json
-        runtime.json
-        analytics.json
-        decision.json
-        explanation.json
-        option_chain.parquet
-        greeks.parquet
-    """
+    """Records one complete QuantNifty market snapshot."""
 
     def __init__(self, root="data/snapshots"):
         self.root = Path(root)
@@ -40,43 +27,9 @@ class SnapshotRecorder:
         self.manifest.save(folder)
         self._save_runtime(folder, ctx)
         self._save_json(folder / self.manifest.analytics, getattr(ctx, "analytics", None))
-
-        decision = getattr(ctx, "decision", None)
-        print("\n================ DECISION DEBUG ================")
-        if decision is None:
-            print("Decision : None")
-        else:
-            print("Decision Type      :", type(decision))
-            print("Decision Dataclass :", is_dataclass(decision))
-            try:
-                print("Signal Type        :", type(decision.signal))
-                print("Signal Dataclass   :", is_dataclass(decision.signal))
-            except Exception as e:
-                print("Signal ERROR :", e)
-            try:
-                print("Trade Type         :", type(decision.trade))
-                print("Trade Dataclass    :", is_dataclass(decision.trade))
-            except Exception as e:
-                print("Trade ERROR :", e)
-            try:
-                print("Market Type        :", type(decision.market))
-                print("Market Dataclass   :", is_dataclass(decision.market))
-            except Exception as e:
-                print("Market ERROR :", e)
-            try:
-                print("Validation Type    :", type(decision.validation))
-                print("Validation Dataclass :", is_dataclass(decision.validation))
-            except Exception as e:
-                print("Validation ERROR :", e)
-            print("\nASDICT OUTPUT\n")
-            try:
-                print(asdict(decision))
-            except Exception as e:
-                print("ASDICT FAILED :", e)
-        print("===============================================\n")
-
-        self._save_json(folder / self.manifest.decision, decision)
+        self._save_json(folder / self.manifest.decision, getattr(ctx, "decision", None))
         self._save_json(folder / self.manifest.explanation, getattr(ctx, "explanation", None))
+        self._save_json(folder / self.manifest.intelligence, getattr(ctx, "intelligence", None))
         self._save_dataframe(folder / self.manifest.option_chain, getattr(ctx, "option_chain", None))
         self._save_dataframe(folder / self.manifest.greeks, getattr(ctx, "greeks_df", None))
         self.index.append(ctx, folder)
@@ -119,19 +72,10 @@ class SnapshotRecorder:
     def _save_json(self, path, obj):
         if obj is None:
             return
-        print("\n================ SAVE JSON ================")
-        print("PATH :", path)
-        print("TYPE :", type(obj))
-        print("IS DATACLASS :", is_dataclass(obj))
         if is_dataclass(obj):
-            print(">>> USING ASDICT() <<<")
             obj = asdict(obj)
-        else:
-            print(">>> NOT A DATACLASS <<<")
-        print("FINAL TYPE :", type(obj))
         with open(path, "w", encoding="utf-8") as fp:
             json.dump(obj, fp, indent=4, default=self._json_default)
-        print("=========================================\n")
 
     def _save_dataframe(self, path, df):
         if df is None or not isinstance(df, pd.DataFrame) or df.empty:
