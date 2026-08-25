@@ -22,7 +22,7 @@ class MarketDataPipeline:
         self._fetch_historical_candles(ctx)
 
     def _run_replay(self, ctx):
-        snapshot = self.provider.next_cycle()
+        snapshot = self.provider.current_snapshot()
         ctx.timestamp = snapshot.timestamp
         ctx.cycle_no = snapshot.cycle_no
         ctx.symbol = snapshot.symbol
