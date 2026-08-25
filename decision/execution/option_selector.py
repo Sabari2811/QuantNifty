@@ -17,6 +17,16 @@ class OptionSelector:
         OptionType.PE.value: ("PE_IV", "PE_DELTA", "PE_GAMMA", "PE_THETA", "PE_VEGA"),
     }
 
+    @staticmethod
+    def _usable(value):
+        if value is None:
+            return False
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return False
+        return numeric == numeric
+
     def select(self, snapshot, strike, option_type):
         df = snapshot.greeks_df
 
@@ -33,14 +43,14 @@ class OptionSelector:
         row = work.sort_values("distance").iloc[0]
 
         fields = self._GREEK_FIELDS[option_type]
-        if any(row.get(field) is None for field in fields):
+        if any(not self._usable(row.get(field)) for field in fields):
             return None
 
-        strike = int(row["Strike"])
+        selected_strike = int(row["Strike"])
 
         prefix = option_type
         return OptionContract(
-            strike=strike,
+            strike=selected_strike,
             option_type=option_type,
             expiry=str(row.get("Expiry", "")),
             ltp=float(row.get(f"{prefix}_LTP", 0) or 0),
