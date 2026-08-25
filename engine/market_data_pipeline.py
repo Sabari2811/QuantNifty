@@ -35,6 +35,7 @@ class MarketDataPipeline:
         ctx.intelligence = snapshot.intelligence
         ctx.replay_expected_decision = snapshot.decision
         ctx.replay_expected_intelligence = snapshot.intelligence
+        ctx.replay_expected_analytics = snapshot.analytics
         ctx.data_provenance = snapshot.data_provenance
         ctx.candles = None
 
