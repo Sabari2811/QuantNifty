@@ -99,14 +99,6 @@ class LiveEngine:
             previous_greeks_df=getattr(self, "_previous_greeks_df", None),
         )
 
-        # A canonical snapshot is the authority for the analytics inputs to
-        # downstream decision/intelligence recomputation. The raw analytics
-        # pipeline is still executed in replay-recompute mode, but its output
-        # is retained for diagnostics rather than silently replacing the
-        # recorded canonical analytics. This prevents missing replay-only
-        # state (for example historical candles or prior OI state) from
-        # changing the decision while preserving strict decision/intelligence
-        # equivalence against the recorded snapshot.
         if replay_recompute:
             expected_analytics = getattr(self.ctx, "replay_expected_analytics", None)
             if expected_analytics:
@@ -117,8 +109,14 @@ class LiveEngine:
         else:
             self.ctx.analytics = computed_analytics
 
+        # In replay recompute, the recorded greeks/analytics are canonical
+        # inputs for the downstream decision and intelligence recomputation.
+        # Do not re-type or stringify the recorded dataframe payload.
+        greeks_for_snapshot = self.ctx.greeks_df
+        if not hasattr(greeks_for_snapshot, "copy"):
+            greeks_for_snapshot = computed_analytics.get("greeks")
         self.ctx.snapshot = MarketSnapshot().save(
-            greeks_df=self.ctx.analytics["greeks"],
+            greeks_df=greeks_for_snapshot,
             spot=self.ctx.spot,
             analytics=self.ctx.analytics,
         )
