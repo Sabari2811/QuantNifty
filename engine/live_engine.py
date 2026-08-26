@@ -25,6 +25,7 @@ from risk.risk_manager import RiskManager
 
 from analytics.analytics_pipeline import AnalyticsPipeline
 from analytics.market_snapshot.market_snapshot import MarketSnapshot
+from analytics.intelligence.decision_consistency import reconcile_decision_intelligence
 
 from execution.trade_execution_pipeline import TradeExecutionPipeline
 
@@ -138,6 +139,12 @@ class LiveEngine:
 
         if self.intelligence_service is not None:
             self.ctx.intelligence = self.intelligence_service.analyze(self.ctx)
+            self.ctx.decision_intelligence_consistency = reconcile_decision_intelligence(
+                self.ctx.decision,
+                self.ctx.intelligence,
+            )
+        else:
+            self.ctx.decision_intelligence_consistency = None
 
         if replay_recompute:
             expected_decision = getattr(self.ctx, "replay_expected_decision", None)
