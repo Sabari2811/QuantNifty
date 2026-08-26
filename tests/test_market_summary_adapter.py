@@ -35,11 +35,12 @@ def test_market_summary_uses_canonical_dashboard_fields():
     assert summary == {
         "spot": 24334.55,
         "atm_strike": 24350,
-        "pcr": 0.97,
-        "max_pain": 24200,
         "expected_move": 228.40,
         "expected_move_lower": 24106.15,
         "expected_move_upper": 24562.95,
+        "expected_move_method": "ATM_STRADDLE",
+        "pcr": 0.97,
+        "max_pain": 24200,
         "expiry": "09/01/2026 14:00",
     }
 
@@ -60,3 +61,4 @@ def test_market_summary_does_not_invent_missing_analytics():
     assert summary["expected_move"] is None
     assert summary["expected_move_lower"] is None
     assert summary["expected_move_upper"] is None
+    assert summary["expected_move_method"] is None
