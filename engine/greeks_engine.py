@@ -23,34 +23,52 @@ class GreeksEngine:
     def get_time_to_expiry(self, expiry):
         """Return exact fractional years until expiry using total seconds.
 
-        Expiry values can arrive from different provider/instrument layers in
-        either day-first (DD/MM/YYYY) or month-first (MM/DD/YYYY) form. Both
-        are accepted here and normalized to a datetime before the calculation
-        so a provider formatting difference cannot silently invalidate every
-        live Greek.
+        Provider instrument masters can expose slash-formatted expiry strings
+        such as ``09/01/2026 14:00``. That representation is ambiguous between
+        DD/MM and MM/DD. The instrument master has already established the
+        selected value as a future expiry, so when both interpretations are
+        syntactically valid we select the future interpretation rather than
+        blindly taking the first parser format. This prevents a valid live
+        expiry from becoming an apparently expired contract and blanking every
+        derived Greek.
         """
         if isinstance(expiry, str):
-            parsed = None
             parse_errors = []
+            parsed_candidates = []
+
             for fmt in (
                 "%d/%m/%Y %H:%M",
                 "%m/%d/%Y %H:%M",
-                "%Y-%m-%d %H:%M:%S",
-                "%Y-%m-%d %H:%M",
             ):
                 try:
-                    parsed = datetime.strptime(expiry, fmt)
-                    break
+                    parsed_candidates.append(datetime.strptime(expiry, fmt))
                 except ValueError as exc:
                     parse_errors.append(exc)
 
-            if parsed is None:
-                raise ValueError(
-                    "Unsupported expiry format; expected DD/MM/YYYY HH:MM, "
-                    "MM/DD/YYYY HH:MM, or ISO datetime"
-                ) from parse_errors[-1]
-
-            expiry = parsed
+            if parsed_candidates:
+                now = datetime.now()
+                future_candidates = [
+                    value for value in parsed_candidates if value > now
+                ]
+                if future_candidates:
+                    expiry = min(future_candidates)
+                else:
+                    expiry = parsed_candidates[0]
+            else:
+                for fmt in (
+                    "%Y-%m-%d %H:%M:%S",
+                    "%Y-%m-%d %H:%M",
+                ):
+                    try:
+                        expiry = datetime.strptime(expiry, fmt)
+                        break
+                    except ValueError as exc:
+                        parse_errors.append(exc)
+                else:
+                    raise ValueError(
+                        "Unsupported expiry format; expected DD/MM/YYYY HH:MM, "
+                        "MM/DD/YYYY HH:MM, or ISO datetime"
+                    ) from parse_errors[-1]
 
         if not isinstance(expiry, datetime):
             raise TypeError("expiry must be a datetime or supported expiry string")
