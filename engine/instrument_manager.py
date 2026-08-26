@@ -154,7 +154,7 @@ class InstrumentManager:
             )
             .any(axis=1)
         ]
-    
+
     # ======================================================
     # SCRIP CODE
     # ======================================================
@@ -169,7 +169,7 @@ class InstrumentManager:
         security_id = int(security_id)
 
         return f"{exchange}_{security_id}"
-    
+
     # ======================================================
     # OPTIONS
     # ======================================================
@@ -193,7 +193,62 @@ class InstrumentManager:
     # ======================================================
     # EXPIRY
     # ======================================================
-    
+
+    @staticmethod
+    def _nearest_future_expiry(df: pd.DataFrame, symbol: str):
+        """Select the authoritative nearest future expiry from one master."""
+        if df.empty:
+            return None
+
+        expiry_dates = pd.to_datetime(
+            df["EXPIRY_DATE"],
+            errors="coerce",
+        )
+
+        valid = df.loc[expiry_dates.notna()].copy()
+        if valid.empty:
+            return None
+
+        valid["_EXPIRY_PARSED"] = pd.to_datetime(
+            valid["EXPIRY_DATE"],
+            errors="coerce",
+        )
+
+        now = pd.Timestamp.now()
+        future = valid[valid["_EXPIRY_PARSED"] > now].copy()
+        if future.empty:
+            return None
+
+        weekly = future[
+            future["EXPIRY_FLAG"]
+            .astype(str)
+            .str.upper()
+            .eq("W")
+        ].copy()
+
+        # NIFTY 50 is the only supported symbol here with weekly index
+        # options. Never silently substitute a monthly expiry when the
+        # weekly contract set is absent: that would produce a complete but
+        # semantically wrong live option chain.
+        if symbol.upper() == "NIFTY":
+            if weekly.empty:
+                return None
+            candidates = weekly
+        elif not weekly.empty:
+            candidates = weekly
+        else:
+            candidates = future
+
+        selected = (
+            candidates["_EXPIRY_PARSED"]
+            .drop_duplicates()
+            .sort_values()
+            .iloc[0]
+        )
+
+        matches = valid[valid["_EXPIRY_PARSED"] == selected]
+        return str(matches["EXPIRY_DATE"].iloc[0])
+
     def get_expiry_dates(self, symbol: str) -> List[str]:
 
         df = self.get_options(symbol)
@@ -208,77 +263,35 @@ class InstrumentManager:
 
     def get_nearest_weekly_expiry(self, symbol: str):
         """
-        Return the nearest future NIFTY option expiry.
+        Return the nearest authoritative future weekly expiry.
 
-        Prefer a future weekly expiry. If no future weekly expiry
-        exists (for example, after the current weekly expiry),
-        fall back to the nearest future expiry of any type.
-
-        The returned value preserves the exact EXPIRY_DATE format
-        used by the instrument master.
+        For NIFTY, a monthly expiry must never be used as a silent fallback
+        when the weekly contract set is missing. If the local F&O master is
+        stale and no future NIFTY weekly expiry is present, refresh the
+        provider instrument master once and retry before declaring that no
+        weekly expiry is available.
         """
-
-        df = self.get_options(symbol)
-
-        if df.empty:
-            return None
-
-        expiry_dates = pd.to_datetime(
-            df["EXPIRY_DATE"],
-            errors="coerce",
+        symbol = symbol.upper()
+        selected = self._nearest_future_expiry(
+            self.get_options(symbol),
+            symbol,
         )
+        if selected is not None:
+            return selected
 
-        valid = df.loc[
-            expiry_dates.notna()
-        ].copy()
-
-        if valid.empty:
-            return None
-
-        valid["_EXPIRY_PARSED"] = pd.to_datetime(
-            valid["EXPIRY_DATE"],
-            errors="coerce",
-        )
-
-        now = pd.Timestamp.now()
-
-        future = valid[
-            valid["_EXPIRY_PARSED"] > now
-        ].copy()
-
-        if future.empty:
-            return None
-
-        weekly = future[
-            future["EXPIRY_FLAG"]
-            .astype(str)
-            .str.upper()
-            .eq("W")
-        ].copy()
-
-        if not weekly.empty:
-            selected = (
-                weekly["_EXPIRY_PARSED"]
-                .drop_duplicates()
-                .sort_values()
-                .iloc[0]
+        # A missing NIFTY weekly expiry is a data-master freshness problem
+        # before it is a contract-selection problem. Refresh the authoritative
+        # F&O master once instead of silently falling back to a monthly chain.
+        if symbol == "NIFTY":
+            self.download_instruments("fno")
+            selected = self._nearest_future_expiry(
+                self.get_options(symbol),
+                symbol,
             )
-        else:
-            selected = (
-                future["_EXPIRY_PARSED"]
-                .drop_duplicates()
-                .sort_values()
-                .iloc[0]
-            )
+            if selected is not None:
+                return selected
 
-        matches = valid[
-            valid["_EXPIRY_PARSED"] == selected
-        ]
-
-        return str(
-            matches["EXPIRY_DATE"]
-            .iloc[0]
-        )
+        return None
 
     def get_monthly_expiry(self, symbol: str):
 
