@@ -15,10 +15,11 @@ def adapt_market_summary(dashboard) -> dict:
     return {
         "spot": dashboard.spot,
         "atm_strike": expected_move.get("atm_strike"),
-        "pcr": pcr.get("oi_pcr"),
-        "max_pain": max_pain.get("max_pain"),
         "expected_move": expected_move.get("expected_move"),
         "expected_move_lower": expected_move.get("lower"),
         "expected_move_upper": expected_move.get("upper"),
+        "expected_move_method": expected_move.get("method"),
+        "pcr": pcr.get("oi_pcr"),
+        "max_pain": max_pain.get("max_pain"),
         "expiry": dashboard.expiry,
     }
