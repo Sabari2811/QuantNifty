@@ -55,6 +55,7 @@
 - [x] Runtime provenance passed from canonical runtime context into dashboard data
 - [x] Authoritative live Greeks mapped into option-chain UI by contract identity
 - [x] Build backend field inventory for option-chain/provenance fields consumed by UI
+- [x] Add a live reconciliation report/runner that consumes one DashboardData cycle and reports backend → UI adapter gaps
 - [ ] Compare option-chain values field-by-field against a fresh captured UI/runtime snapshot
 - [x] Data-quality/provenance fields are mapped independently: coverage, integrity, freshness, source, counts, reasons
 - [x] Exact backend integrity contract findings are surfaced in the option-chain UI data-quality details
@@ -83,7 +84,7 @@
 - [x] Highlighted-row readability
 - [x] Compact AI decision reasons
 - [x] Compact execution plan
-- [x] Unnecessary AI section removed
+- [x] Unnecessary AI section removal
 - [x] Provenance/integrity UI separation
 - [x] Exact backend integrity findings are available in the option-chain data-quality details
 - [x] Decision UI no longer derives its displayed signal from probability thresholds
