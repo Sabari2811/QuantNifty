@@ -9,7 +9,6 @@ def _value(data, key, default="-"):
 
 
 def _compact_provenance_reasons(reasons):
-    """Turn canonical provenance reasons into short, human-readable details."""
     labels = {
         "provider_quote_timestamp_unavailable": "Quote timestamp unavailable",
         "provider_candle_timestamp": "Provider candle timestamp available",
@@ -17,8 +16,8 @@ def _compact_provenance_reasons(reasons):
         "freshness_unverified:INDMoney option quotes": "Option quote freshness unverified",
         "integrity_suspect:INDMoney option quotes": "Option quote integrity suspect",
         "ce_ltp_below_intrinsic": "CE LTP below intrinsic value",
+        "pe_ltp_below_intrinsic": "PE LTP below intrinsic value",
     }
-
     compact = []
     seen = set()
     for reason in reasons or ():
@@ -31,9 +30,7 @@ def _compact_provenance_reasons(reasons):
 
 def render(intelligence):
     """Render canonical IntelligenceResult data without recomputation."""
-
     st.subheader("🧠 Intelligence")
-
     if not intelligence:
         st.info("Intelligence unavailable for this runtime cycle.")
         return
@@ -48,7 +45,6 @@ def render(intelligence):
     c4.metric("Recommendation", _value(intelligence, "recommendation"))
 
     st.divider()
-
     c5, c6, c7, c8 = st.columns(4)
     c5.metric("Regime", _value(regime, "regime"))
     c6.metric("Regime Confidence", f"{float(_value(regime, 'confidence', 0.0)):.1f}%")
@@ -58,17 +54,14 @@ def render(intelligence):
     freshness = _value(quality, "freshness_status")
     integrity = _value(quality, "integrity_status", _value(quality, "status"))
     reasons = _value(quality, "reasons", ())
-
     if freshness == "VERIFIED":
         st.success("Freshness: VERIFIED")
     else:
         st.warning("Freshness: UNVERIFIED — provider quote timestamp is unavailable.")
-
     if integrity == "SUSPECT":
         st.warning("Data integrity: SUSPECT — option quote validation flagged an issue.")
     elif integrity == "UNVERIFIED":
         st.info("Data integrity: UNVERIFIED — no integrity failure was detected.")
-
     if reasons:
         with st.expander("View data-quality details", expanded=False):
             for reason in _compact_provenance_reasons(reasons):
@@ -76,36 +69,23 @@ def render(intelligence):
 
     primary = _value(intelligence, "primary_scenario")
     alternative = _value(intelligence, "alternative_scenario")
-
     if primary or alternative:
         st.divider()
         c9, c10 = st.columns(2)
-
         with c9:
             st.markdown("**Primary scenario**")
             if primary:
-                st.write(
-                    f"{_value(primary, 'name')} — "
-                    f"{_value(primary, 'direction')} "
-                    f"({_value(primary, 'probability', 0.0):.1f}%)"
-                )
+                st.write(f"{_value(primary, 'name')} — {_value(primary, 'direction')} ({_value(primary, 'probability', 0.0):.1f}%)")
                 if _value(primary, "trigger", ""):
                     st.caption(f"Trigger: {_value(primary, 'trigger')}")
                 if _value(primary, "invalidation", ""):
-                    st.caption(
-                        f"Invalidation: {_value(primary, 'invalidation')}"
-                    )
+                    st.caption(f"Invalidation: {_value(primary, 'invalidation')}")
             else:
                 st.caption("Not available")
-
         with c10:
             st.markdown("**Alternative scenario**")
             if alternative:
-                st.write(
-                    f"{_value(alternative, 'name')} — "
-                    f"{_value(alternative, 'direction')} "
-                    f"({_value(alternative, 'probability', 0.0):.1f}%)"
-                )
+                st.write(f"{_value(alternative, 'name')} — {_value(alternative, 'direction')} ({_value(alternative, 'probability', 0.0):.1f}%)")
                 if _value(alternative, "trigger", ""):
                     st.caption(f"Trigger: {_value(alternative, 'trigger')}")
             else:
