@@ -13,6 +13,7 @@ import streamlit as st
 from config.settings import PROVIDER
 from dashboard.dashboard_controller import DashboardController
 from dashboard.market_summary_adapter import adapt_market_summary
+from dashboard.decision_adapter import adapt_decision
 from dashboard.components import institutional_score_card
 from dashboard.components import intelligence_card
 
@@ -83,7 +84,8 @@ market_regime.render(dashboard)
 runtime_card.render(dashboard)
 
 intelligence_card.render(dashboard.intelligence)
-signal_card.render(dashboard.probability, dashboard.dealer)
+decision = adapt_decision(dashboard)
+signal_card.render(decision, dashboard.dealer)
 institutional_score_card.render(dashboard.institutional_score)
 probability_gauge.render(dashboard.probability)
 
@@ -105,7 +107,7 @@ market_structure_card.render(dashboard.market_structure)
 dealer_card.render(dashboard.dealer)
 dealer_flow_card.render(dashboard.dealer_flow)
 liquidity_card.render(dashboard.liquidity)
-trade_plan.render(dashboard.trade_plan, dashboard.signal)
+trade_plan.render(dashboard.trade_plan, decision)
 risk_card.render(dashboard.risk)
 gamma_heatmap.render(dashboard.greeks)
 oi_heatmap.render(dashboard.option_chain)
