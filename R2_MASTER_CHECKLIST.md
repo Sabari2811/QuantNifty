@@ -62,6 +62,8 @@
 - [x] Canonical decision adapter maps signal, probabilities, confidence, reasons, and trade-plan signal without recomputation
 - [x] Trade Signal UI renders the canonical backend signal instead of recomputing it from probability thresholds
 - [ ] Compare decision fields field-by-field against a fresh live runtime snapshot
+- [x] Intelligence adapter maps canonical recommendation, direction, confidence, conviction, opportunity, regime, scenarios, and data-quality states
+- [x] Intelligence UI renders those canonical values without recomputation
 - [ ] Compare intelligence fields field-by-field against a fresh live runtime snapshot
 - [x] Classify the identified option-chain Greek gap as backend parsing, then fix backend before UI mapping
 - [x] Fix backend gaps first for live expiry/Greeks parsing and option-chain coverage denominator
@@ -85,6 +87,7 @@
 - [x] Provenance/integrity UI separation
 - [x] Exact backend integrity findings are available in the option-chain data-quality details
 - [x] Decision UI no longer derives its displayed signal from probability thresholds
+- [x] Intelligence UI is sourced from the canonical intelligence adapter
 - [ ] Freshness state matches backend in a fresh running UI session
 - [ ] Coverage state matches backend in a fresh running UI session
 - [ ] Integrity state matches backend in a fresh running UI session
