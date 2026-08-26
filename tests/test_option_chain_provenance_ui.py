@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from core.data_provenance import AcquisitionProvenance, RuntimeDataProvenance
-from dashboard.components.option_chain import _option_chain_provenance
+from dashboard.components.option_chain import _integrity_findings, _option_chain_provenance
 
 
 def _provenance():
@@ -51,3 +51,26 @@ def test_option_chain_ui_preserves_partial_coverage_without_overwriting_integrit
     assert state["integrity_status"] == "VALID"
     assert state["freshness_status"] == "UNVERIFIED"
     assert state["missing_count"] == 2
+
+
+def test_option_chain_ui_exposes_exact_backend_integrity_contracts():
+    integrity = {
+        "status": "SUSPECT",
+        "contract_reasons": (
+            (
+                "strike:24550|CE:47007.0|PE:47008.0|row:9",
+                ("pe_ltp_below_intrinsic",),
+            ),
+            (
+                "strike:24600|CE:47009.0|PE:47010.0|row:10",
+                ("pe_ltp_below_intrinsic",),
+            ),
+        ),
+    }
+
+    findings = _integrity_findings(integrity)
+
+    assert findings == (
+        "strike:24550|CE:47007.0|PE:47008.0|row:9: pe_ltp_below_intrinsic",
+        "strike:24600|CE:47009.0|PE:47010.0|row:10: pe_ltp_below_intrinsic",
+    )
