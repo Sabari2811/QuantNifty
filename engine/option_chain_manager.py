@@ -53,6 +53,18 @@ class OptionChainManager:
                 "No option contracts found for selected expiry."
             )
 
+        # Coverage is measured against the contract universe requested by
+        # the runtime, not only the contracts that happened to exist in the
+        # local instrument master.  This prevents a missing instrument from
+        # disappearing from the denominator and producing false 100% coverage.
+        requested_strikes = (2 * int(levels)) + 1
+        expected_contract_count = requested_strikes * 2
+        instrument_contract_count = len(contracts) * 2
+        missing_instrument_count = max(
+            0,
+            expected_contract_count - instrument_contract_count,
+        )
+
         security_ids = []
 
         for contract in contracts:
@@ -150,20 +162,35 @@ class OptionChainManager:
             spot_price,
         )
 
-        provenance_reasons = (
-            ("provider_quote_timestamp_unavailable",)
-            if quotes
-            else ("no_option_quotes_received",)
-        )
+        provenance_reasons = []
+        if quotes:
+            provenance_reasons.append(
+                "provider_quote_timestamp_unavailable"
+            )
+        else:
+            provenance_reasons.append(
+                "no_option_quotes_received"
+            )
+        if missing_instrument_count:
+            provenance_reasons.append(
+                f"missing_instrument_contracts:{missing_instrument_count}"
+            )
+        if missing_ids:
+            provenance_reasons.append(
+                f"missing_provider_quotes:{len(missing_ids)}"
+            )
+
+        received_count = len(security_ids) - len(missing_ids)
+        missing_count = expected_contract_count - received_count
 
         provenance = AcquisitionProvenance(
             source="INDMoney option quotes",
             acquired_at=acquired_at,
-            expected_count=len(security_ids),
-            received_count=len(security_ids) - len(missing_ids),
-            missing_count=len(missing_ids),
+            expected_count=expected_contract_count,
+            received_count=received_count,
+            missing_count=missing_count,
             freshness_verified=False,
-            reasons=provenance_reasons,
+            reasons=tuple(provenance_reasons),
             integrity_status=integrity.status,
             integrity_reasons=integrity.reasons,
         )
