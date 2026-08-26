@@ -52,6 +52,6 @@ def test_provenance_adapter_preserves_partial_coverage():
 
     payload = adapt_provenance(provenance)
 
-    assert payload["option_chain"]["coverage_ratio"] == 90.0
+    assert payload["option_chain"]["coverage_ratio"] == (20 / 22) * 100.0
     assert payload["option_chain"]["coverage_status"] == "PARTIAL"
     assert payload["option_chain"]["missing_count"] == 2
