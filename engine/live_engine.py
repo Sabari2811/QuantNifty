@@ -109,9 +109,6 @@ class LiveEngine:
         else:
             self.ctx.analytics = computed_analytics
 
-        # In replay recompute, the recorded greeks/analytics are canonical
-        # inputs for the downstream decision and intelligence recomputation.
-        # Do not re-type or stringify the recorded dataframe payload.
         greeks_for_snapshot = self.ctx.greeks_df
         if not hasattr(greeks_for_snapshot, "copy"):
             greeks_for_snapshot = computed_analytics.get("greeks")
@@ -123,6 +120,12 @@ class LiveEngine:
         regime = self.market_regime.analyze(self.ctx.snapshot)
         self.ctx.snapshot.regime = regime
         self.ctx.regime = regime
+
+        # Replay recompute must reconstruct the exact decision from the
+        # canonical recorded decision inputs, but the execution plan should
+        # not be allowed to mutate the canonical comparison object. We build
+        # the decision normally, then compare before the optional execution
+        # gate can alter runtime status.
         self.ctx.decision = self.decision_engine.build(self.ctx.snapshot)
         self.ctx.explanation = self.explanation_engine.build(
             decision=self.ctx.decision,
@@ -166,7 +169,12 @@ class LiveEngine:
             if self._is_replay_fast():
                 pass
             else:
-                self._calculate_greeks()
+                # Replay recompute consumes recorded canonical Greeks. Live
+                # cycles continue to calculate Greeks from the live chain.
+                if self._is_replay_recompute():
+                    self.ctx.greeks_df = self.ctx.greeks_df.copy(deep=True)
+                else:
+                    self._calculate_greeks()
                 self._run_analytics()
                 self._previous_greeks_df = self.ctx.greeks_df.copy(deep=True)
             if not self._is_replay():
