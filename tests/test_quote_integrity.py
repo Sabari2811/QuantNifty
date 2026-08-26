@@ -112,7 +112,7 @@ def test_report_serializes_without_losing_contract_reasons():
     assert payload["status"] == "SUSPECT"
     assert payload["contract_reasons"]
     assert payload["contract_reasons"][0][0] == (
-        "strike:24900|CE:111|PE:222|row:0",
+        "strike:24900|CE:111|PE:222|row:0"
     )
     assert payload["contract_reasons"][0][1] == (
         "ce_ltp_below_intrinsic",
