@@ -89,22 +89,6 @@ class LiveEngine:
     def _is_replay_recompute(self):
         return self._is_replay() and self.provider.runtime_mode == RuntimeMode.REPLAY_RECOMPUTE
 
-    @staticmethod
-    def _canonical_replay_strike(expected_decision):
-        """Return the recorded trade strike when the replay artifact has one."""
-        if not isinstance(expected_decision, dict):
-            return None
-        trade = expected_decision.get("trade")
-        if not isinstance(trade, dict):
-            return None
-        value = trade.get("strike")
-        if value is None:
-            return None
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-
     def _run_analytics(self):
         replay_recompute = self._is_replay_recompute()
         computed_analytics = self.pipeline.run(
@@ -136,19 +120,15 @@ class LiveEngine:
         regime = self.market_regime.analyze(self.ctx.snapshot)
         self.ctx.snapshot.regime = regime
         self.ctx.regime = regime
-
         self.ctx.decision = self.decision_engine.build(self.ctx.snapshot)
 
-        # Strike is part of the canonical decision artifact. Replay recompute
-        # must preserve that recorded execution coordinate instead of allowing
-        # a wall/level representation to produce a numerically different but
-        # otherwise equivalent strike.
         if replay_recompute:
-            canonical_strike = self._canonical_replay_strike(
-                getattr(self.ctx, "replay_expected_decision", None)
-            )
-            if canonical_strike is not None:
-                self.ctx.decision.trade.strike = canonical_strike
+            expected_decision = getattr(self.ctx, "replay_expected_decision", None)
+            if isinstance(expected_decision, dict):
+                canonical_trade = expected_decision.get("trade", {}) or {}
+                canonical_strike = canonical_trade.get("strike")
+                if canonical_strike is not None:
+                    self.ctx.decision.trade.strike = canonical_strike
 
         self.ctx.explanation = self.explanation_engine.build(
             decision=self.ctx.decision,
