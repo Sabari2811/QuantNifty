@@ -10,7 +10,7 @@
 - [x] Replay intelligence equivalence
 - [x] Real recorded snapshot replay equivalence
 - [x] Zero-drift real replay gate
-- [x] Full regression baseline: 313 passed
+- [x] Full regression baseline: 315 passed
 
 ## R2-013 — Live Backend Validation / Backend → UI Reconciliation
 
@@ -59,8 +59,10 @@
 - [x] Data-quality/provenance fields are mapped independently: coverage, integrity, freshness, source, counts, reasons
 - [x] Exact backend integrity contract findings are surfaced in the option-chain UI data-quality details
 - [x] Canonical market-summary adapter maps Spot, ATM, PCR, Max Pain, Expected Move, and Expiry from one DashboardData cycle
-- [ ] Compare decision fields field-by-field
-- [ ] Compare intelligence fields field-by-field
+- [x] Canonical decision adapter maps signal, probabilities, confidence, reasons, and trade-plan signal without recomputation
+- [x] Trade Signal UI renders the canonical backend signal instead of recomputing it from probability thresholds
+- [ ] Compare decision fields field-by-field against a fresh live runtime snapshot
+- [ ] Compare intelligence fields field-by-field against a fresh live runtime snapshot
 - [x] Classify the identified option-chain Greek gap as backend parsing, then fix backend before UI mapping
 - [x] Fix backend gaps first for live expiry/Greeks parsing and option-chain coverage denominator
 - [x] Fix UI mapping/display gaps second for authoritative Greeks and provenance
@@ -82,6 +84,7 @@
 - [x] Unnecessary AI section removed
 - [x] Provenance/integrity UI separation
 - [x] Exact backend integrity findings are available in the option-chain data-quality details
+- [x] Decision UI no longer derives its displayed signal from probability thresholds
 - [ ] Freshness state matches backend in a fresh running UI session
 - [ ] Coverage state matches backend in a fresh running UI session
 - [ ] Integrity state matches backend in a fresh running UI session
