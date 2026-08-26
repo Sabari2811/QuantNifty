@@ -49,7 +49,22 @@ def _option_chain_provenance(provenance: RuntimeDataProvenance | None) -> dict |
     return payload.get("option_chain")
 
 
-def _render_provenance(provenance: RuntimeDataProvenance | None) -> None:
+def _integrity_findings(integrity: dict | None) -> tuple[str, ...]:
+    """Return human-readable contract-specific integrity findings from backend output."""
+    if not integrity:
+        return ()
+
+    findings = []
+    for contract, reasons in integrity.get("contract_reasons", ()):
+        reason_text = ", ".join(reasons)
+        findings.append(f"{contract}: {reason_text}")
+    return tuple(findings)
+
+
+def _render_provenance(
+    provenance: RuntimeDataProvenance | None,
+    integrity: dict | None = None,
+) -> None:
     """Display independent backend quality states without deriving one from another."""
     state = _option_chain_provenance(provenance)
     if state is None:
@@ -57,13 +72,13 @@ def _render_provenance(provenance: RuntimeDataProvenance | None) -> None:
         return
 
     coverage = f"{state['received_count']}/{state['expected_count']} ({state['coverage_ratio']:.1f}%)"
-    integrity = state["integrity_status"]
+    integrity_status = state["integrity_status"]
     freshness = state["freshness_status"]
     source = state["source"] or "Unknown"
 
     columns = st.columns(4)
     columns[0].metric("Coverage", coverage)
-    columns[1].metric("Integrity", integrity)
+    columns[1].metric("Integrity", integrity_status)
     columns[2].metric("Freshness", freshness)
     columns[3].metric("Source", source)
 
@@ -77,18 +92,25 @@ def _render_provenance(provenance: RuntimeDataProvenance | None) -> None:
     if state["reasons"]:
         details.append("Data quality: " + ", ".join(state["reasons"]))
 
+    findings = _integrity_findings(integrity)
+    if findings:
+        with st.expander("View data-quality details"):
+            st.write("Affected contracts")
+            for finding in findings:
+                st.code(finding)
+
     if details:
         st.caption(" · ".join(details))
 
 
-def render(df, greeks=None, provenance=None):
+def render(df, greeks=None, provenance=None, integrity=None):
     st.subheader("📑 Live Option Chain")
 
     if df is None or df.empty:
         st.warning("No Option Chain Available")
         return
 
-    _render_provenance(provenance)
+    _render_provenance(provenance, integrity)
     table = _merge_authoritative_greeks(df, greeks)
 
     max_ce_oi = table["CE_OI"].max()
