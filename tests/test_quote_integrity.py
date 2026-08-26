@@ -43,6 +43,20 @@ def test_below_intrinsic_ltp_is_suspect_not_invalid():
     assert "ce_ltp_below_intrinsic" in report.reasons
 
 
+def test_integrity_finding_preserves_contract_identity():
+    report = assess_option_chain(
+        _chain(Strike=24900, CE_LTP=120),
+        spot_price=25050,
+    )
+
+    assert report.contract_reasons == (
+        (
+            "strike:24900|CE:111|PE:222|row:0",
+            ("ce_ltp_below_intrinsic",),
+        ),
+    )
+
+
 def test_negative_ltp_is_invalid():
     report = assess_option_chain(
         _chain(CE_LTP=-1),
@@ -97,6 +111,9 @@ def test_report_serializes_without_losing_contract_reasons():
 
     assert payload["status"] == "SUSPECT"
     assert payload["contract_reasons"]
+    assert payload["contract_reasons"][0][0] == (
+        "strike:24900|CE:111|PE:222|row:0",
+    )
     assert payload["contract_reasons"][0][1] == (
         "ce_ltp_below_intrinsic",
     )
