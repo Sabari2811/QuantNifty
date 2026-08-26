@@ -58,6 +58,7 @@ class DashboardController:
             option_chain=ctx.option_chain,
             institutional_score=analytics.get("institutional_score", {}),
             greeks=ctx.greeks_df,
+            data_provenance=ctx.data_provenance,
             portfolio=ctx.portfolio,
             position=ctx.position,
             last_trade=ctx.last_trade,
