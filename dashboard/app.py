@@ -97,11 +97,12 @@ risk_card.render(dashboard.risk)
 gamma_heatmap.render(dashboard.greeks)
 oi_heatmap.render(dashboard.option_chain)
 
-# Live option-chain view must use Greeks and provenance from the same canonical runtime cycle.
+# Live option-chain view must use Greeks, provenance, and integrity from the same canonical runtime cycle.
 option_chain.render(
     dashboard.option_chain,
     dashboard.greeks,
     dashboard.data_provenance,
+    dashboard.option_chain_integrity,
 )
 
 greeks_table.render(dashboard.greeks)
