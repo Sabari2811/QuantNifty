@@ -10,7 +10,7 @@
 - [x] Replay intelligence equivalence
 - [x] Real recorded snapshot replay equivalence
 - [x] Zero-drift real replay gate
-- [x] Full regression baseline: 315 passed
+- [x] Full regression baseline: 321 passed
 
 ## R2-013 — Live Backend Validation / Backend → UI Reconciliation
 
@@ -47,6 +47,8 @@
 - [x] Live Greeks now produce values for the live selected expiry and are covered by regression tests
 - [ ] Live analytics outputs reconciled against raw provider data
 - [ ] Decision/intelligence values reconciled against canonical backend snapshot
+- [x] Decision ↔ Intelligence consistency contract implemented
+- [ ] Decision ↔ Intelligence consistency contract validated against fresh live runtime
 
 ## Backend → UI Reconciliation
 
@@ -93,11 +95,13 @@
 - [ ] Coverage state matches backend in a fresh running UI session
 - [ ] Integrity state matches backend in a fresh running UI session
 - [ ] Live degraded-data presentation validated
+- [ ] Decision ↔ Intelligence conflict state is surfaced clearly in the UI
 
 ## Release Gate
 
 - [ ] Fresh live-session backend validation complete
 - [ ] Backend → UI reconciliation complete
+- [ ] Decision ↔ Intelligence semantic reconciliation validated
 - [x] Targeted tests pass for previously implemented R2-013 fixes
 - [x] Real snapshot replay gate passes
 - [ ] Full regression after final live reconciliation
