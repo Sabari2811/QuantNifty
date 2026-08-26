@@ -12,6 +12,7 @@ import streamlit as st
 
 from config.settings import PROVIDER
 from dashboard.dashboard_controller import DashboardController
+from dashboard.market_summary_adapter import adapt_market_summary
 from dashboard.components import institutional_score_card
 from dashboard.components import intelligence_card
 
@@ -85,7 +86,19 @@ intelligence_card.render(dashboard.intelligence)
 signal_card.render(dashboard.probability, dashboard.dealer)
 institutional_score_card.render(dashboard.institutional_score)
 probability_gauge.render(dashboard.probability)
-expected_move_card.render(dashboard.expected_move)
+
+# Market-summary values are mapped once from the canonical DashboardData cycle.
+summary = adapt_market_summary(dashboard)
+expected_move_card.render(
+    {
+        "spot": summary["spot"],
+        "expected_move": summary["expected_move"],
+        "upper": summary["expected_move_upper"],
+        "lower": summary["expected_move_lower"],
+        "method": summary["expected_move_method"],
+    }
+)
+
 max_pain_card.render(dashboard.max_pain)
 pcr_card.render(dashboard.pcr)
 market_structure_card.render(dashboard.market_structure)
