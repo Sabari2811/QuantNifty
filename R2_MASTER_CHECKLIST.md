@@ -10,7 +10,7 @@
 - [x] Replay intelligence equivalence
 - [x] Real recorded snapshot replay equivalence
 - [x] Zero-drift real replay gate
-- [x] Full regression baseline: 310 passed
+- [x] Full regression baseline: 311 passed
 
 ## R2-013 — Live Backend Validation / Backend → UI Reconciliation
 
@@ -63,6 +63,7 @@
 - [x] Classify the identified option-chain Greek gap as backend parsing, then fix backend before UI mapping
 - [x] Fix backend gaps first for live expiry/Greeks parsing and option-chain coverage denominator
 - [x] Fix UI mapping/display gaps second for authoritative Greeks and provenance
+- [x] Dashboard header acquisition time uses canonical runtime provenance rather than local render time
 - [ ] Validate only affected UI sections with a fresh live provider session
 - [ ] Full regression after final live reconciliation
 
