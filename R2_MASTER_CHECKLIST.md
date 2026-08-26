@@ -10,17 +10,19 @@
 - [x] Replay intelligence equivalence
 - [x] Real recorded snapshot replay equivalence
 - [x] Zero-drift real replay gate
-- [x] Full regression: 293 passed
+- [x] Full regression baseline: 296 passed
 
-## Live Backend Validation — Current Phase
+## R2-013 — Live Backend Validation / Backend → UI Reconciliation
 
 ### Acquisition / Coverage
 
-- [ ] Live spot acquisition validated against provider response
+- [x] Live spot acquisition validated against provider response
 - [ ] Live option-chain acquisition validated against provider response
-- [ ] Spot coverage validated
+- [x] Spot coverage validated
 - [ ] Option-chain coverage validated across consecutive cycles
 - [ ] Missing-contract behavior validated
+- [x] NIFTY expiry selection rejects silent monthly fallback and refreshes stale F&O master
+- [ ] NIFTY expiry selection validated against the live refreshed instrument master
 
 ### Freshness
 
@@ -79,4 +81,4 @@
 - [ ] Targeted tests pass
 - [ ] Real snapshot replay gate passes
 - [ ] Full regression passes
-- [ ] Master checklist fully green for the current milestone
+- [ ] Master checklist fully green for R2-013
