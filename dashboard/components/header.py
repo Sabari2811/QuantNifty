@@ -1,5 +1,22 @@
 import streamlit as st
-from datetime import datetime
+
+
+def _acquisition_time(dashboard):
+    """Return the latest canonical acquisition time used by this dashboard cycle."""
+    provenance = getattr(dashboard, "data_provenance", None)
+    acquisitions = (
+        getattr(provenance, "spot", None),
+        getattr(provenance, "option_chain", None),
+        getattr(provenance, "candles", None),
+    )
+    timestamps = [
+        item.acquired_at
+        for item in acquisitions
+        if item is not None and item.acquired_at is not None
+    ]
+    if not timestamps:
+        return None
+    return max(timestamps)
 
 
 def render(dashboard):
@@ -11,66 +28,20 @@ def render(dashboard):
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
 
-    # -----------------------------------
-    # Symbol
-    # -----------------------------------
+    c1.metric("Symbol", dashboard.symbol)
+    c2.metric("Spot", f"{dashboard.spot:,.2f}")
+    c3.metric("Expiry", dashboard.expiry)
+    c4.metric("Provider", dashboard.provider.upper())
 
-    c1.metric(
-        "Symbol",
-        dashboard.symbol
+    session = "MOCK" if dashboard.provider.lower() == "mock" else "LIVE"
+    c5.metric("Session", session)
+
+    acquired_at = _acquisition_time(dashboard)
+    updated = (
+        acquired_at.astimezone().strftime("%H:%M:%S %Z")
+        if acquired_at is not None
+        else "UNAVAILABLE"
     )
-
-    # -----------------------------------
-    # Spot
-    # -----------------------------------
-
-    c2.metric(
-        "Spot",
-        f"{dashboard.spot:,.2f}"
-    )
-
-    # -----------------------------------
-    # Expiry
-    # -----------------------------------
-
-    c3.metric(
-        "Expiry",
-        dashboard.expiry
-    )
-
-    # -----------------------------------
-    # Provider
-    # -----------------------------------
-
-    c4.metric(
-        "Provider",
-        dashboard.provider.upper()
-    )
-
-    # -----------------------------------
-    # Session
-    # -----------------------------------
-
-    if dashboard.provider.lower() == "mock":
-
-        session = "MOCK"
-
-    else:
-
-        session = "LIVE"
-
-    c5.metric(
-        "Session",
-        session
-    )
-
-    # -----------------------------------
-    # Last Refresh
-    # -----------------------------------
-
-    c6.metric(
-        "Updated",
-        datetime.now().strftime("%H:%M:%S")
-    )
+    c6.metric("Acquired", updated)
 
     st.divider()
