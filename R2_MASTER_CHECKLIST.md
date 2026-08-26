@@ -10,7 +10,7 @@
 - [x] Replay intelligence equivalence
 - [x] Real recorded snapshot replay equivalence
 - [x] Zero-drift real replay gate
-- [x] Full regression baseline: 299 passed
+- [x] Full regression baseline: 300 passed
 
 ## R2-013 — Live Backend Validation / Backend → UI Reconciliation
 
@@ -20,7 +20,7 @@
 - [ ] Live option-chain acquisition validated against provider response
 - [x] Spot coverage validated
 - [ ] Option-chain coverage validated across consecutive cycles
-- [ ] Missing-contract behavior validated
+- [x] Missing-contract coverage is represented in provenance rather than disappearing from the denominator
 - [x] NIFTY expiry selection rejects silent monthly fallback and refreshes stale F&O master
 - [ ] NIFTY expiry selection validated against the live refreshed instrument master
 
