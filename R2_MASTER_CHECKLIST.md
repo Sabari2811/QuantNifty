@@ -10,7 +10,7 @@
 - [x] Replay intelligence equivalence
 - [x] Real recorded snapshot replay equivalence
 - [x] Zero-drift real replay gate
-- [x] Full regression baseline: 296 passed
+- [x] Full regression baseline: 299 passed
 
 ## R2-013 — Live Backend Validation / Backend → UI Reconciliation
 
@@ -36,6 +36,7 @@
 - [x] Option-chain integrity validator
 - [x] INVALID vs SUSPECT separation
 - [x] Integrity reasons preserved in provenance
+- [x] Live cycle observed complete coverage with a separate SUSPECT integrity state
 - [ ] Real live-chain integrity validated during market hours
 - [ ] Real degraded-data case validated
 
