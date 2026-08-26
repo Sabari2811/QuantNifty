@@ -18,6 +18,20 @@ def check(name, condition):
         raise AssertionError(name)
 
 
+def test_ambiguous_provider_expiry_uses_future_interpretation():
+    engine = GreeksEngine()
+    target = datetime.now() + timedelta(days=7)
+
+    # The same slash-formatted date can be represented by either convention.
+    # The parser must select the interpretation that is actually future rather
+    # than accepting the first syntactically valid interpretation.
+    day_first = target.strftime("%d/%m/%Y %H:%M")
+    month_first = target.strftime("%m/%d/%Y %H:%M")
+
+    assert engine.get_time_to_expiry(day_first) > 0
+    assert engine.get_time_to_expiry(month_first) > 0
+
+
 def validate_result(result):
     for key in ["iv", "delta", "gamma", "theta", "vega", "rho"]:
         check(f"{key} exists", key in result)
