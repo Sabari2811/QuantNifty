@@ -10,7 +10,7 @@
 - [x] Replay intelligence equivalence
 - [x] Real recorded snapshot replay equivalence
 - [x] Zero-drift real replay gate
-- [x] Full regression baseline: 304 passed
+- [x] Full regression baseline: 305 passed
 
 ## R2-013 — Live Backend Validation / Backend → UI Reconciliation
 
