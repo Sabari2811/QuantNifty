@@ -14,7 +14,7 @@ IntegrityStatus = Literal["VALID", "SUSPECT", "INVALID"]
 class QuoteIntegrityReport:
     """Deterministic structural/pricing checks for a live option chain.
 
-    The validator never changes the raw quotes.  A below-intrinsic LTP is
+    The validator never changes the raw quotes. A below-intrinsic LTP is
     classified as SUSPECT rather than INVALID because an LTP can be a stale
     last trade while the underlying has already moved.
     """
@@ -46,6 +46,15 @@ def _finite_float(value):
     return value if math.isfinite(value) else None
 
 
+def _contract_key(row, row_number: int) -> str:
+    """Return a stable human/reconciliation key for an option contract row."""
+    strike = _finite_float(row.get("Strike"))
+    strike_text = str(int(strike)) if strike is not None and strike.is_integer() else str(strike)
+    ce_id = row.get("CE_ID")
+    pe_id = row.get("PE_ID")
+    return f"strike:{strike_text}|CE:{ce_id}|PE:{pe_id}|row:{row_number}"
+
+
 def assess_option_chain(
     option_chain: pd.DataFrame,
     spot_price: float,
@@ -60,7 +69,7 @@ def assess_option_chain(
     - finite, non-negative LTP/OI/volume values
     - LTP below spot-based intrinsic value
 
-    A below-intrinsic LTP is only a SUSPECT condition.  This deliberately
+    A below-intrinsic LTP is only a SUSPECT condition. This deliberately
     avoids treating a stale LTP as fabricated data when the provider does not
     expose a usable quote timestamp.
     """
@@ -157,8 +166,9 @@ def assess_option_chain(
                     row_invalid = True
 
         if row_reasons:
-            contract_key = f"row:{row_number}"
-            contract_reasons.append((contract_key, tuple(row_reasons)))
+            contract_reasons.append(
+                (_contract_key(row, row_number), tuple(row_reasons))
+            )
             reasons.extend(row_reasons)
 
         if row_invalid:
