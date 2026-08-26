@@ -1,6 +1,9 @@
 import pandas as pd
 import streamlit as st
 
+from core.data_provenance import RuntimeDataProvenance
+from dashboard.provenance_adapter import adapt_provenance
+
 
 _GREEK_COLUMNS = [
     "CE_IV",
@@ -23,15 +26,13 @@ def _merge_authoritative_greeks(option_chain: pd.DataFrame, greeks: pd.DataFrame
     if greeks is None or greeks.empty:
         return option_chain.copy()
 
-    required = {"Strike", *["CE_ID", "PE_ID"], *_GREEK_COLUMNS}
+    required = {"Strike", "CE_ID", "PE_ID", *_GREEK_COLUMNS}
     if not required.issubset(greeks.columns):
         return option_chain.copy()
 
     greek_columns = ["Strike", "CE_ID", "PE_ID", *_GREEK_COLUMNS]
     greek_view = greeks[greek_columns].copy()
 
-    # Contract IDs are the authoritative identity; strike is retained as a
-    # deterministic fallback only for legacy/replay frames without stable IDs.
     merged = option_chain.merge(
         greek_view,
         on=["Strike", "CE_ID", "PE_ID"],
@@ -42,13 +43,52 @@ def _merge_authoritative_greeks(option_chain: pd.DataFrame, greeks: pd.DataFrame
     return merged
 
 
-def render(df, greeks=None):
+def _option_chain_provenance(provenance: RuntimeDataProvenance | None) -> dict | None:
+    """Return only the canonical option-chain provenance used by this view."""
+    payload = adapt_provenance(provenance)
+    return payload.get("option_chain")
+
+
+def _render_provenance(provenance: RuntimeDataProvenance | None) -> None:
+    """Display independent backend quality states without deriving one from another."""
+    state = _option_chain_provenance(provenance)
+    if state is None:
+        st.warning("Option-chain provenance unavailable")
+        return
+
+    coverage = f"{state['received_count']}/{state['expected_count']} ({state['coverage_ratio']:.1f}%)"
+    integrity = state["integrity_status"]
+    freshness = state["freshness_status"]
+    source = state["source"] or "Unknown"
+
+    columns = st.columns(4)
+    columns[0].metric("Coverage", coverage)
+    columns[1].metric("Integrity", integrity)
+    columns[2].metric("Freshness", freshness)
+    columns[3].metric("Source", source)
+
+    details = []
+    if state["missing_count"]:
+        details.append(f"Missing contracts: {state['missing_count']}")
+    if state["integrity_reasons"]:
+        details.append(
+            "Integrity: " + ", ".join(state["integrity_reasons"])
+        )
+    if state["reasons"]:
+        details.append("Data quality: " + ", ".join(state["reasons"]))
+
+    if details:
+        st.caption(" · ".join(details))
+
+
+def render(df, greeks=None, provenance=None):
     st.subheader("📑 Live Option Chain")
 
     if df is None or df.empty:
         st.warning("No Option Chain Available")
         return
 
+    _render_provenance(provenance)
     table = _merge_authoritative_greeks(df, greeks)
 
     max_ce_oi = table["CE_OI"].max()
