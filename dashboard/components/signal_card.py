@@ -1,81 +1,39 @@
 import streamlit as st
 
 
-def render(
-    probability,
-    dealer
-):
-    """
-    Trade Signal Card
-    """
+def render(decision, dealer):
+    """Render canonical decision fields without recomputing the signal."""
 
     st.subheader("🎯 Trade Signal")
 
-    bullish = probability["bullish_probability"]
-    bearish = probability["bearish_probability"]
-    confidence = probability["confidence"]
+    bullish = decision.get("bullish_probability")
+    bearish = decision.get("bearish_probability")
+    confidence = decision.get("confidence")
+    signal = decision.get("signal")
 
-    # ======================================================
-    # Signal
-    # ======================================================
+    if signal is None:
+        st.info("Trade signal unavailable for this runtime cycle.")
+        return
 
-    if bullish >= 70:
-
-        signal = "🟢 BUY CALL"
-
-    elif bearish >= 70:
-
-        signal = "🔴 BUY PUT"
-
+    if signal == "BUY CALL":
+        st.success("🟢 BUY CALL")
+    elif signal == "BUY PUT":
+        st.error("🔴 BUY PUT")
     else:
-
-        signal = "🟡 WAIT"
-
-    st.success(signal)
-
-    # ======================================================
-    # Metrics
-    # ======================================================
+        st.warning(f"🟡 {signal}")
 
     c1, c2, c3 = st.columns(3)
+    c1.metric("Bullish", "-" if bullish is None else f"{bullish}%")
+    c2.metric("Bearish", "-" if bearish is None else f"{bearish}%")
+    c3.metric("Confidence", "-" if confidence is None else f"{confidence}%")
 
-    with c1:
-
-        st.metric(
-            "Bullish",
-            f"{bullish}%"
-        )
-
-    with c2:
-
-        st.metric(
-            "Bearish",
-            f"{bearish}%"
-        )
-
-    with c3:
-
-        st.metric(
-            "Confidence",
-            f"{confidence}%"
-        )
-
-    # ======================================================
-    # Reasons
-    # ======================================================
-
-    st.write("### Reasons")
-
-    for reason in probability["reasons"]:
-
-        st.write(f"✅ {reason}")
-
-    # ======================================================
-    # Dealer Summary
-    # ======================================================
+    reasons = decision.get("reasons", ())
+    if reasons:
+        st.write("### Reasons")
+        for reason in reasons:
+            st.write(f"✅ {reason}")
 
     st.info(
-
         f"""
 Dealer Gamma : **{dealer.dealer_gamma}**
 
@@ -83,7 +41,6 @@ Market Mode : **{dealer.market_mode}**
 
 Expected Volatility : **{dealer.expected_volatility}**
 """
-
     )
 
     st.divider()
