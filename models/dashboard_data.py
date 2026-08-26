@@ -34,6 +34,7 @@ class DashboardData:
     option_chain: pd.DataFrame
     greeks: pd.DataFrame
     data_provenance: RuntimeDataProvenance = field(default_factory=RuntimeDataProvenance)
+    option_chain_integrity: dict | None = None
 
     intelligence: dict | None = None
 
