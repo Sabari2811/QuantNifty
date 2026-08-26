@@ -10,7 +10,7 @@
 - [x] Replay intelligence equivalence
 - [x] Real recorded snapshot replay equivalence
 - [x] Zero-drift real replay gate
-- [x] Full regression baseline: 308 passed
+- [x] Full regression baseline: 310 passed
 
 ## R2-013 — Live Backend Validation / Backend → UI Reconciliation
 
@@ -57,6 +57,7 @@
 - [x] Build backend field inventory for option-chain/provenance fields consumed by UI
 - [ ] Compare option-chain values field-by-field against a fresh captured UI/runtime snapshot
 - [x] Data-quality/provenance fields are mapped independently: coverage, integrity, freshness, source, counts, reasons
+- [x] Exact backend integrity contract findings are surfaced in the option-chain UI data-quality details
 - [ ] Compare decision fields field-by-field
 - [ ] Compare intelligence fields field-by-field
 - [x] Classify the identified option-chain Greek gap as backend parsing, then fix backend before UI mapping
@@ -78,6 +79,7 @@
 - [x] Compact execution plan
 - [x] Unnecessary AI section removed
 - [x] Provenance/integrity UI separation
+- [x] Exact backend integrity findings are available in the option-chain data-quality details
 - [ ] Freshness state matches backend in a fresh running UI session
 - [ ] Coverage state matches backend in a fresh running UI session
 - [ ] Integrity state matches backend in a fresh running UI session
