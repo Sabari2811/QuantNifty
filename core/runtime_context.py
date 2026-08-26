@@ -13,52 +13,29 @@ class RuntimeContext:
     Intelligence Layer, Paper Trading, and Dashboard.
     """
 
-    # ==========================================================
-    # MARKET
-    # ==========================================================
-
     symbol: str = "NIFTY"
     strike_levels: int = 5
     spot: float = 0.0
     expiry: str = ""
     timestamp: str = ""
 
-    # ==========================================================
-    # RAW MARKET DATA
-    # ==========================================================
-
     option_chain: Any = None
     greeks_df: Any = None
     candles: Any = None
-
-    # ==========================================================
-    # DATA PROVENANCE
-    # ==========================================================
 
     data_provenance: RuntimeDataProvenance = field(
         default_factory=RuntimeDataProvenance
     )
 
-    # ==========================================================
-    # ANALYTICS
-    # ==========================================================
-
     analytics: dict = field(default_factory=dict)
     features: dict = field(default_factory=dict)
     regime: Any = None
-
-    # ==========================================================
-    # DOMAIN OBJECTS
-    # ==========================================================
 
     snapshot: Any = None
     decision: Any = None
     explanation: Any = None
     intelligence: Any = None
-
-    # ==========================================================
-    # PAPER TRADING
-    # ==========================================================
+    decision_intelligence_consistency: Any = None
 
     portfolio: Any = None
     position: Any = None
@@ -68,10 +45,6 @@ class RuntimeContext:
     risk_state: Any = None
     trade_status: str = ""
     trade_block_reason: str = ""
-
-    # ==========================================================
-    # RUNTIME
-    # ==========================================================
 
     runtime_status: str = "READY"
     cycle_no: int = 0
