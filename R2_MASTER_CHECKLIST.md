@@ -10,7 +10,7 @@
 - [x] Replay intelligence equivalence
 - [x] Real recorded snapshot replay equivalence
 - [x] Zero-drift real replay gate
-- [x] Full regression baseline: 311 passed
+- [x] Full regression baseline: 313 passed
 
 ## R2-013 — Live Backend Validation / Backend → UI Reconciliation
 
@@ -58,6 +58,7 @@
 - [ ] Compare option-chain values field-by-field against a fresh captured UI/runtime snapshot
 - [x] Data-quality/provenance fields are mapped independently: coverage, integrity, freshness, source, counts, reasons
 - [x] Exact backend integrity contract findings are surfaced in the option-chain UI data-quality details
+- [x] Canonical market-summary adapter maps Spot, ATM, PCR, Max Pain, Expected Move, and Expiry from one DashboardData cycle
 - [ ] Compare decision fields field-by-field
 - [ ] Compare intelligence fields field-by-field
 - [x] Classify the identified option-chain Greek gap as backend parsing, then fix backend before UI mapping
@@ -90,7 +91,7 @@
 
 - [ ] Fresh live-session backend validation complete
 - [ ] Backend → UI reconciliation complete
-- [x] Targeted tests pass for implemented R2-013 fixes
+- [x] Targeted tests pass for previously implemented R2-013 fixes
 - [x] Real snapshot replay gate passes
 - [ ] Full regression after final live reconciliation
 - [ ] Master checklist fully green for R2-013
