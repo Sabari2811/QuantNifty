@@ -10,7 +10,7 @@
 - [x] Replay intelligence equivalence
 - [x] Real recorded snapshot replay equivalence
 - [x] Zero-drift real replay gate
-- [x] Full regression baseline: 300 passed
+- [x] Full regression baseline: 303 passed
 
 ## R2-013 — Live Backend Validation / Backend → UI Reconciliation
 
@@ -51,6 +51,7 @@
 ## Backend → UI Reconciliation
 
 - [ ] Capture fresh canonical live snapshot
+- [x] Add canonical provenance adapter exposing coverage, integrity, freshness, and provider source independently
 - [ ] Build backend field inventory consumed by UI
 - [ ] Compare option-chain values field-by-field
 - [ ] Compare data-quality/provenance fields field-by-field
