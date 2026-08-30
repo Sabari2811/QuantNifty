@@ -86,6 +86,8 @@
 ### Test-environment integrity
 - [x] Pytest collection does not execute the live INDMoney diagnostic script
 - [x] Live-provider failure is not allowed to masquerade as a unit/integration test failure
+- [x] WebSocket environment variables cannot activate live networking for non-INDMoney test doubles
+- [x] Missing WebSocket index-token configuration fails closed for real INDMoney live-feed activation
 
 ## UI Validation
 - [x] Live option-chain strike ordering
