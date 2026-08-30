@@ -118,8 +118,10 @@ class MarketDataPipeline:
             for column in ("CE_ID", "PE_ID"):
                 if column in ctx.option_chain.columns:
                     instruments.extend(self.live_feed.option_instrument(value) for value in ctx.option_chain[column].dropna())
+            option_timestamp = None
             if instruments:
                 batch = self.live_feed.collect(instruments, mode="quote")
+                option_timestamp = batch.latest_provider_timestamp
                 for id_column, price_column in (("CE_ID", "CE_LTP"), ("PE_ID", "PE_LTP")):
                     if id_column not in ctx.option_chain.columns or price_column not in ctx.option_chain.columns:
                         continue
@@ -127,7 +129,6 @@ class MarketDataPipeline:
                         tick = batch.ticks.get(self.live_feed.option_instrument(security_id))
                         if tick is not None and tick.ltp is not None:
                             ctx.option_chain.at[index, price_column] = tick.ltp
-            option_timestamp = batch.latest_provider_timestamp if instruments else None
         else:
             option_timestamp = None
         option_provenance = ctx.option_chain.attrs.get("data_provenance")
