@@ -53,6 +53,30 @@ def test_option_chain_ui_preserves_partial_coverage_without_overwriting_integrit
     assert state["missing_count"] == 2
 
 
+def test_option_chain_ui_exposes_provider_timestamp_and_age():
+    provenance = RuntimeDataProvenance(
+        option_chain=AcquisitionProvenance(
+            source="INDMoney option quotes",
+            acquired_at=datetime(2026, 8, 30, 7, 0, tzinfo=timezone.utc),
+            provider_timestamp=datetime(2026, 8, 30, 6, 59, 58, tzinfo=timezone.utc),
+            expected_count=22,
+            received_count=22,
+            missing_count=0,
+            freshness_verified=True,
+            freshness_seconds=2.0,
+            integrity_status="VALID",
+        )
+    )
+
+    state = _option_chain_provenance(provenance)
+
+    assert state["provider_timestamp"] == datetime(
+        2026, 8, 30, 6, 59, 58, tzinfo=timezone.utc
+    )
+    assert state["freshness_status"] == "VERIFIED"
+    assert state["freshness_seconds"] == 2.0
+
+
 def test_option_chain_ui_exposes_exact_backend_integrity_contracts():
     integrity = {
         "status": "SUSPECT",
