@@ -10,14 +10,14 @@
 - [x] Replay intelligence equivalence
 - [x] Real recorded snapshot replay equivalence
 - [x] Zero-drift real replay gate
-- [x] Full regression baseline: 321 passed
+- [x] Full regression baseline: 324 passed
 
 ## R2-013 — Live Backend Validation / Backend → UI Reconciliation
 
 ### Acquisition / Coverage
 
 - [x] Live spot acquisition validated against provider response
-- [ ] Live option-chain acquisition validated against provider response
+- [x] Live option-chain acquisition validated against provider response
 - [x] Spot coverage validated
 - [ ] Option-chain coverage validated across consecutive cycles
 - [x] Missing-contract coverage is represented in provenance rather than disappearing from the denominator
@@ -48,11 +48,12 @@
 - [ ] Live analytics outputs reconciled against raw provider data
 - [ ] Decision/intelligence values reconciled against canonical backend snapshot
 - [x] Decision ↔ Intelligence consistency contract implemented
+- [x] Decision ↔ Intelligence semantic model distinguishes direction from actionability
 - [ ] Decision ↔ Intelligence consistency contract validated against fresh live runtime
 
 ## Backend → UI Reconciliation
 
-- [ ] Capture fresh canonical live snapshot
+- [x] Capture fresh canonical live snapshot
 - [x] Add canonical provenance adapter exposing coverage, integrity, freshness, and provider source independently
 - [x] Runtime provenance passed from canonical runtime context into dashboard data
 - [x] Authoritative live Greeks mapped into option-chain UI by contract identity
@@ -95,13 +96,13 @@
 - [ ] Coverage state matches backend in a fresh running UI session
 - [ ] Integrity state matches backend in a fresh running UI session
 - [ ] Live degraded-data presentation validated
-- [ ] Decision ↔ Intelligence conflict state is surfaced clearly in the UI
+- [ ] Decision ↔ Intelligence conflict/deferred state is surfaced clearly in the UI
 
 ## Release Gate
 
 - [ ] Fresh live-session backend validation complete
-- [ ] Backend → UI reconciliation complete
-- [ ] Decision ↔ Intelligence semantic reconciliation validated
+- [x] Backend → UI single-cycle reconciliation complete
+- [ ] Decision ↔ Intelligence semantic reconciliation validated against fresh live runtime
 - [x] Targeted tests pass for previously implemented R2-013 fixes
 - [x] Real snapshot replay gate passes
 - [ ] Full regression after final live reconciliation
