@@ -15,6 +15,7 @@ if PROJECT_ROOT not in sys.path:
 
 from dashboard.dashboard_controller import DashboardController
 from dashboard.live_reconciliation import build_live_reconciliation
+from validation.live_session_freshness import evaluate_consecutive_freshness
 
 DEFAULT_REPORT = os.path.join(PROJECT_ROOT, "validation", "live_session_latest.json")
 DEFAULT_SUMMARY = os.path.join(PROJECT_ROOT, "validation", "live_session_latest_summary.txt")
@@ -164,22 +165,12 @@ def main() -> int:
         if cycle_index + 1 < args.cycles and args.interval:
             time.sleep(args.interval)
 
-    # Freshness for a live trading decision is a property of live quote
-    # acquisitions (spot + option chain). Historical candles are intentionally
-    # excluded: their age is a separate analytical-data property and a stale
-    # historical window must not masquerade as stale live quotes.
-    live_items = []
-    for cycle in reports:
-        for source in ("spot", "option_chain"):
-            item = cycle["provenance"].get(source)
-            if item is not None:
-                live_items.append(item)
-
-    timestamped = [item for item in live_items if item.get("provider_timestamp") is not None]
-    stale = [item for item in live_items if item.get("freshness_status") == "STALE"]
-    suspect = [item for item in live_items if item.get("integrity_status") == "SUSPECT"]
-    invalid = [item for item in live_items if item.get("integrity_status") == "INVALID"]
-    unverified = [item for item in live_items if item.get("freshness_status") in {"UNVERIFIED", "REALTIME_UNTIMESTAMPED"}]
+    freshness = evaluate_consecutive_freshness(
+        [
+            {"spot": cycle["provenance"].get("spot"), "option_chain": cycle["provenance"].get("option_chain")}
+            for cycle in reports
+        ]
+    )
 
     oi_states = [cycle["oi"] for cycle in reports if cycle["oi"] is not None]
     oi_ready = len(oi_states) >= 2 and all(
@@ -193,20 +184,27 @@ def main() -> int:
     )
     reconciliation_ok = not any(c["gaps"] for c in reports)
     coverage_ok = not any(f["type"] == "incomplete_coverage" for f in failures)
+    integrity_invalid = any(
+        f["type"] == "invalid_provenance" for f in failures
+    )
+    integrity_suspect = any(
+        item.get("integrity_status") == "SUSPECT"
+        for cycle in reports
+        for item in (cycle["provenance"].get("spot"), cycle["provenance"].get("option_chain"))
+        if item is not None
+    )
 
     gates = {
         "backend_ui_reconciliation": _gate("PASS" if reconciliation_ok else "FAIL", "all DashboardData → UI reconciliation fields matched" if reconciliation_ok else "field-level gaps recorded"),
         "coverage": _gate("PASS" if coverage_ok else "FAIL", "no incomplete acquisition coverage observed" if coverage_ok else "incomplete coverage observed"),
-        "freshness": _gate("PASS" if timestamped and not stale and not unverified else "NOT_VERIFIED", "all live quote sources have provider timestamps and no stale state" if timestamped and not stale and not unverified else "live quote freshness cannot be proven from the current acquisition evidence; historical candle age is excluded from this gate"),
-        "integrity": _gate("PASS" if not invalid and not suspect else "DEGRADED", "all live quote sources passed integrity" if not invalid and not suspect else f"suspect={len(suspect)} invalid={len(invalid)}; degradation remains explicit"),
+        "freshness": _gate(freshness["status"], "consecutive live spot and option-chain sources are timestamped and non-stale" if freshness["status"] == "PASS" else "timestamp-bearing consecutive live quote evidence is not yet sufficient to prove freshness"),
+        "integrity": _gate("PASS" if not integrity_invalid and not integrity_suspect else "DEGRADED", "all live quote sources passed integrity" if not integrity_invalid and not integrity_suspect else "suspect or invalid quote integrity remains explicit"),
         "oi_consecutive_state": _gate("PASS" if oi_ready else "NOT_VERIFIED", "consecutive cycles reached READY/NO_CHANGE" if oi_ready else "insufficient consecutive OI evidence"),
         "decision_intelligence": _gate("PASS" if decision_ok else "FAIL", "canonical decision/intelligence values matched UI" if decision_ok else "decision/intelligence mismatch recorded"),
         "analytics_raw_reconciliation": _gate("NOT_VERIFIED", "requires a fresh market-session raw-provider numerical reconciliation; successful analytics generation alone is not proof"),
-        "degraded_data_ui": _gate("OBSERVED" if suspect else "NOT_VERIFIED", "live suspect integrity state observed; controlled UI degradation test still required" if suspect else "requires a controlled missing/invalid-data UI session"),
+        "degraded_data_ui": _gate("OBSERVED" if integrity_suspect else "NOT_VERIFIED", "live suspect integrity state observed; controlled UI degradation test still required" if integrity_suspect else "requires a controlled missing/invalid-data UI session"),
     }
 
-    # A validation run succeeds only when every release gate is PASS.
-    # NOT_VERIFIED, DEGRADED and OBSERVED are evidence states, never success.
     for name, gate in gates.items():
         if gate["status"] != "PASS":
             failures.append({
@@ -224,6 +222,7 @@ def main() -> int:
         "cycles_completed": len(reports),
         "failures": failures,
         "gates": gates,
+        "freshness": freshness,
         "cycles": reports,
     }
 
