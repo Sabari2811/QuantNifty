@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from core.data_provenance import AcquisitionProvenance, RuntimeDataProvenance
 from core.quote_integrity import assess_option_chain
 from core.quote_metadata import extract_provider_timestamp
+from providers.indmoney_provider import INDMoneyProvider
 from providers.live_quote_coordinator import LiveQuoteCoordinator
 from providers.simulation_provider import SimulationProvider
 
@@ -23,7 +24,8 @@ class MarketDataPipeline:
         self.chain_manager = chain_manager
         self.candle_manager = candle_manager
         self.live_feed = None
-        if os.getenv("INDSTOCKS_ENABLE_WS_LIVE_QUOTES", "0") == "1":
+        self.ws_nifty_token = None
+        if os.getenv("INDSTOCKS_ENABLE_WS_LIVE_QUOTES", "0") == "1" and isinstance(provider, INDMoneyProvider):
             token = getattr(provider, "token", None) or os.getenv("INDSTOCKS_API_TOKEN")
             ws_token = os.getenv("INDSTOCKS_WS_NIFTY_TOKEN")
             if not token:
@@ -32,8 +34,6 @@ class MarketDataPipeline:
                 raise RuntimeError("INDSTOCKS_ENABLE_WS_LIVE_QUOTES=1 requires INDSTOCKS_WS_NIFTY_TOKEN")
             self.live_feed = LiveQuoteCoordinator(token)
             self.ws_nifty_token = ws_token
-        else:
-            self.ws_nifty_token = None
 
     @classmethod
     def _candle_freshness(cls, provider_timestamp, acquired_at):
