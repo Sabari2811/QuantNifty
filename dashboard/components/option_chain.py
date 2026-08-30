@@ -83,12 +83,14 @@ def _render_provenance(
     columns[3].metric("Source", source)
 
     details = []
+    if state["provider_timestamp"] is not None:
+        details.append(f"Provider timestamp: {state['provider_timestamp']}")
+    if state["freshness_seconds"] is not None:
+        details.append(f"Age: {state['freshness_seconds']:.1f}s")
     if state["missing_count"]:
         details.append(f"Missing contracts: {state['missing_count']}")
     if state["integrity_reasons"]:
-        details.append(
-            "Integrity: " + ", ".join(state["integrity_reasons"])
-        )
+        details.append("Integrity: " + ", ".join(state["integrity_reasons"]))
     if state["reasons"]:
         details.append("Data quality: " + ", ".join(state["reasons"]))
 
@@ -124,22 +126,13 @@ def render(df, greeks=None, provenance=None, integrity=None):
 
         if row["CE_OI"] == max_ce_oi:
             style[columns.index("CE_OI")] = "background-color:#006400;color:white;font-weight:bold"
-
         if row["PE_OI"] == max_pe_oi:
             style[columns.index("PE_OI")] = "background-color:#8B0000;color:white;font-weight:bold"
-
         if row["CE_VOLUME"] == max_ce_vol:
             style[columns.index("CE_VOLUME")] = "background-color:#1E90FF;color:white"
-
         if row["PE_VOLUME"] == max_pe_vol:
             style[columns.index("PE_VOLUME")] = "background-color:#1E90FF;color:white"
-
         return style
 
     styled = table.style.apply(highlight, axis=1)
-
-    st.dataframe(
-        styled,
-        use_container_width=True,
-        height=420,
-    )
+    st.dataframe(styled, use_container_width=True, height=420)
