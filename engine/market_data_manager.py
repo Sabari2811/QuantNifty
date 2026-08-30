@@ -13,46 +13,29 @@ class MarketDataManager:
     """
 
     def __init__(self, provider: INDMoneyProvider):
-
         self.provider = provider
-
         self.cache = {}
 
     # -------------------------------------------------------
-    # Live Spot Price
+    # Live Spot Quote / Price
     # -------------------------------------------------------
 
-    def get_spot_price(self, symbol: str):
-
+    def get_spot_quote(self, symbol: str):
         symbol = symbol.upper()
-
-        if symbol == "NIFTY":
-
-            quote = self.provider.get_index_quote("NIFTY 50")
-
-        elif symbol == "BANKNIFTY":
-
-            quote = self.provider.get_index_quote("NIFTY BANK")
-
-        elif symbol == "FINNIFTY":
-
-            quote = self.provider.get_index_quote("NIFTY FIN SERVICE")
-
-        elif symbol == "MIDCPNIFTY":
-
-            quote = self.provider.get_index_quote("NIFTY MID SELECT")
-
-        else:
-
+        mapping = {
+            "NIFTY": "NIFTY 50",
+            "BANKNIFTY": "NIFTY BANK",
+            "FINNIFTY": "NIFTY FIN SERVICE",
+            "MIDCPNIFTY": "NIFTY MID SELECT",
+        }
+        if symbol not in mapping:
             raise ValueError(f"Unsupported Index : {symbol}")
+        return self.provider.get_index_quote(mapping[symbol])
 
+    def get_spot_price(self, symbol: str):
+        quote = self.get_spot_quote(symbol)
         if quote is None:
-
             raise Exception("Unable to fetch live quote.")
-
-        # ----------------------------
-        # Try common response keys
-        # ----------------------------
 
         for key in (
             "ltp",
@@ -62,21 +45,16 @@ class MarketDataManager:
             "live_price",
             "close",
         ):
-
-            if key in quote:
-
+            if key in quote and quote[key] is not None:
                 return float(quote[key])
 
-        raise Exception(
-            f"Spot price not found in response: {quote}"
-        )
+        raise Exception(f"Spot price not found in response: {quote}")
 
     # -------------------------------------------------------
     # Generic Quote
     # -------------------------------------------------------
 
     def get_quote(self, symbol):
-
         return self.provider.get_quote(symbol)
 
     # -------------------------------------------------------
@@ -84,9 +62,7 @@ class MarketDataManager:
     # -------------------------------------------------------
 
     def set_cache(self, key, value):
-
         self.cache[key] = value
 
     def get_cache(self, key):
-
         return self.cache.get(key)
