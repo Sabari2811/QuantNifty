@@ -17,19 +17,10 @@ class TradeExecutionPipeline:
     - Update RuntimeContext
     """
 
-    def __init__(
-        self,
-        paper_broker,
-        risk_manager,
-        intelligence_gate=None,
-    ):
+    def __init__(self, paper_broker, risk_manager, intelligence_gate=None):
         self.paper_broker = paper_broker
         self.risk_manager = risk_manager
-        self.intelligence_gate = (
-            intelligence_gate
-            if intelligence_gate is not None
-            else IntelligenceGate()
-        )
+        self.intelligence_gate = intelligence_gate if intelligence_gate is not None else IntelligenceGate()
 
     def sync_context(self, ctx):
         broker = self.paper_broker
@@ -37,10 +28,7 @@ class TradeExecutionPipeline:
         ctx.position = getattr(broker, "position", None)
         ctx.last_trade = getattr(broker, "last_trade", None)
         ctx.journal = getattr(broker, "journal", None)
-        if ctx.journal is not None:
-            ctx.statistics = ctx.journal.summary()
-        else:
-            ctx.statistics = {}
+        ctx.statistics = ctx.journal.summary() if ctx.journal is not None else {}
         ctx.risk_state = self.risk_manager.state
 
     def execute(self, ctx):
@@ -50,7 +38,6 @@ class TradeExecutionPipeline:
 
         if ctx.decision is None:
             return
-
         trade = getattr(ctx.decision, "trade", None)
         if trade is None:
             return
@@ -60,43 +47,33 @@ class TradeExecutionPipeline:
             if not intelligence_result.allowed:
                 ctx.trade_status = "BLOCKED"
                 ctx.trade_block_reason = intelligence_result.reason
-                print()
-                print("=" * 70)
+                print("\n" + "=" * 70)
                 print("INTELLIGENCE GATE")
                 print("=" * 70)
                 print(intelligence_result.reason)
                 return
 
             consistency = getattr(ctx, "decision_intelligence_consistency", None)
-            if consistency is not None:
-                if getattr(consistency, "status", "") == "DEFERRED":
-                    ctx.trade_status = "BLOCKED"
-                    ctx.trade_block_reason = consistency.reason
-                    print()
-                    print("=" * 70)
-                    print("DECISION / INTELLIGENCE DEFERRAL GATE")
-                    print("=" * 70)
-                    print(consistency.reason)
-                    return
-                if not consistency.consistent:
-                    ctx.trade_status = "BLOCKED"
-                    ctx.trade_block_reason = consistency.reason
-                    print()
-                    print("=" * 70)
-                    print("DECISION / INTELLIGENCE CONSISTENCY GATE")
-                    print("=" * 70)
-                    print(consistency.reason)
-                    return
+            if consistency is not None and not consistency.actionable:
+                ctx.trade_status = "BLOCKED"
+                ctx.trade_block_reason = consistency.reason
+                semantic_status = getattr(consistency, "semantic_status", "CONFLICT")
+                title = (
+                    "DECISION / INTELLIGENCE DEFERRAL GATE"
+                    if semantic_status == "DEFERRED"
+                    else "DECISION / INTELLIGENCE CONSISTENCY GATE"
+                )
+                print("\n" + "=" * 70)
+                print(title)
+                print("=" * 70)
+                print(consistency.reason)
+                return
 
-        ok, reason = self.risk_manager.validate(
-            self.paper_broker,
-            ctx.decision,
-        )
+        ok, reason = self.risk_manager.validate(self.paper_broker, ctx.decision)
         if not ok:
             ctx.trade_status = "BLOCKED"
             ctx.trade_block_reason = reason
-            print()
-            print("=" * 70)
+            print("\n" + "=" * 70)
             print("RISK MANAGER")
             print("=" * 70)
             print(reason)
