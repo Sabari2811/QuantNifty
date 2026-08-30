@@ -51,7 +51,7 @@
 - [ ] Consecutive-cycle OI flow classification validated with known live ΔPrice/ΔOI behavior
 - [x] Live Greeks now produce values for the live selected expiry and are covered by regression tests
 - [ ] Live analytics outputs reconciled against raw provider data
-- [ ] Decision/intelligence values reconciled against canonical backend snapshot
+- [x] Decision/intelligence values reconciled against canonical backend snapshot
 - [x] Decision ↔ Intelligence consistency contract implemented
 - [x] Decision ↔ Intelligence semantic model distinguishes direction from actionability
 - [ ] Decision ↔ Intelligence consistency contract validated against fresh live runtime
