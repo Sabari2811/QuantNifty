@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import select
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -9,6 +10,10 @@ import websocket
 
 
 PRICE_FEED_URL = "wss://ws-prices.indstocks.com/api/v1/ws/prices"
+
+
+class LiveQuoteReceiveTimeout(TimeoutError):
+    """Raised when no complete WebSocket price message arrives before a deadline."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,13 +113,31 @@ class IndmoneyPriceFeed:
             raise ValueError("at least one instrument is required")
         self._socket.send(json.dumps(payload))
 
-    def recv_tick(self) -> LiveQuoteTick | None:
+    def recv_tick(self, timeout: float | None = None) -> LiveQuoteTick | None:
         if self._socket is None:
             raise RuntimeError("price feed is not connected")
-        # The socket-level timeout is essential: a coordinator-level deadline
-        # cannot expire while websocket.recv() is blocked inside SSL.
-        self._socket.settimeout(self.timeout)
-        return parse_price_feed_message(self._socket.recv())
+        effective_timeout = self.timeout if timeout is None else float(timeout)
+        if effective_timeout <= 0:
+            raise ValueError("timeout must be positive")
+
+        # websocket-client's recv() can remain inside an SSL read on Windows
+        # even after the WebSocket timeout is configured.  Select on the
+        # underlying socket first so an unread socket never enters recv().
+        raw_socket = getattr(self._socket, "sock", None)
+        if raw_socket is None:
+            raise RuntimeError("price feed socket is unavailable")
+        raw_socket.settimeout(effective_timeout)
+        readable, _, _ = select.select([raw_socket], [], [], effective_timeout)
+        if not readable:
+            raise LiveQuoteReceiveTimeout(
+                f"no WebSocket price message received within {effective_timeout:.1f}s"
+            )
+        try:
+            return parse_price_feed_message(self._socket.recv())
+        except (websocket.WebSocketTimeoutException, TimeoutError) as exc:
+            raise LiveQuoteReceiveTimeout(
+                f"WebSocket price receive exceeded {effective_timeout:.1f}s"
+            ) from exc
 
     def iter_ticks(self, *, max_ticks: int | None = None, timeout: float | None = None):
         if self._socket is None:
@@ -122,10 +145,9 @@ class IndmoneyPriceFeed:
         effective_timeout = self.timeout if timeout is None else float(timeout)
         if effective_timeout <= 0:
             raise ValueError("timeout must be positive")
-        self._socket.settimeout(effective_timeout)
         received = 0
         while max_ticks is None or received < max_ticks:
-            tick = self.recv_tick()
+            tick = self.recv_tick(timeout=effective_timeout)
             if tick is None:
                 continue
             received += 1
