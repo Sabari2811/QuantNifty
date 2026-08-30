@@ -11,12 +11,10 @@ def _status(ok: bool) -> str:
     return "MATCH" if ok else "GAP"
 
 
-def _records_equal(left, right) -> bool:
+def _dataframe_values_equal(left, right) -> bool:
     if left is None or right is None:
         return left is right
-    if hasattr(left, "equals"):
-        return bool(left.equals(right))
-    return left == right
+    return bool(left.reset_index(drop=True).equals(right.reset_index(drop=True)))
 
 
 def build_live_reconciliation(dashboard) -> dict:
@@ -53,30 +51,40 @@ def build_live_reconciliation(dashboard) -> dict:
                     "extra_greek_contracts": extra,
                 }
 
-    # This is the exact projection used by the option-chain component. Compare
-    # it back to the canonical source so a future UI merge cannot silently
-    # alter, duplicate, drop, or fabricate option/Greek values.
     option_projection = None
     option_projection_matches = False
     option_projection_gap = None
     if option_chain is not None:
         option_projection = _merge_authoritative_greeks(option_chain, greeks)
-        canonical_columns = list(option_projection.columns)
-        option_projection_matches = _records_equal(option_projection, option_projection.copy())
         if option_projection is None:
             option_projection_gap = "projection_unavailable"
         elif identity_gap:
-            option_projection_matches = False
             option_projection_gap = identity_gap
-        elif option_chain_rows != len(option_projection):
-            option_projection_matches = False
+        elif len(option_projection) != option_chain_rows:
             option_projection_gap = {
                 "canonical_rows": option_chain_rows,
                 "projected_rows": len(option_projection),
             }
-        elif canonical_columns != list(option_projection.columns):
-            option_projection_matches = False
-            option_projection_gap = "column_mapping_changed"
+        else:
+            source_columns = list(option_chain.columns)
+            source_values_match = (
+                source_columns == [column for column in option_projection.columns if column in source_columns]
+                and _dataframe_values_equal(option_chain[source_columns], option_projection[source_columns])
+            )
+            greek_values_match = True
+            if greeks is not None and not greeks.empty:
+                greek_columns = [
+                    column for column in greeks.columns
+                    if column not in option_chain.columns
+                ]
+                if greek_columns:
+                    greek_values_match = _dataframe_values_equal(
+                        greeks[greek_columns].reset_index(drop=True),
+                        option_projection[greek_columns].reset_index(drop=True),
+                    )
+            option_projection_matches = source_values_match and greek_values_match
+            if not option_projection_matches:
+                option_projection_gap = "ui_projection_value_mismatch"
 
     fields = {
         "market_summary": {
