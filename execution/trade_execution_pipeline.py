@@ -11,7 +11,7 @@ class TradeExecutionPipeline:
     ----------------
     - Synchronize RuntimeContext
     - Intelligence eligibility gate
-    - Decision/Intelligence consistency gate
+    - Decision/Intelligence consistency and actionability gate
     - Risk Validation
     - Execute Paper Trades
     - Update RuntimeContext
@@ -23,7 +23,6 @@ class TradeExecutionPipeline:
         risk_manager,
         intelligence_gate=None,
     ):
-
         self.paper_broker = paper_broker
         self.risk_manager = risk_manager
         self.intelligence_gate = (
@@ -69,15 +68,25 @@ class TradeExecutionPipeline:
                 return
 
             consistency = getattr(ctx, "decision_intelligence_consistency", None)
-            if consistency is not None and not consistency.consistent:
-                ctx.trade_status = "BLOCKED"
-                ctx.trade_block_reason = consistency.reason
-                print()
-                print("=" * 70)
-                print("DECISION / INTELLIGENCE CONSISTENCY GATE")
-                print("=" * 70)
-                print(consistency.reason)
-                return
+            if consistency is not None:
+                if getattr(consistency, "status", "") == "DEFERRED":
+                    ctx.trade_status = "BLOCKED"
+                    ctx.trade_block_reason = consistency.reason
+                    print()
+                    print("=" * 70)
+                    print("DECISION / INTELLIGENCE DEFERRAL GATE")
+                    print("=" * 70)
+                    print(consistency.reason)
+                    return
+                if not consistency.consistent:
+                    ctx.trade_status = "BLOCKED"
+                    ctx.trade_block_reason = consistency.reason
+                    print()
+                    print("=" * 70)
+                    print("DECISION / INTELLIGENCE CONSISTENCY GATE")
+                    print("=" * 70)
+                    print(consistency.reason)
+                    return
 
         ok, reason = self.risk_manager.validate(
             self.paper_broker,
