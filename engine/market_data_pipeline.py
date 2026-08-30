@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from core.data_provenance import AcquisitionProvenance, RuntimeDataProvenance
 from core.quote_integrity import assess_option_chain
+from core.quote_metadata import extract_provider_timestamp
 from providers.simulation_provider import SimulationProvider
 
 
@@ -39,18 +40,52 @@ class MarketDataPipeline:
         ctx.data_provenance = snapshot.data_provenance
         ctx.candles = None
 
+    @staticmethod
+    def _quote_freshness(quote, acquired_at):
+        """Return canonical freshness metadata without inventing timestamps."""
+        provider_timestamp = extract_provider_timestamp(quote)
+        if provider_timestamp is None:
+            return None, False, None, ("provider_quote_timestamp_unavailable",)
+        if provider_timestamp > acquired_at:
+            return provider_timestamp, False, None, ("provider_quote_timestamp_in_future",)
+        return (
+            provider_timestamp,
+            True,
+            (acquired_at - provider_timestamp).total_seconds(),
+            ("provider_quote_timestamp",),
+        )
+
     def _fetch_spot(self, ctx):
         acquired_at = datetime.now(timezone.utc)
-        ctx.spot = self.market.get_spot_price(ctx.symbol)
+        quote = self.market.get_spot_quote(ctx.symbol)
+        if quote is None:
+            raise Exception("Unable to fetch live quote.")
+
+        price = None
+        for key in (
+            "ltp", "LTP", "last_price", "lastPrice", "live_price", "close"
+        ):
+            if quote.get(key) is not None:
+                price = float(quote[key])
+                break
+        if price is None:
+            raise Exception(f"Spot price not found in response: {quote}")
+
+        ctx.spot = price
+        provider_timestamp, freshness_verified, freshness_seconds, reasons = self._quote_freshness(
+            quote, acquired_at
+        )
         ctx.data_provenance = RuntimeDataProvenance(
             spot=AcquisitionProvenance(
                 source="INDMoney index quote",
                 acquired_at=acquired_at,
+                provider_timestamp=provider_timestamp,
                 expected_count=1,
-                received_count=1 if ctx.spot is not None else 0,
-                missing_count=0 if ctx.spot is not None else 1,
-                freshness_verified=False,
-                reasons=("provider_quote_timestamp_unavailable",),
+                received_count=1,
+                missing_count=0,
+                freshness_verified=freshness_verified,
+                freshness_seconds=freshness_seconds,
+                reasons=reasons,
             )
         )
 
@@ -66,8 +101,8 @@ class MarketDataPipeline:
         if option_provenance is None:
             option_provenance = AcquisitionProvenance(
                 source="INDMoney option quotes",
-                expected_count=len(ctx.option_chain),
-                received_count=len(ctx.option_chain),
+                expected_count=len(ctx.option_chain) * 2,
+                received_count=len(ctx.option_chain) * 2,
                 missing_count=0,
                 freshness_verified=False,
                 reasons=("provider_quote_timestamp_unavailable",),
