@@ -1,12 +1,4 @@
-"""Validate consecutive live DashboardData cycles and persist evidence.
-
-This tool intentionally runs outside pytest because it requires a live INDMoney
-session. It reuses the singleton RuntimeManager so OI state is preserved between
-cycles and evaluates the canonical backend -> UI reconciliation on every cycle.
-
-The complete machine-readable report and concise summary are written under
-``validation/``. Stdout intentionally contains only the final gate status.
-"""
+"""Validate consecutive live DashboardData cycles and persist evidence."""
 
 from __future__ import annotations
 
@@ -38,14 +30,18 @@ def _provenance_summary(dashboard):
 
 
 def _oi_summary(dashboard):
+    """Return the canonical OI-flow summary, not the wrapper/table payload."""
     analytics = dashboard.analytics or {}
-    oi = analytics.get("oi_flow")
-    if oi is None:
-        oi = analytics.get("oi")
+    oi = analytics.get("oi_flow") or analytics.get("oi")
     if oi is None:
         return None
+    if isinstance(oi, dict) and isinstance(oi.get("summary"), dict):
+        return oi["summary"]
     if hasattr(oi, "as_dict"):
-        return oi.as_dict()
+        value = oi.as_dict()
+        if isinstance(value, dict) and isinstance(value.get("summary"), dict):
+            return value["summary"]
+        return value
     return oi
 
 
@@ -168,14 +164,13 @@ def main() -> int:
         if cycle_index + 1 < args.cycles and args.interval:
             time.sleep(args.interval)
 
-    all_cycles = reports
-    freshness_items = [item for cycle in all_cycles for item in cycle["provenance"].values() if item is not None]
+    freshness_items = [item for cycle in reports for item in cycle["provenance"].values() if item is not None]
     timestamped = [item for item in freshness_items if item.get("provider_timestamp") is not None]
     stale = [item for item in freshness_items if item.get("freshness_status") == "STALE"]
     suspect = [item for item in freshness_items if item.get("integrity_status") == "SUSPECT"]
     invalid = [item for item in freshness_items if item.get("integrity_status") == "INVALID"]
 
-    oi_states = [cycle["oi"] for cycle in all_cycles if cycle["oi"] is not None]
+    oi_states = [cycle["oi"] for cycle in reports if cycle["oi"] is not None]
     oi_ready = len(oi_states) >= 2 and all(
         isinstance(state, dict) and state.get("status") in {"READY", "NO_CHANGE"}
         for state in oi_states[1:]
@@ -183,9 +178,9 @@ def main() -> int:
     decision_ok = all(
         c["intelligence"]["status"] == "MATCH"
         and not any(gap.startswith("decision.") for gap in c["gaps"])
-        for c in all_cycles
+        for c in reports
     )
-    reconciliation_ok = not any(c["gaps"] for c in all_cycles)
+    reconciliation_ok = not any(c["gaps"] for c in reports)
     coverage_ok = not any(f["type"] == "incomplete_coverage" for f in failures)
 
     gates = {
@@ -198,6 +193,17 @@ def main() -> int:
         "analytics_raw_reconciliation": _gate("NOT_VERIFIED", "requires a fresh market-session raw-provider numerical reconciliation; successful analytics generation alone is not proof"),
         "degraded_data_ui": _gate("OBSERVED" if suspect else "NOT_VERIFIED", "live suspect integrity state observed; controlled UI degradation test still required" if suspect else "requires a controlled missing/invalid-data UI session"),
     }
+
+    # A validation run succeeds only when every release gate is PASS.
+    # NOT_VERIFIED, DEGRADED and OBSERVED are evidence states, never success.
+    for name, gate in gates.items():
+        if gate["status"] != "PASS":
+            failures.append({
+                "type": "gate_not_pass",
+                "gate": name,
+                "status": gate["status"],
+                "detail": gate["detail"],
+            })
 
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
