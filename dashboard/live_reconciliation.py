@@ -77,14 +77,23 @@ def build_live_reconciliation(dashboard) -> dict:
                     column for column in greeks.columns
                     if column not in option_chain.columns
                 ]
-                if greek_columns:
+                missing_projection_columns = [
+                    column for column in greek_columns
+                    if column not in option_projection.columns
+                ]
+                if missing_projection_columns:
+                    greek_values_match = False
+                    option_projection_gap = {
+                        "missing_projected_greek_columns": missing_projection_columns,
+                    }
+                elif greek_columns:
                     greek_values_match = _dataframe_values_equal(
                         greeks[greek_columns].reset_index(drop=True),
                         option_projection[greek_columns].reset_index(drop=True),
                     )
+                    if not greek_values_match:
+                        option_projection_gap = "ui_projection_value_mismatch"
             option_projection_matches = source_values_match and greek_values_match
-            if not option_projection_matches:
-                option_projection_gap = "ui_projection_value_mismatch"
 
     fields = {
         "market_summary": {
