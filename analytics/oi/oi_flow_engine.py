@@ -141,14 +141,16 @@ class OIFlowEngine:
             merged[column] = pd.to_numeric(merged[column], errors="coerce")
 
         matched = merged["_PREV_SNAPSHOT_MATCH"].eq("both")
-        for price, oi, prev_price, prev_oi in [
-            ("CE_PRICE_CHANGE", "CE_OI_CHANGE", "PREV_CE_LTP", "PREV_CE_OI"),
-            ("PE_PRICE_CHANGE", "PE_OI_CHANGE", "PREV_PE_LTP", "PREV_PE_OI"),
-        ]:
-            merged[price] = merged[price.replace("_CHANGE", "_LTP")] - merged[prev_price]
-            merged[oi] = merged[oi.replace("_CHANGE", "_OI")] - merged[prev_oi]
-            merged.loc[~matched, [price, oi]] = pd.NA
-
+        merged["CE_PRICE_CHANGE"] = merged["CE_LTP"] - merged["PREV_CE_LTP"]
+        merged["PE_PRICE_CHANGE"] = merged["PE_LTP"] - merged["PREV_PE_LTP"]
+        merged["CE_OI_CHANGE"] = merged["CE_OI"] - merged["PREV_CE_OI"]
+        merged["PE_OI_CHANGE"] = merged["PE_OI"] - merged["PREV_PE_OI"]
+        merged.loc[~matched, [
+            "CE_PRICE_CHANGE",
+            "PE_PRICE_CHANGE",
+            "CE_OI_CHANGE",
+            "PE_OI_CHANGE",
+        ]] = pd.NA
         return merged
 
     def _flow_from_row(self, row: pd.Series, price_column: str, oi_column: str) -> str:
