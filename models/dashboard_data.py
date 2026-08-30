@@ -36,11 +36,10 @@ class DashboardData:
     data_provenance: RuntimeDataProvenance = field(default_factory=RuntimeDataProvenance)
     option_chain_integrity: dict | None = None
 
-    # UI receives the adapted intelligence mapping, while reconciliation keeps
-    # the canonical backend artifact available so the two can be compared
-    # without reconstructing or recalculating intelligence.
+    # UI receives the adapted intelligence mapping. The canonical backend
+    # artifact is retained separately so reconciliation can compare the UI
+    # contract against the exact runtime artifact without recomputation.
     intelligence: dict | None = None
-    canonical_intelligence: Any = None
 
     portfolio: Any = None
     position: Any = None
@@ -52,3 +51,5 @@ class DashboardData:
     trade_block_reason: str = ""
     runtime_status: str = ""
     cycle_no: int = 0
+
+    canonical_intelligence: Any = None
