@@ -15,6 +15,31 @@ if PROJECT_ROOT not in sys.path:
 from engine.instrument_manager import InstrumentManager
 
 
+def _parse_provider_expiry(value) -> datetime:
+    """Normalize provider expiry strings used by the F&O master."""
+    text = str(value).strip()
+    formats = (
+        "%Y-%m-%d",
+        "%m/%d/%Y %H:%M",
+        "%m/%d/%Y",
+        "%d/%m/%Y %H:%M",
+        "%d/%m/%Y",
+    )
+    for fmt in formats:
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    # Final fallback for values parseable by pandas without silently accepting
+    # an unparseable contract date.
+    try:
+        import pandas as pd
+        parsed = pd.to_datetime(text, errors="raise")
+        return parsed.to_pydatetime()
+    except Exception as exc:
+        raise RuntimeError(f"Unable to parse selected expiry {value}") from exc
+
+
 def validate(symbol: str = "NIFTY") -> dict:
     manager = InstrumentManager()
     manager.download_instruments("fno")
@@ -32,10 +57,7 @@ def validate(symbol: str = "NIFTY") -> dict:
     if "W" not in flags:
         raise RuntimeError(f"Selected expiry {expiry} is not marked weekly in refreshed {symbol} master")
 
-    parsed = selected["EXPIRY_DATE"].iloc[0]
-    expiry_dt = datetime.strptime(str(parsed), "%Y-%m-%d") if len(str(parsed)) == 10 else None
-    if expiry_dt is None:
-        raise RuntimeError(f"Unable to parse selected expiry {parsed}")
+    expiry_dt = _parse_provider_expiry(selected["EXPIRY_DATE"].iloc[0])
     if expiry_dt.date() <= datetime.now().date():
         raise RuntimeError(f"Selected expiry {expiry} is not future-dated")
 
@@ -46,6 +68,7 @@ def validate(symbol: str = "NIFTY") -> dict:
         "expiry_flag": "W",
         "matching_contract_rows": int(len(selected)),
         "master_refreshed": True,
+        "parsed_expiry": expiry_dt.isoformat(),
     }
 
 
