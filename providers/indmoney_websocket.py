@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import select
+import socket
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -84,7 +86,7 @@ def websocket_instrument(segment: str, security_id: int | str) -> str:
 
 
 class IndmoneyPriceFeed:
-    """Small synchronous price-feed client with explicit timestamp propagation."""
+    """Synchronous INDstocks price-feed client with bounded I/O."""
 
     def __init__(self, access_token: str, *, url: str = PRICE_FEED_URL, timeout: float = 10.0) -> None:
         if not access_token:
@@ -97,7 +99,7 @@ class IndmoneyPriceFeed:
         self._socket: websocket.WebSocket | None = None
 
     def connect(self) -> None:
-        deadline = __import__("time").monotonic() + self.timeout
+        started = time.monotonic()
         try:
             self._socket = websocket.create_connection(
                 self.url,
@@ -105,7 +107,7 @@ class IndmoneyPriceFeed:
                 header=[f"Authorization: {self.access_token}"],
             )
         except Exception as exc:
-            elapsed = __import__("time").monotonic() - (deadline - self.timeout)
+            elapsed = time.monotonic() - started
             if elapsed >= self.timeout:
                 raise LiveQuoteConnectTimeout(
                     f"WebSocket connection exceeded {self.timeout:.1f}s"
@@ -136,15 +138,23 @@ class IndmoneyPriceFeed:
         raw_socket = getattr(self._socket, "sock", None)
         if raw_socket is None:
             raise RuntimeError("price feed socket is unavailable")
+
+        # Bound the low-level socket before entering websocket-client recv().
+        # On Windows this prevents indefinite waits inside SSL reads.
         raw_socket.settimeout(effective_timeout)
-        readable, _, _ = select.select([raw_socket], [], [], effective_timeout)
+        try:
+            readable, _, _ = select.select([raw_socket], [], [], effective_timeout)
+        except (OSError, ValueError) as exc:
+            raise LiveQuoteReceiveTimeout(
+                f"WebSocket socket readiness check failed within {effective_timeout:.1f}s"
+            ) from exc
         if not readable:
             raise LiveQuoteReceiveTimeout(
                 f"no WebSocket price message received within {effective_timeout:.1f}s"
             )
         try:
             return parse_price_feed_message(self._socket.recv())
-        except (websocket.WebSocketTimeoutException, TimeoutError) as exc:
+        except (websocket.WebSocketTimeoutException, TimeoutError, socket.timeout) as exc:
             raise LiveQuoteReceiveTimeout(
                 f"WebSocket price receive exceeded {effective_timeout:.1f}s"
             ) from exc
