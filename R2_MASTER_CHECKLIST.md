@@ -15,17 +15,15 @@
 ## R2-013 — Live Backend Validation / Backend → UI Reconciliation
 
 ### Acquisition / Coverage
-
 - [x] Live spot acquisition validated against provider response
 - [x] Live option-chain acquisition validated against provider response
 - [x] Spot coverage validated
-- [ ] Option-chain coverage validated across consecutive cycles
+- [x] Option-chain coverage validated across consecutive cycles
 - [x] Missing-contract coverage is represented in provenance rather than disappearing from the denominator
 - [x] NIFTY expiry selection rejects silent monthly fallback and refreshes stale F&O master
 - [ ] NIFTY expiry selection validated against the live refreshed instrument master
 
 ### Freshness
-
 - [x] Provider candle timestamp is propagated when available
 - [x] Provider quote timestamp is preserved by INDMoney normalization when supplied
 - [x] Spot provider timestamp is propagated into canonical provenance when supplied
@@ -33,11 +31,12 @@
 - [x] Quote freshness is explicitly represented as UNVERIFIED when REST quote payload has no provider timestamp
 - [x] Future provider timestamps are rejected from freshness verification
 - [x] Consecutive-cycle validation runner added for live provenance/OI checks
+- [x] Candle freshness now distinguishes timestamp provenance from actual age
+- [x] Historical candle older than the live freshness threshold is STALE rather than VERIFIED
 - [ ] Live quote freshness behavior validated with a timestamp-bearing source/session
-- [ ] Consecutive-cycle freshness behavior validated
+- [ ] Consecutive-cycle freshness behavior validated with timestamp-bearing quotes
 
 ### Integrity
-
 - [x] Option-chain integrity validator
 - [x] INVALID vs SUSPECT separation
 - [x] Integrity reasons preserved in provenance
@@ -46,9 +45,8 @@
 - [ ] Real degraded-data case validated
 
 ### OI / Greeks / Analytics
-
-- [ ] First live cycle OI baseline validated
-- [ ] Consecutive-cycle OI flow validated
+- [x] First live cycle OI baseline validated mechanically
+- [ ] Consecutive-cycle OI flow classification validated with known ΔPrice/ΔOI behavior
 - [x] Live Greeks now produce values for the live selected expiry and are covered by regression tests
 - [ ] Live analytics outputs reconciled against raw provider data
 - [ ] Decision/intelligence values reconciled against canonical backend snapshot
@@ -57,7 +55,6 @@
 - [ ] Decision ↔ Intelligence consistency contract validated against fresh live runtime
 
 ## Backend → UI Reconciliation
-
 - [x] Capture fresh canonical live snapshot
 - [x] Add canonical provenance adapter exposing coverage, integrity, freshness, and provider source independently
 - [x] Runtime provenance passed from canonical runtime context into dashboard data
@@ -83,12 +80,10 @@
 - [ ] Full regression after final live reconciliation
 
 ### Test-environment integrity
-
 - [x] Pytest collection does not execute the live INDMoney diagnostic script
 - [x] Live-provider failure is not allowed to masquerade as a unit/integration test failure
 
 ## UI Validation
-
 - [x] Live option-chain strike ordering
 - [x] Highlighted-row readability
 - [x] Compact AI decision reasons
@@ -106,7 +101,6 @@
 - [ ] Decision ↔ Intelligence conflict/deferred state is surfaced clearly in the UI
 
 ## Release Gate
-
 - [ ] Fresh live-session backend validation complete
 - [x] Backend → UI single-cycle reconciliation complete
 - [ ] Decision ↔ Intelligence semantic reconciliation validated against fresh live runtime
