@@ -61,7 +61,7 @@ def test_historical_acquisition_records_provider_timestamp_and_stale_freshness()
     assert provenance.freshness_seconds is not None
     assert provenance.freshness_seconds > 5 * 60
     assert provenance.freshness_status == "STALE"
-    assert provenance.reasons == ("provider_candle_timestamp",)
+    assert provenance.reasons == ("provider_candle_timestamp", "provider_candle_stale")
 
 
 def test_missing_provider_candle_timestamp_is_unverified():
