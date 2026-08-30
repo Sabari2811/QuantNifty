@@ -156,7 +156,7 @@ def main() -> int:
             if item is None:
                 failures.append({"cycle": cycle_index + 1, "type": "missing_provenance", "source": source})
                 continue
-            if item.get("coverage_status") == "INCOMPLETE":
+            if item.get("coverage_status") in {"INCOMPLETE", "PARTIAL", "EMPTY"}:
                 failures.append({"cycle": cycle_index + 1, "type": "incomplete_coverage", "source": source})
             if item.get("status") == "INVALID":
                 failures.append({"cycle": cycle_index + 1, "type": "invalid_provenance", "source": source})
@@ -164,11 +164,22 @@ def main() -> int:
         if cycle_index + 1 < args.cycles and args.interval:
             time.sleep(args.interval)
 
-    freshness_items = [item for cycle in reports for item in cycle["provenance"].values() if item is not None]
-    timestamped = [item for item in freshness_items if item.get("provider_timestamp") is not None]
-    stale = [item for item in freshness_items if item.get("freshness_status") == "STALE"]
-    suspect = [item for item in freshness_items if item.get("integrity_status") == "SUSPECT"]
-    invalid = [item for item in freshness_items if item.get("integrity_status") == "INVALID"]
+    # Freshness for a live trading decision is a property of live quote
+    # acquisitions (spot + option chain). Historical candles are intentionally
+    # excluded: their age is a separate analytical-data property and a stale
+    # historical window must not masquerade as stale live quotes.
+    live_items = []
+    for cycle in reports:
+        for source in ("spot", "option_chain"):
+            item = cycle["provenance"].get(source)
+            if item is not None:
+                live_items.append(item)
+
+    timestamped = [item for item in live_items if item.get("provider_timestamp") is not None]
+    stale = [item for item in live_items if item.get("freshness_status") == "STALE"]
+    suspect = [item for item in live_items if item.get("integrity_status") == "SUSPECT"]
+    invalid = [item for item in live_items if item.get("integrity_status") == "INVALID"]
+    unverified = [item for item in live_items if item.get("freshness_status") in {"UNVERIFIED", "REALTIME_UNTIMESTAMPED"}]
 
     oi_states = [cycle["oi"] for cycle in reports if cycle["oi"] is not None]
     oi_ready = len(oi_states) >= 2 and all(
@@ -186,8 +197,8 @@ def main() -> int:
     gates = {
         "backend_ui_reconciliation": _gate("PASS" if reconciliation_ok else "FAIL", "all DashboardData → UI reconciliation fields matched" if reconciliation_ok else "field-level gaps recorded"),
         "coverage": _gate("PASS" if coverage_ok else "FAIL", "no incomplete acquisition coverage observed" if coverage_ok else "incomplete coverage observed"),
-        "freshness": _gate("PASS" if timestamped and not stale else "NOT_VERIFIED", "timestamp-bearing source observed with no stale state" if timestamped and not stale else "provider quote timestamp/market-session freshness evidence is insufficient"),
-        "integrity": _gate("PASS" if not invalid and not suspect else "DEGRADED", "all observed sources passed integrity" if not invalid and not suspect else f"suspect={len(suspect)} invalid={len(invalid)}; degradation remains explicit"),
+        "freshness": _gate("PASS" if timestamped and not stale and not unverified else "NOT_VERIFIED", "all live quote sources have provider timestamps and no stale state" if timestamped and not stale and not unverified else "live quote freshness cannot be proven from the current acquisition evidence; historical candle age is excluded from this gate"),
+        "integrity": _gate("PASS" if not invalid and not suspect else "DEGRADED", "all live quote sources passed integrity" if not invalid and not suspect else f"suspect={len(suspect)} invalid={len(invalid)}; degradation remains explicit"),
         "oi_consecutive_state": _gate("PASS" if oi_ready else "NOT_VERIFIED", "consecutive cycles reached READY/NO_CHANGE" if oi_ready else "insufficient consecutive OI evidence"),
         "decision_intelligence": _gate("PASS" if decision_ok else "FAIL", "canonical decision/intelligence values matched UI" if decision_ok else "decision/intelligence mismatch recorded"),
         "analytics_raw_reconciliation": _gate("NOT_VERIFIED", "requires a fresh market-session raw-provider numerical reconciliation; successful analytics generation alone is not proof"),
