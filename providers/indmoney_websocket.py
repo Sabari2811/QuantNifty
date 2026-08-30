@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import select
 import socket
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -99,20 +100,34 @@ class IndmoneyPriceFeed:
         self._socket: websocket.WebSocket | None = None
 
     def connect(self) -> None:
-        started = time.monotonic()
-        try:
-            self._socket = websocket.create_connection(
-                self.url,
-                timeout=self.timeout,
-                header=[f"Authorization: {self.access_token}"],
+        """Establish the socket without allowing a blocking transport to freeze the caller."""
+        result: dict[str, Any] = {}
+        finished = threading.Event()
+
+        def worker() -> None:
+            try:
+                result["socket"] = websocket.create_connection(
+                    self.url,
+                    timeout=self.timeout,
+                    header=[f"Authorization: {self.access_token}"],
+                )
+            except BaseException as exc:  # propagate transport errors to caller
+                result["error"] = exc
+            finally:
+                finished.set()
+
+        thread = threading.Thread(target=worker, name="indstocks-ws-connect", daemon=True)
+        thread.start()
+        if not finished.wait(self.timeout):
+            raise LiveQuoteConnectTimeout(
+                f"WebSocket connection exceeded {self.timeout:.1f}s"
             )
-        except Exception as exc:
-            elapsed = time.monotonic() - started
-            if elapsed >= self.timeout:
-                raise LiveQuoteConnectTimeout(
-                    f"WebSocket connection exceeded {self.timeout:.1f}s"
-                ) from exc
-            raise
+        error = result.get("error")
+        if error is not None:
+            raise error
+        self._socket = result.get("socket")
+        if self._socket is None:
+            raise LiveQuoteConnectTimeout("WebSocket connection returned no socket")
 
     def subscribe(self, instruments: Iterable[str], mode: str = "quote") -> None:
         if mode not in {"ltp", "quote"}:
@@ -138,7 +153,6 @@ class IndmoneyPriceFeed:
         raw_socket = getattr(self._socket, "sock", None)
         if raw_socket is None:
             raise RuntimeError("price feed socket is unavailable")
-
         raw_socket.settimeout(effective_timeout)
         try:
             readable, _, _ = select.select([raw_socket], [], [], effective_timeout)
