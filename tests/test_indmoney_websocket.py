@@ -1,10 +1,12 @@
 import json
+import time
 from datetime import datetime, timezone
 
 import pytest
 
 from providers.indmoney_websocket import (
     IndmoneyPriceFeed,
+    LiveQuoteConnectTimeout,
     LiveQuoteReceiveTimeout,
     parse_price_feed_message,
     parse_timestamp_ms,
@@ -90,3 +92,16 @@ def test_recv_tick_hard_deadline_prevents_blocking_recv(monkeypatch):
 
     with pytest.raises(LiveQuoteReceiveTimeout, match="no WebSocket price message"):
         feed.recv_tick()
+
+
+def test_connect_has_hard_wall_clock_deadline(monkeypatch):
+    def blocking_connect(*args, **kwargs):
+        time.sleep(1.0)
+        raise OSError("simulated network hang")
+
+    monkeypatch.setattr("providers.indmoney_websocket.websocket.create_connection", blocking_connect)
+    feed = IndmoneyPriceFeed("token", timeout=0.05)
+    started = time.monotonic()
+    with pytest.raises(LiveQuoteConnectTimeout, match="connection exceeded"):
+        feed.connect()
+    assert time.monotonic() - started < 0.5
