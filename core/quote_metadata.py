@@ -7,9 +7,10 @@ import math
 def parse_provider_timestamp(value):
     """Parse provider timestamps without inventing missing timestamps.
 
-    INDMoney may expose timestamps as ISO-8601 strings or epoch seconds/
-    milliseconds. Numeric epoch values are normalized to UTC so freshness
-    validation can use the provider's actual observation time.
+    INDMoney may expose timestamps as ISO-8601 strings or epoch
+    seconds/milliseconds/microseconds. Numeric epoch values are normalized
+    to UTC so freshness validation can use the provider's actual observation
+    time.
     """
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
@@ -21,10 +22,10 @@ def parse_provider_timestamp(value):
         if not math.isfinite(float(value)):
             return None
         epoch = float(value)
-        if epoch > 1_000_000_000_000:
-            epoch /= 1000.0
-        elif epoch > 1_000_000_000_000_000:
+        if epoch > 1_000_000_000_000_000:
             epoch /= 1_000_000.0
+        elif epoch > 1_000_000_000_000:
+            epoch /= 1000.0
         try:
             return datetime.fromtimestamp(epoch, tz=timezone.utc)
         except (OverflowError, OSError, ValueError):
