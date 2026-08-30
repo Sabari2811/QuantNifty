@@ -21,7 +21,7 @@
 - [x] Option-chain coverage validated across consecutive cycles
 - [x] Missing-contract coverage is represented in provenance rather than disappearing from the denominator
 - [x] NIFTY expiry selection rejects silent monthly fallback and refreshes stale F&O master
-- [ ] NIFTY expiry selection validated against the live refreshed instrument master
+- [x] NIFTY expiry selection validated against the live refreshed instrument master
 
 ### Freshness
 - [x] Provider candle timestamp is propagated when available
