@@ -24,16 +24,11 @@ class MarketDataPipeline:
         self.chain_manager = chain_manager
         self.candle_manager = candle_manager
         self.live_feed = None
-        self.ws_nifty_token = None
         if os.getenv("INDSTOCKS_ENABLE_WS_LIVE_QUOTES", "0") == "1" and isinstance(provider, INDMoneyProvider):
             token = getattr(provider, "token", None) or os.getenv("INDSTOCKS_API_TOKEN")
-            ws_token = os.getenv("INDSTOCKS_WS_NIFTY_TOKEN")
             if not token:
                 raise RuntimeError("INDSTOCKS_ENABLE_WS_LIVE_QUOTES=1 requires INDSTOCKS_API_TOKEN")
-            if not ws_token:
-                raise RuntimeError("INDSTOCKS_ENABLE_WS_LIVE_QUOTES=1 requires INDSTOCKS_WS_NIFTY_TOKEN")
             self.live_feed = LiveQuoteCoordinator(token)
-            self.ws_nifty_token = ws_token
 
     @classmethod
     def _candle_freshness(cls, provider_timestamp, acquired_at):
@@ -93,8 +88,12 @@ class MarketDataPipeline:
         acquired_at = datetime.now(timezone.utc)
         quote = self.market.get_spot_quote(ctx.symbol)
         if self.live_feed is not None:
-            batch = self.live_feed.collect([self.live_feed.index_instrument(self.ws_nifty_token)], mode="quote")
-            tick = next(iter(batch.ticks.values()), None)
+            security_id = self.instrument.get_index_security_id(ctx.symbol)
+            if security_id is None:
+                raise RuntimeError(f"Unable to resolve WebSocket index security ID for {ctx.symbol}")
+            ws_instrument = self.live_feed.index_instrument(security_id)
+            batch = self.live_feed.collect([ws_instrument], mode="quote")
+            tick = batch.ticks.get(ws_instrument)
             if tick is not None:
                 quote = self._tick_quote(tick)
                 acquired_at = batch.acquired_at
