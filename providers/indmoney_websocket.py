@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import select
-import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -18,7 +17,7 @@ class LiveQuoteReceiveTimeout(TimeoutError):
 
 
 class LiveQuoteConnectTimeout(TimeoutError):
-    """Raised when WebSocket connection setup exceeds its hard deadline."""
+    """Raised when the WebSocket connection cannot be established before a deadline."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,51 +97,20 @@ class IndmoneyPriceFeed:
         self._socket: websocket.WebSocket | None = None
 
     def connect(self) -> None:
-        """Connect with a hard wall-clock deadline, including DNS/TLS setup."""
-        done = threading.Event()
-        cancelled = threading.Event()
-        result: list[websocket.WebSocket] = []
-        error: list[BaseException] = []
-
-        def _connect() -> None:
-            sock: websocket.WebSocket | None = None
-            try:
-                sock = websocket.create_connection(
-                    self.url,
-                    timeout=self.timeout,
-                    header=[f"Authorization: {self.access_token}"],
-                )
-                if cancelled.is_set():
-                    sock.close()
-                else:
-                    result.append(sock)
-            except BaseException as exc:  # propagate the actual provider/network error
-                if not cancelled.is_set():
-                    error.append(exc)
-                elif sock is not None:
-                    try:
-                        sock.close()
-                    except Exception:
-                        pass
-            finally:
-                done.set()
-
-        worker = threading.Thread(target=_connect, name="quantnifty-ws-connect", daemon=True)
-        worker.start()
-        if not done.wait(self.timeout):
-            cancelled.set()
-            if result:
-                result[0].close()
-                result.clear()
-            raise LiveQuoteConnectTimeout(
-                f"WebSocket connection exceeded {self.timeout:.1f}s"
+        deadline = __import__("time").monotonic() + self.timeout
+        try:
+            self._socket = websocket.create_connection(
+                self.url,
+                timeout=self.timeout,
+                header=[f"Authorization: {self.access_token}"],
             )
-
-        if error:
-            raise error[0]
-        if not result:
-            raise LiveQuoteConnectTimeout("WebSocket connection did not complete")
-        self._socket = result[0]
+        except Exception as exc:
+            elapsed = __import__("time").monotonic() - (deadline - self.timeout)
+            if elapsed >= self.timeout:
+                raise LiveQuoteConnectTimeout(
+                    f"WebSocket connection exceeded {self.timeout:.1f}s"
+                ) from exc
+            raise
 
     def subscribe(self, instruments: Iterable[str], mode: str = "quote") -> None:
         if mode not in {"ltp", "quote"}:
@@ -165,9 +133,6 @@ class IndmoneyPriceFeed:
         if effective_timeout <= 0:
             raise ValueError("timeout must be positive")
 
-        # websocket-client's recv() can remain inside an SSL read on Windows
-        # even after the WebSocket timeout is configured. Select on the
-        # underlying socket first so an unread socket never enters recv().
         raw_socket = getattr(self._socket, "sock", None)
         if raw_socket is None:
             raise RuntimeError("price feed socket is unavailable")
