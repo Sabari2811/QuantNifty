@@ -17,6 +17,20 @@ def _dataframe_values_equal(left, right) -> bool:
     return bool(left.reset_index(drop=True).equals(right.reset_index(drop=True)))
 
 
+def _decision_backend_values(dashboard) -> dict:
+    signal = dashboard.signal or {}
+    probability = dashboard.probability or {}
+    trade_plan = dashboard.trade_plan or {}
+    return {
+        "signal": signal.get("signal"),
+        "bullish_probability": probability.get("bullish_probability"),
+        "bearish_probability": probability.get("bearish_probability"),
+        "confidence": probability.get("confidence"),
+        "reasons": probability.get("reasons", ()),
+        "trade_plan_signal": trade_plan.get("signal"),
+    }
+
+
 def build_live_reconciliation(dashboard) -> dict:
     """Build a field-level reconciliation report from one DashboardData cycle.
 
@@ -25,6 +39,7 @@ def build_live_reconciliation(dashboard) -> dict:
     """
     summary = adapt_market_summary(dashboard)
     decision = adapt_decision(dashboard)
+    decision_backend = _decision_backend_values(dashboard)
     canonical_intelligence = getattr(dashboard, "canonical_intelligence", None)
     intelligence = dashboard.intelligence
     canonical_intelligence_ui = adapt_intelligence(canonical_intelligence)
@@ -112,7 +127,7 @@ def build_live_reconciliation(dashboard) -> dict:
             "expiry": {"backend": dashboard.expiry, "ui": summary["expiry"]},
         },
         "decision": {
-            key: {"backend": dashboard.signal.get(key) if key == "signal" else dashboard.probability.get(key) if key in dashboard.probability else dashboard.trade_plan.get(key), "ui": value}
+            key: {"backend": decision_backend[key], "ui": value}
             for key, value in decision.items()
         },
         "intelligence": {
