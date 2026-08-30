@@ -7,6 +7,7 @@ from engine.market_data_pipeline import MarketDataPipeline
 
 def test_ws_live_feed_requires_explicit_index_token(monkeypatch):
     monkeypatch.setenv("INDSTOCKS_ENABLE_WS_LIVE_QUOTES", "1")
+    monkeypatch.setenv("INDSTOCKS_API_TOKEN", "api-token")
     monkeypatch.delenv("INDSTOCKS_WS_NIFTY_TOKEN", raising=False)
     provider = SimpleNamespace(token="token")
     with pytest.raises(RuntimeError, match="INDSTOCKS_WS_NIFTY_TOKEN"):
