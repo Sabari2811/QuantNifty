@@ -8,6 +8,16 @@ def test_parse_provider_timestamp_handles_iso_zulu():
     assert value == datetime(2026, 8, 30, 7, 16, 17, tzinfo=timezone.utc)
 
 
+def test_parse_provider_timestamp_handles_epoch_milliseconds():
+    value = parse_provider_timestamp(1788074177000)
+    assert value == datetime(2026, 8, 30, 7, 16, 17, tzinfo=timezone.utc)
+
+
+def test_parse_provider_timestamp_handles_epoch_seconds_string():
+    value = parse_provider_timestamp("1788074177")
+    assert value == datetime(2026, 8, 30, 7, 16, 17, tzinfo=timezone.utc)
+
+
 def test_parse_provider_timestamp_rejects_invalid_values():
     assert parse_provider_timestamp("not-a-timestamp") is None
     assert parse_provider_timestamp(None) is None
