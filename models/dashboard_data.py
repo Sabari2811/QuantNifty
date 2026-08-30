@@ -36,7 +36,11 @@ class DashboardData:
     data_provenance: RuntimeDataProvenance = field(default_factory=RuntimeDataProvenance)
     option_chain_integrity: dict | None = None
 
+    # UI receives the adapted intelligence mapping, while reconciliation keeps
+    # the canonical backend artifact available so the two can be compared
+    # without reconstructing or recalculating intelligence.
     intelligence: dict | None = None
+    canonical_intelligence: Any = None
 
     portfolio: Any = None
     position: Any = None
