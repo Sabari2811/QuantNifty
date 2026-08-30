@@ -25,9 +25,15 @@ class MarketDataPipeline:
         self.live_feed = None
         if os.getenv("INDSTOCKS_ENABLE_WS_LIVE_QUOTES", "0") == "1":
             token = getattr(provider, "token", None) or os.getenv("INDSTOCKS_API_TOKEN")
+            ws_token = os.getenv("INDSTOCKS_WS_NIFTY_TOKEN")
             if not token:
                 raise RuntimeError("INDSTOCKS_ENABLE_WS_LIVE_QUOTES=1 requires INDSTOCKS_API_TOKEN")
+            if not ws_token:
+                raise RuntimeError("INDSTOCKS_ENABLE_WS_LIVE_QUOTES=1 requires INDSTOCKS_WS_NIFTY_TOKEN")
             self.live_feed = LiveQuoteCoordinator(token)
+            self.ws_nifty_token = ws_token
+        else:
+            self.ws_nifty_token = None
 
     def _run_live(self, ctx):
         self._fetch_spot(ctx)
@@ -70,22 +76,15 @@ class MarketDataPipeline:
             data["live_price"] = tick.ltp
         return data
 
-    def _ws_index_token(self, symbol):
-        key = f"INDSTOCKS_WS_{symbol.upper()}_TOKEN"
-        token = os.getenv(key)
-        if not token:
-            raise RuntimeError(f"Timestamped live feed enabled but {key} is not configured")
-        return token
-
     def _fetch_spot(self, ctx):
         acquired_at = datetime.now(timezone.utc)
+        quote = self.market.get_spot_quote(ctx.symbol)
         if self.live_feed is not None:
-            instrument = self.live_feed.index_instrument(self._ws_index_token(ctx.symbol))
-            batch = self.live_feed.collect([instrument], mode="quote")
-            tick = batch.ticks.get(instrument)
-            quote = self._tick_quote(tick) if tick else None
-        else:
-            quote = self.market.get_spot_quote(ctx.symbol)
+            batch = self.live_feed.collect([self.live_feed.index_instrument(self.ws_nifty_token)], mode="quote")
+            tick = next(iter(batch.ticks.values()), None)
+            if tick is not None:
+                quote = self._tick_quote(tick)
+                acquired_at = batch.acquired_at
         if quote is None:
             raise Exception("Unable to fetch live quote.")
         price = None
@@ -99,57 +98,48 @@ class MarketDataPipeline:
         provider_timestamp, freshness_verified, freshness_seconds, reasons = self._quote_freshness(quote, acquired_at)
         ctx.data_provenance = RuntimeDataProvenance(
             spot=AcquisitionProvenance(
-                source="INDMoney WebSocket index quote" if self.live_feed else "INDMoney index quote",
-                acquired_at=acquired_at, provider_timestamp=provider_timestamp,
-                expected_count=1, received_count=1, missing_count=0,
-                freshness_verified=freshness_verified, freshness_seconds=freshness_seconds, reasons=reasons,
+                source="INDMoney index quote", acquired_at=acquired_at,
+                provider_timestamp=provider_timestamp, expected_count=1, received_count=1,
+                missing_count=0, freshness_verified=freshness_verified,
+                freshness_seconds=freshness_seconds, reasons=reasons,
             )
         )
 
     def _fetch_option_chain(self, ctx):
         ctx.expiry = self.instrument.get_nearest_weekly_expiry(ctx.symbol)
         ctx.option_chain = self.chain_manager.get_live_option_chain(ctx.symbol, ctx.spot, ctx.strike_levels)
-        if self.live_feed is not None:
-            requested, mapping = [], {}
-            for row_index, row in ctx.option_chain.iterrows():
-                for side in ("CE", "PE"):
-                    value = row.get(f"{side}_ID")
-                    if value is None:
+        if self.live_feed is not None and not ctx.option_chain.empty:
+            instruments = []
+            for column in ("CE_ID", "PE_ID"):
+                if column in ctx.option_chain.columns:
+                    instruments.extend(self.live_feed.option_instrument(value) for value in ctx.option_chain[column].dropna())
+            if instruments:
+                batch = self.live_feed.collect(instruments, mode="quote")
+                for side, id_column, price_column in (("CE", "CE_ID", "CE_LTP"), ("PE", "PE_ID", "PE_LTP")):
+                    if id_column not in ctx.option_chain.columns or price_column not in ctx.option_chain.columns:
                         continue
-                    try:
-                        instrument = self.live_feed.option_instrument(int(float(value)))
-                    except (TypeError, ValueError):
-                        continue
-                    requested.append(instrument)
-                    mapping[instrument] = (row_index, side)
-            batch = self.live_feed.collect(requested, mode="quote") if requested else None
-            received, timestamps = 0, []
-            for instrument, (row_index, side) in mapping.items():
-                tick = batch.ticks.get(instrument) if batch else None
-                if tick is None:
-                    continue
-                received += 1
-                timestamps.append(tick.timestamp)
-                if tick.ltp is not None:
-                    ctx.option_chain.at[row_index, f"{side}_LTP"] = tick.ltp
-            expected = len(requested)
-            latest = max(timestamps) if timestamps else None
-            option_provenance = AcquisitionProvenance(
-                source="INDMoney WebSocket option quotes", acquired_at=batch.acquired_at if batch else datetime.now(timezone.utc),
-                provider_timestamp=latest, expected_count=expected, received_count=received,
-                missing_count=max(0, expected - received),
-                freshness_verified=bool(expected and received == expected and latest),
-                freshness_seconds=((batch.acquired_at - latest).total_seconds() if batch and latest else None),
-                reasons=("provider_quote_timestamp",) if expected and received == expected and latest else ("provider_quote_timestamp_missing_ticks",),
-            )
+                    for index, security_id in ctx.option_chain[id_column].items():
+                        tick = batch.ticks.get(self.live_feed.option_instrument(security_id))
+                        if tick is not None and tick.ltp is not None:
+                            ctx.option_chain.at[index, price_column] = tick.ltp
+            option_timestamp = batch.latest_provider_timestamp if instruments else None
         else:
-            option_provenance = ctx.option_chain.attrs.get("data_provenance")
-            if option_provenance is None:
-                option_provenance = AcquisitionProvenance(
-                    source="INDMoney option quotes", expected_count=len(ctx.option_chain) * 2,
-                    received_count=len(ctx.option_chain) * 2, missing_count=0,
-                    freshness_verified=False, reasons=("provider_quote_timestamp_unavailable",),
-                )
+            option_timestamp = None
+        option_provenance = ctx.option_chain.attrs.get("data_provenance")
+        if option_provenance is None:
+            option_provenance = AcquisitionProvenance(
+                source="INDMoney option quotes", expected_count=len(ctx.option_chain) * 2,
+                received_count=len(ctx.option_chain) * 2, missing_count=0,
+                freshness_verified=False, reasons=("provider_quote_timestamp_unavailable",),
+            )
+        if option_timestamp is not None:
+            option_provenance = replace(
+                option_provenance,
+                provider_timestamp=option_timestamp,
+                freshness_verified=True,
+                freshness_seconds=(datetime.now(timezone.utc) - option_timestamp).total_seconds(),
+                reasons=("provider_quote_timestamp",),
+            )
         integrity = assess_option_chain(ctx.option_chain, ctx.spot)
         option_provenance = replace(option_provenance, integrity_status=integrity.status, integrity_reasons=integrity.reasons)
         ctx.option_chain.attrs["quote_integrity"] = integrity.as_dict()
@@ -172,19 +162,6 @@ class MarketDataPipeline:
                 continue
         return max(timestamps) if timestamps else None
 
-    @staticmethod
-    def _candle_freshness(provider_timestamp, acquired_at):
-        if provider_timestamp is None:
-            return False, None, "UNVERIFIED", ("provider_candle_timestamp_unavailable",)
-        if provider_timestamp > acquired_at:
-            return False, None, "UNVERIFIED", ("provider_candle_timestamp_in_future",)
-        age = (acquired_at - provider_timestamp).total_seconds()
-        if age <= MarketDataPipeline.CANDLE_FRESH_SECONDS:
-            return True, age, "FRESH", ("provider_candle_timestamp",)
-        if age <= MarketDataPipeline.CANDLE_AGING_SECONDS:
-            return True, age, "AGING", ("provider_candle_timestamp", "provider_candle_aging")
-        return False, age, "STALE", ("provider_candle_timestamp", "provider_candle_stale")
-
     def _fetch_historical_candles(self, ctx):
         security_id = self.instrument.get_index_security_id(ctx.symbol)
         if security_id is None:
@@ -192,19 +169,24 @@ class MarketDataPipeline:
         scrip_code = self.instrument.get_scrip_code("NIDX", security_id)
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=5)
-        candles = self.provider.get_historical_data(scrip_code=scrip_code, interval="5minute", start_time=int(start.timestamp() * 1000), end_time=int(end.timestamp() * 1000))
+        candles = self.provider.get_historical_data(
+            scrip_code=scrip_code, interval="5minute",
+            start_time=int(start.timestamp() * 1000), end_time=int(end.timestamp() * 1000),
+        )
         ctx.candles = self.candle_manager.to_dataframe(candles)
         provider_timestamp = self._provider_candle_timestamp(candles)
         freshness_verified, freshness_seconds, freshness_status, freshness_reasons = self._candle_freshness(provider_timestamp, end)
         ctx.data_provenance = RuntimeDataProvenance(
-            spot=ctx.data_provenance.spot, option_chain=ctx.data_provenance.option_chain,
+            spot=ctx.data_provenance.spot,
+            option_chain=ctx.data_provenance.option_chain,
             candles=AcquisitionProvenance(
                 source=f"INDMoney historical candles:{scrip_code}", acquired_at=end,
                 provider_timestamp=provider_timestamp, expected_count=1,
                 received_count=1 if len(ctx.candles) > 0 else 0,
                 missing_count=0 if len(ctx.candles) > 0 else 1,
                 freshness_verified=freshness_verified, freshness_seconds=freshness_seconds,
-                reasons=freshness_reasons, freshness_status_override=freshness_status,
+                reasons=freshness_reasons,
+                freshness_status_override=freshness_status,
             ),
         )
 
