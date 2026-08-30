@@ -5,6 +5,7 @@ import pytest
 
 from providers.indmoney_websocket import (
     IndmoneyPriceFeed,
+    LiveQuoteReceiveTimeout,
     parse_price_feed_message,
     parse_timestamp_ms,
     websocket_instrument,
@@ -72,3 +73,20 @@ def test_websocket_instrument_rejects_unknown_segment():
 def test_price_feed_requires_token():
     with pytest.raises(ValueError):
         IndmoneyPriceFeed("")
+
+
+def test_recv_tick_hard_deadline_prevents_blocking_recv(monkeypatch):
+    feed = IndmoneyPriceFeed("token", timeout=0.1)
+
+    class Socket:
+        def settimeout(self, value):
+            self.timeout = value
+
+        def recv(self):
+            raise AssertionError("recv must not be entered after select timeout")
+
+    feed._socket = type("WebSocket", (), {"sock": Socket()})()
+    monkeypatch.setattr("providers.indmoney_websocket.select.select", lambda *args: ([], [], []))
+
+    with pytest.raises(LiveQuoteReceiveTimeout, match="no WebSocket price message"):
+        feed.recv_tick()
