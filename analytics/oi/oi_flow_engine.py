@@ -27,16 +27,10 @@ class OIFlowEngine:
         successful market snapshot.
         Status = READY.
 
-    UNKNOWN is reserved for insufficient comparison data.
-    NO_CHANGE means both snapshots were available and the
-    observed price and OI did not change.
-
-    Backward compatibility
-    ----------------------
-    When _classify() is called directly, it preserves the
-    existing classification contract used by the unit tests,
-    except that a genuine zero/zero delta is now explicitly
-    represented as NO_CHANGE rather than UNKNOWN.
+    UNKNOWN is reserved for insufficient comparison data,
+    including a strike that was not present in the previous
+    snapshot. NO_CHANGE means both snapshots were available
+    and the observed price and OI did not change.
     """
 
     FLOW_TYPES = [
@@ -137,18 +131,30 @@ class OIFlowEngine:
             "PE_LTP": "PREV_PE_LTP",
             "PE_OI": "PREV_PE_OI",
         })
-        merged = current.merge(previous, on="Strike", how="left")
+        merged = current.merge(
+            previous,
+            on="Strike",
+            how="left",
+            indicator="_PREV_SNAPSHOT_MATCH",
+        )
         for column in ["PREV_CE_LTP", "PREV_CE_OI", "PREV_PE_LTP", "PREV_PE_OI"]:
             merged[column] = pd.to_numeric(merged[column], errors="coerce")
-        merged["PREV_CE_LTP"] = merged["PREV_CE_LTP"].fillna(0.0)
-        merged["PREV_CE_OI"] = merged["PREV_CE_OI"].fillna(0.0)
-        merged["PREV_PE_LTP"] = merged["PREV_PE_LTP"].fillna(0.0)
-        merged["PREV_PE_OI"] = merged["PREV_PE_OI"].fillna(0.0)
-        merged["CE_PRICE_CHANGE"] = merged["CE_LTP"] - merged["PREV_CE_LTP"]
-        merged["PE_PRICE_CHANGE"] = merged["PE_LTP"] - merged["PREV_PE_LTP"]
-        merged["CE_OI_CHANGE"] = merged["CE_OI"] - merged["PREV_CE_OI"]
-        merged["PE_OI_CHANGE"] = merged["PE_OI"] - merged["PREV_PE_OI"]
+
+        matched = merged["_PREV_SNAPSHOT_MATCH"].eq("both")
+        for price, oi, prev_price, prev_oi in [
+            ("CE_PRICE_CHANGE", "CE_OI_CHANGE", "PREV_CE_LTP", "PREV_CE_OI"),
+            ("PE_PRICE_CHANGE", "PE_OI_CHANGE", "PREV_PE_LTP", "PREV_PE_OI"),
+        ]:
+            merged[price] = merged[price.replace("_CHANGE", "_LTP")] - merged[prev_price]
+            merged[oi] = merged[oi.replace("_CHANGE", "_OI")] - merged[prev_oi]
+            merged.loc[~matched, [price, oi]] = pd.NA
+
         return merged
+
+    def _flow_from_row(self, row: pd.Series, price_column: str, oi_column: str) -> str:
+        if pd.isna(row[price_column]) or pd.isna(row[oi_column]):
+            return "UNKNOWN"
+        return self._classify(float(row[price_column]), float(row[oi_column]))
 
     def analyze(self, greeks_df: pd.DataFrame, previous_greeks_df: pd.DataFrame | None = None):
         if greeks_df is None or greeks_df.empty:
@@ -167,8 +173,14 @@ class OIFlowEngine:
         if previous.empty:
             return self._first_snapshot(df)
         df = self._calculate_deltas(df, previous)
-        df["CE_FLOW"] = df.apply(lambda row: self._classify(float(row["CE_PRICE_CHANGE"]), float(row["CE_OI_CHANGE"])), axis=1)
-        df["PE_FLOW"] = df.apply(lambda row: self._classify(float(row["PE_PRICE_CHANGE"]), float(row["PE_OI_CHANGE"])), axis=1)
+        df["CE_FLOW"] = df.apply(
+            lambda row: self._flow_from_row(row, "CE_PRICE_CHANGE", "CE_OI_CHANGE"),
+            axis=1,
+        )
+        df["PE_FLOW"] = df.apply(
+            lambda row: self._flow_from_row(row, "PE_PRICE_CHANGE", "PE_OI_CHANGE"),
+            axis=1,
+        )
         ce_summary = self._count_flow(df["CE_FLOW"])
         pe_summary = self._count_flow(df["PE_FLOW"])
         summary = {
