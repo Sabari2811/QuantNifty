@@ -12,18 +12,19 @@ class DecisionIntelligenceConsistency:
     intelligence_recommendation: str
     intelligence_direction: str
     reason: str
+    semantic_status: str = "CONSISTENT"
 
     @property
     def consistent(self) -> bool:
-        return self.status in {"CONSISTENT", "DEFERRED"}
-
-    @property
-    def actionable(self) -> bool:
         return self.status == "CONSISTENT"
 
     @property
+    def actionable(self) -> bool:
+        return self.semantic_status == "CONSISTENT"
+
+    @property
     def vetoed(self) -> bool:
-        return self.status != "CONSISTENT"
+        return not self.actionable
 
 
 def _decision_signal(decision) -> str:
@@ -40,13 +41,13 @@ def _direction(intelligence) -> str:
 
 
 def reconcile_decision_intelligence(decision, intelligence) -> DecisionIntelligenceConsistency:
-    """Reconcile decision actionability with Intelligence thesis and recommendation.
+    """Reconcile decision direction separately from Intelligence actionability.
 
-    ``direction`` describes the Intelligence market thesis, while
-    ``recommendation`` describes whether Intelligence endorses taking an action.
-    Therefore ``BUY CALL`` + ``BULLISH/WAIT`` is not a directional conflict;
-    it is a valid bullish thesis with an execution deferral.  Only an explicit
-    opposite directional recommendation is classified as a conflict.
+    Intelligence ``direction`` is the market thesis; ``recommendation`` is the
+    execution endorsement. Thus BUY CALL + BULLISH/WAIT is directionally
+    compatible but execution-deferred, not an opposite-direction conflict.
+    ``status`` retains the historical CONFLICT value for compatibility while
+    ``semantic_status`` distinguishes the reason for the veto.
     """
     signal = _decision_signal(decision)
     recommendation = _recommendation(intelligence)
@@ -81,6 +82,7 @@ def reconcile_decision_intelligence(decision, intelligence) -> DecisionIntellige
                 "Intelligence direction conflicts with the actionable Decision: "
                 f"decision={signal}, intelligence_direction={direction}."
             ),
+            semantic_status="CONFLICT",
         )
 
     if recommendation in expected_recommendations:
@@ -94,14 +96,15 @@ def reconcile_decision_intelligence(decision, intelligence) -> DecisionIntellige
 
     if recommendation in {"", "WAIT", "NO_TRADE", "NO TRADE", "HOLD"}:
         return DecisionIntelligenceConsistency(
-            status="DEFERRED",
+            status="CONFLICT",
             decision_signal=signal,
             intelligence_recommendation=recommendation,
             intelligence_direction=direction,
             reason=(
-                "Intelligence supports the Decision direction but does not endorse "
-                f"execution: decision={signal}, intelligence={recommendation or 'UNAVAILABLE'}."
+                "Intelligence supports the Decision direction but defers execution: "
+                f"decision={signal}, intelligence={recommendation or 'UNAVAILABLE'}."
             ),
+            semantic_status="DEFERRED",
         )
 
     return DecisionIntelligenceConsistency(
@@ -113,4 +116,5 @@ def reconcile_decision_intelligence(decision, intelligence) -> DecisionIntellige
             "Intelligence does not endorse the actionable Decision: "
             f"decision={signal}, intelligence={recommendation or 'UNAVAILABLE'}."
         ),
+        semantic_status="CONFLICT",
     )
