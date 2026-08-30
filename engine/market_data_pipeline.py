@@ -10,6 +10,12 @@ from providers.simulation_provider import SimulationProvider
 class MarketDataPipeline:
     """Prepare RuntimeContext with live or replay market data."""
 
+    # A provider timestamp proves timestamp provenance; it does not prove that
+    # data is suitable for a live decision.  Keep the threshold explicit.
+    CANDLE_FRESH_SECONDS = 5 * 60
+    CANDLE_AGING_SECONDS = 15 * 60
+    CANDLE_STALE_SECONDS = 30 * 60
+
     def __init__(self, provider, instrument, market, chain_manager, candle_manager):
         self.provider = provider
         self.instrument = instrument
@@ -42,89 +48,68 @@ class MarketDataPipeline:
 
     @staticmethod
     def _quote_freshness(quote, acquired_at):
-        """Return canonical freshness metadata without inventing timestamps."""
         provider_timestamp = extract_provider_timestamp(quote)
         if provider_timestamp is None:
             return None, False, None, ("provider_quote_timestamp_unavailable",)
         if provider_timestamp > acquired_at:
             return provider_timestamp, False, None, ("provider_quote_timestamp_in_future",)
-        return (
-            provider_timestamp,
-            True,
-            (acquired_at - provider_timestamp).total_seconds(),
-            ("provider_quote_timestamp",),
-        )
+        return provider_timestamp, True, (acquired_at - provider_timestamp).total_seconds(), ("provider_quote_timestamp",)
+
+    @staticmethod
+    def _candle_freshness(provider_timestamp, acquired_at):
+        """Classify candle age separately from timestamp provenance."""
+        if provider_timestamp is None:
+            return False, None, "UNVERIFIED", ("provider_candle_timestamp_unavailable",)
+        if provider_timestamp > acquired_at:
+            return False, None, "UNVERIFIED", ("provider_candle_timestamp_in_future",)
+        age = (acquired_at - provider_timestamp).total_seconds()
+        if age <= MarketDataPipeline.CANDLE_FRESH_SECONDS:
+            return True, age, "FRESH", ("provider_candle_timestamp",)
+        if age <= MarketDataPipeline.CANDLE_AGING_SECONDS:
+            return True, age, "AGING", ("provider_candle_timestamp", "provider_candle_aging")
+        return False, age, "STALE", ("provider_candle_timestamp", "provider_candle_stale")
 
     def _fetch_spot(self, ctx):
         acquired_at = datetime.now(timezone.utc)
         quote = self.market.get_spot_quote(ctx.symbol)
         if quote is None:
             raise Exception("Unable to fetch live quote.")
-
         price = None
-        for key in (
-            "ltp", "LTP", "last_price", "lastPrice", "live_price", "close"
-        ):
+        for key in ("ltp", "LTP", "last_price", "lastPrice", "live_price", "close"):
             if quote.get(key) is not None:
                 price = float(quote[key])
                 break
         if price is None:
             raise Exception(f"Spot price not found in response: {quote}")
-
         ctx.spot = price
-        provider_timestamp, freshness_verified, freshness_seconds, reasons = self._quote_freshness(
-            quote, acquired_at
-        )
+        provider_timestamp, freshness_verified, freshness_seconds, reasons = self._quote_freshness(quote, acquired_at)
         ctx.data_provenance = RuntimeDataProvenance(
             spot=AcquisitionProvenance(
-                source="INDMoney index quote",
-                acquired_at=acquired_at,
-                provider_timestamp=provider_timestamp,
-                expected_count=1,
-                received_count=1,
-                missing_count=0,
-                freshness_verified=freshness_verified,
-                freshness_seconds=freshness_seconds,
-                reasons=reasons,
+                source="INDMoney index quote", acquired_at=acquired_at,
+                provider_timestamp=provider_timestamp, expected_count=1, received_count=1,
+                missing_count=0, freshness_verified=freshness_verified,
+                freshness_seconds=freshness_seconds, reasons=reasons,
             )
         )
 
     def _fetch_option_chain(self, ctx):
         ctx.expiry = self.instrument.get_nearest_weekly_expiry(ctx.symbol)
-        ctx.option_chain = self.chain_manager.get_live_option_chain(
-            ctx.symbol,
-            ctx.spot,
-            ctx.strike_levels,
-        )
-
+        ctx.option_chain = self.chain_manager.get_live_option_chain(ctx.symbol, ctx.spot, ctx.strike_levels)
         option_provenance = ctx.option_chain.attrs.get("data_provenance")
         if option_provenance is None:
             option_provenance = AcquisitionProvenance(
-                source="INDMoney option quotes",
-                expected_count=len(ctx.option_chain) * 2,
-                received_count=len(ctx.option_chain) * 2,
-                missing_count=0,
-                freshness_verified=False,
-                reasons=("provider_quote_timestamp_unavailable",),
+                source="INDMoney option quotes", expected_count=len(ctx.option_chain) * 2,
+                received_count=len(ctx.option_chain) * 2, missing_count=0,
+                freshness_verified=False, reasons=("provider_quote_timestamp_unavailable",),
             )
-
         integrity = assess_option_chain(ctx.option_chain, ctx.spot)
-        option_provenance = replace(
-            option_provenance,
-            integrity_status=integrity.status,
-            integrity_reasons=integrity.reasons,
-        )
+        option_provenance = replace(option_provenance, integrity_status=integrity.status, integrity_reasons=integrity.reasons)
         ctx.option_chain.attrs["quote_integrity"] = integrity.as_dict()
         ctx.option_chain.attrs["data_provenance"] = option_provenance
-
-        ctx.data_provenance = RuntimeDataProvenance(
-            spot=ctx.data_provenance.spot,
-            option_chain=option_provenance,
-        )
+        ctx.data_provenance = RuntimeDataProvenance(spot=ctx.data_provenance.spot, option_chain=option_provenance)
 
     @staticmethod
     def _provider_candle_timestamp(candles):
-        """Return the newest provider candle timestamp as an aware UTC datetime."""
         timestamps = []
         for candle in candles or []:
             value = candle.get("ts") if isinstance(candle, dict) else None
@@ -143,46 +128,27 @@ class MarketDataPipeline:
         security_id = self.instrument.get_index_security_id(ctx.symbol)
         if security_id is None:
             raise ValueError(f"Index security ID not found for symbol: {ctx.symbol}")
-
         scrip_code = self.instrument.get_scrip_code("NIDX", security_id)
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=5)
-
         candles = self.provider.get_historical_data(
-            scrip_code=scrip_code,
-            interval="5minute",
-            start_time=int(start.timestamp() * 1000),
-            end_time=int(end.timestamp() * 1000),
+            scrip_code=scrip_code, interval="5minute",
+            start_time=int(start.timestamp() * 1000), end_time=int(end.timestamp() * 1000),
         )
-
         ctx.candles = self.candle_manager.to_dataframe(candles)
         provider_timestamp = self._provider_candle_timestamp(candles)
-        if provider_timestamp is None:
-            freshness_verified = False
-            freshness_seconds = None
-            freshness_reasons = ("provider_candle_timestamp_unavailable",)
-        elif provider_timestamp > end:
-            freshness_verified = False
-            freshness_seconds = None
-            freshness_reasons = ("provider_candle_timestamp_in_future",)
-        else:
-            freshness_verified = True
-            freshness_seconds = (end - provider_timestamp).total_seconds()
-            freshness_reasons = ("provider_candle_timestamp",)
-
+        freshness_verified, freshness_seconds, freshness_status, freshness_reasons = self._candle_freshness(provider_timestamp, end)
         ctx.data_provenance = RuntimeDataProvenance(
             spot=ctx.data_provenance.spot,
             option_chain=ctx.data_provenance.option_chain,
             candles=AcquisitionProvenance(
-                source=f"INDMoney historical candles:{scrip_code}",
-                acquired_at=end,
-                provider_timestamp=provider_timestamp,
-                expected_count=1,
+                source=f"INDMoney historical candles:{scrip_code}", acquired_at=end,
+                provider_timestamp=provider_timestamp, expected_count=1,
                 received_count=1 if len(ctx.candles) > 0 else 0,
                 missing_count=0 if len(ctx.candles) > 0 else 1,
-                freshness_verified=freshness_verified,
-                freshness_seconds=freshness_seconds,
+                freshness_verified=freshness_verified, freshness_seconds=freshness_seconds,
                 reasons=freshness_reasons,
+                freshness_status_override=freshness_status,
             ),
         )
 
