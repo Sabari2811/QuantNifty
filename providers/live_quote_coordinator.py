@@ -13,6 +13,8 @@ class LiveQuoteBatch:
 
     ticks: dict[str, LiveQuoteTick]
     acquired_at: datetime
+    connected_at: datetime
+    completed_at: datetime
 
     @property
     def latest_provider_timestamp(self) -> datetime | None:
@@ -34,6 +36,7 @@ class LiveQuoteCoordinator:
         started_at = datetime.now(timezone.utc)
         ticks: dict[str, LiveQuoteTick] = {}
         with IndmoneyPriceFeed(self.access_token, timeout=self.timeout) as feed:
+            connected_at = datetime.now(timezone.utc)
             feed.subscribe(requested, mode=mode)
             deadline = started_at.timestamp() + self.timeout
             while len(ticks) < len(requested) and datetime.now(timezone.utc).timestamp() < deadline:
@@ -43,7 +46,13 @@ class LiveQuoteCoordinator:
                 current = ticks.get(tick.instrument)
                 if current is None or tick.timestamp_ms >= current.timestamp_ms:
                     ticks[tick.instrument] = tick
-        return LiveQuoteBatch(ticks=ticks, acquired_at=datetime.now(timezone.utc))
+            completed_at = datetime.now(timezone.utc)
+        return LiveQuoteBatch(
+            ticks=ticks,
+            acquired_at=completed_at,
+            connected_at=connected_at,
+            completed_at=completed_at,
+        )
 
     @staticmethod
     def option_instrument(security_id: int | str) -> str:
