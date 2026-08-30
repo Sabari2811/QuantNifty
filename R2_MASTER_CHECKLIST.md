@@ -27,7 +27,12 @@
 ### Freshness
 
 - [x] Provider candle timestamp is propagated when available
+- [x] Provider quote timestamp is preserved by INDMoney normalization when supplied
+- [x] Spot provider timestamp is propagated into canonical provenance when supplied
+- [x] Option-chain provider timestamp is propagated into canonical provenance when supplied
 - [x] Quote freshness is explicitly represented as UNVERIFIED when REST quote payload has no provider timestamp
+- [x] Future provider timestamps are rejected from freshness verification
+- [x] Consecutive-cycle validation runner added for live provenance/OI checks
 - [ ] Live quote freshness behavior validated with a timestamp-bearing source/session
 - [ ] Consecutive-cycle freshness behavior validated
 
@@ -73,6 +78,7 @@
 - [x] Fix backend gaps first for live expiry/Greeks parsing and option-chain coverage denominator
 - [x] Fix UI mapping/display gaps second for authoritative Greeks and provenance
 - [x] Dashboard header acquisition time uses canonical runtime provenance rather than local render time
+- [x] Option-chain UI exposes provider timestamp and verified quote age when backend provenance supplies them
 - [ ] Validate only affected UI sections with a fresh live provider session
 - [ ] Full regression after final live reconciliation
 
@@ -92,6 +98,7 @@
 - [x] Exact backend integrity findings are available in the option-chain data-quality details
 - [x] Decision UI no longer derives its displayed signal from probability thresholds
 - [x] Intelligence UI is sourced from the canonical intelligence adapter
+- [x] Provider timestamp and quote age are displayed when available from canonical provenance
 - [ ] Freshness state matches backend in a fresh running UI session
 - [ ] Coverage state matches backend in a fresh running UI session
 - [ ] Integrity state matches backend in a fresh running UI session
