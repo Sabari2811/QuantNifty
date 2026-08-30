@@ -35,6 +35,19 @@ class MarketDataPipeline:
         else:
             self.ws_nifty_token = None
 
+    @classmethod
+    def _candle_freshness(cls, provider_timestamp, acquired_at):
+        if provider_timestamp is None:
+            return False, None, "UNVERIFIED", ("provider_candle_timestamp_unavailable",)
+        if provider_timestamp > acquired_at:
+            return False, None, "UNVERIFIED", ("provider_candle_timestamp_in_future",)
+        age = (acquired_at - provider_timestamp).total_seconds()
+        if age <= cls.CANDLE_FRESH_SECONDS:
+            return True, age, "FRESH", ("provider_candle_timestamp",)
+        if age <= cls.CANDLE_AGING_SECONDS:
+            return False, age, "AGING", ("provider_candle_timestamp", "provider_candle_aging")
+        return False, age, "STALE", ("provider_candle_timestamp", "provider_candle_stale")
+
     def _run_live(self, ctx):
         self._fetch_spot(ctx)
         self._fetch_option_chain(ctx)
@@ -96,14 +109,7 @@ class MarketDataPipeline:
             raise Exception(f"Spot price not found in response: {quote}")
         ctx.spot = price
         provider_timestamp, freshness_verified, freshness_seconds, reasons = self._quote_freshness(quote, acquired_at)
-        ctx.data_provenance = RuntimeDataProvenance(
-            spot=AcquisitionProvenance(
-                source="INDMoney index quote", acquired_at=acquired_at,
-                provider_timestamp=provider_timestamp, expected_count=1, received_count=1,
-                missing_count=0, freshness_verified=freshness_verified,
-                freshness_seconds=freshness_seconds, reasons=reasons,
-            )
-        )
+        ctx.data_provenance = RuntimeDataProvenance(spot=AcquisitionProvenance(source="INDMoney index quote", acquired_at=acquired_at, provider_timestamp=provider_timestamp, expected_count=1, received_count=1, missing_count=0, freshness_verified=freshness_verified, freshness_seconds=freshness_seconds, reasons=reasons))
 
     def _fetch_option_chain(self, ctx):
         ctx.expiry = self.instrument.get_nearest_weekly_expiry(ctx.symbol)
@@ -115,7 +121,7 @@ class MarketDataPipeline:
                     instruments.extend(self.live_feed.option_instrument(value) for value in ctx.option_chain[column].dropna())
             if instruments:
                 batch = self.live_feed.collect(instruments, mode="quote")
-                for side, id_column, price_column in (("CE", "CE_ID", "CE_LTP"), ("PE", "PE_ID", "PE_LTP")):
+                for id_column, price_column in (("CE_ID", "CE_LTP"), ("PE_ID", "PE_LTP")):
                     if id_column not in ctx.option_chain.columns or price_column not in ctx.option_chain.columns:
                         continue
                     for index, security_id in ctx.option_chain[id_column].items():
@@ -127,19 +133,9 @@ class MarketDataPipeline:
             option_timestamp = None
         option_provenance = ctx.option_chain.attrs.get("data_provenance")
         if option_provenance is None:
-            option_provenance = AcquisitionProvenance(
-                source="INDMoney option quotes", expected_count=len(ctx.option_chain) * 2,
-                received_count=len(ctx.option_chain) * 2, missing_count=0,
-                freshness_verified=False, reasons=("provider_quote_timestamp_unavailable",),
-            )
+            option_provenance = AcquisitionProvenance(source="INDMoney option quotes", expected_count=len(ctx.option_chain) * 2, received_count=len(ctx.option_chain) * 2, missing_count=0, freshness_verified=False, reasons=("provider_quote_timestamp_unavailable",))
         if option_timestamp is not None:
-            option_provenance = replace(
-                option_provenance,
-                provider_timestamp=option_timestamp,
-                freshness_verified=True,
-                freshness_seconds=(datetime.now(timezone.utc) - option_timestamp).total_seconds(),
-                reasons=("provider_quote_timestamp",),
-            )
+            option_provenance = replace(option_provenance, provider_timestamp=option_timestamp, freshness_verified=True, freshness_seconds=(datetime.now(timezone.utc) - option_timestamp).total_seconds(), reasons=("provider_quote_timestamp",))
         integrity = assess_option_chain(ctx.option_chain, ctx.spot)
         option_provenance = replace(option_provenance, integrity_status=integrity.status, integrity_reasons=integrity.reasons)
         ctx.option_chain.attrs["quote_integrity"] = integrity.as_dict()
@@ -169,26 +165,11 @@ class MarketDataPipeline:
         scrip_code = self.instrument.get_scrip_code("NIDX", security_id)
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=5)
-        candles = self.provider.get_historical_data(
-            scrip_code=scrip_code, interval="5minute",
-            start_time=int(start.timestamp() * 1000), end_time=int(end.timestamp() * 1000),
-        )
+        candles = self.provider.get_historical_data(scrip_code=scrip_code, interval="5minute", start_time=int(start.timestamp() * 1000), end_time=int(end.timestamp() * 1000))
         ctx.candles = self.candle_manager.to_dataframe(candles)
         provider_timestamp = self._provider_candle_timestamp(candles)
         freshness_verified, freshness_seconds, freshness_status, freshness_reasons = self._candle_freshness(provider_timestamp, end)
-        ctx.data_provenance = RuntimeDataProvenance(
-            spot=ctx.data_provenance.spot,
-            option_chain=ctx.data_provenance.option_chain,
-            candles=AcquisitionProvenance(
-                source=f"INDMoney historical candles:{scrip_code}", acquired_at=end,
-                provider_timestamp=provider_timestamp, expected_count=1,
-                received_count=1 if len(ctx.candles) > 0 else 0,
-                missing_count=0 if len(ctx.candles) > 0 else 1,
-                freshness_verified=freshness_verified, freshness_seconds=freshness_seconds,
-                reasons=freshness_reasons,
-                freshness_status_override=freshness_status,
-            ),
-        )
+        ctx.data_provenance = RuntimeDataProvenance(spot=ctx.data_provenance.spot, option_chain=ctx.data_provenance.option_chain, candles=AcquisitionProvenance(source=f"INDMoney historical candles:{scrip_code}", acquired_at=end, provider_timestamp=provider_timestamp, expected_count=1, received_count=1 if len(ctx.candles) > 0 else 0, missing_count=0 if len(ctx.candles) > 0 else 1, freshness_verified=freshness_verified, freshness_seconds=freshness_seconds, reasons=freshness_reasons, freshness_status_override=freshness_status))
 
     def run(self, ctx):
         if isinstance(self.provider, SimulationProvider):
