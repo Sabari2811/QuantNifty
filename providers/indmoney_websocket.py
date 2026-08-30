@@ -139,8 +139,6 @@ class IndmoneyPriceFeed:
         if raw_socket is None:
             raise RuntimeError("price feed socket is unavailable")
 
-        # Bound the low-level socket before entering websocket-client recv().
-        # On Windows this prevents indefinite waits inside SSL reads.
         raw_socket.settimeout(effective_timeout)
         try:
             readable, _, _ = select.select([raw_socket], [], [], effective_timeout)
