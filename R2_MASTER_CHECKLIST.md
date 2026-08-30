@@ -33,6 +33,7 @@
 - [x] Consecutive-cycle validation runner added for live provenance/OI checks
 - [x] Candle freshness now distinguishes timestamp provenance from actual age
 - [x] Historical candle older than the live freshness threshold is STALE rather than VERIFIED
+- [x] Timestamp-bearing INDstocks WebSocket price-feed adapter implemented with provider timestamp preservation
 - [ ] Live quote freshness behavior validated with a timestamp-bearing source/session
 - [ ] Consecutive-cycle freshness behavior validated with timestamp-bearing quotes
 
