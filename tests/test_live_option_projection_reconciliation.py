@@ -5,7 +5,15 @@ import pandas as pd
 from dashboard.live_reconciliation import build_live_reconciliation
 
 
+_GREEK_COLUMNS = [
+    "CE_IV", "CE_DELTA", "CE_GAMMA", "CE_THETA", "CE_VEGA", "CE_RHO",
+    "PE_IV", "PE_DELTA", "PE_GAMMA", "PE_THETA", "PE_VEGA", "PE_RHO",
+]
+
+
 def _dashboard():
+    greek_row = {"Strike": 24350, "CE_ID": 46999, "PE_ID": 47000}
+    greek_row.update({column: 0.1 for column in _GREEK_COLUMNS})
     return SimpleNamespace(
         spot=24334.55,
         expiry="09/01/2026 14:00",
@@ -20,10 +28,7 @@ def _dashboard():
             "Strike": 24350, "CE_ID": 46999, "PE_ID": 47000,
             "CE_LTP": 100.0, "PE_LTP": 100.0,
         }]),
-        greeks=pd.DataFrame([{
-            "Strike": 24350, "CE_ID": 46999, "PE_ID": 47000,
-            "CE_IV": 0.1, "CE_DELTA": 0.5,
-        }]),
+        greeks=pd.DataFrame([greek_row]),
         data_provenance=None,
     )
 
