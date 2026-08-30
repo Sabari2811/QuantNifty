@@ -10,11 +10,20 @@ class DecisionIntelligenceConsistency:
     status: str
     decision_signal: str
     intelligence_recommendation: str
+    intelligence_direction: str
     reason: str
 
     @property
     def consistent(self) -> bool:
+        return self.status in {"CONSISTENT", "DEFERRED"}
+
+    @property
+    def actionable(self) -> bool:
         return self.status == "CONSISTENT"
+
+    @property
+    def vetoed(self) -> bool:
+        return self.status != "CONSISTENT"
 
 
 def _decision_signal(decision) -> str:
@@ -26,44 +35,80 @@ def _recommendation(intelligence) -> str:
     return str(getattr(intelligence, "recommendation", "") or "").upper()
 
 
-def reconcile_decision_intelligence(decision, intelligence) -> DecisionIntelligenceConsistency:
-    """Reconcile actionable Decision direction with Intelligence recommendation.
+def _direction(intelligence) -> str:
+    return str(getattr(intelligence, "direction", "") or "").upper()
 
-    WAIT/NO_TRADE intelligence is treated as a safety veto when the canonical
-    decision requests an actionable BUY CALL or BUY PUT. The two objects are
-    allowed to differ directionally only when the Intelligence layer explicitly
-    recommends the same actionable direction or the canonical decision is WAIT.
+
+def reconcile_decision_intelligence(decision, intelligence) -> DecisionIntelligenceConsistency:
+    """Reconcile decision actionability with Intelligence thesis and recommendation.
+
+    ``direction`` describes the Intelligence market thesis, while
+    ``recommendation`` describes whether Intelligence endorses taking an action.
+    Therefore ``BUY CALL`` + ``BULLISH/WAIT`` is not a directional conflict;
+    it is a valid bullish thesis with an execution deferral.  Only an explicit
+    opposite directional recommendation is classified as a conflict.
     """
     signal = _decision_signal(decision)
     recommendation = _recommendation(intelligence)
+    direction = _direction(intelligence)
 
     if signal in {"", "WAIT"}:
         return DecisionIntelligenceConsistency(
             status="CONSISTENT",
             decision_signal=signal,
             intelligence_recommendation=recommendation,
+            intelligence_direction=direction,
             reason="Decision is non-actionable; Intelligence does not veto it.",
         )
 
     if signal == "BUY CALL":
-        expected = {"BUY CALL", "BUY"}
+        expected_direction = "BULLISH"
+        expected_recommendations = {"BUY CALL", "BUY"}
     elif signal == "BUY PUT":
-        expected = {"BUY PUT", "SELL", "SELL PUT"}
+        expected_direction = "BEARISH"
+        expected_recommendations = {"BUY PUT", "SELL", "SELL PUT"}
     else:
-        expected = {signal}
+        expected_direction = ""
+        expected_recommendations = {signal}
 
-    if recommendation in expected:
+    if direction and direction != expected_direction:
+        return DecisionIntelligenceConsistency(
+            status="CONFLICT",
+            decision_signal=signal,
+            intelligence_recommendation=recommendation,
+            intelligence_direction=direction,
+            reason=(
+                "Intelligence direction conflicts with the actionable Decision: "
+                f"decision={signal}, intelligence_direction={direction}."
+            ),
+        )
+
+    if recommendation in expected_recommendations:
         return DecisionIntelligenceConsistency(
             status="CONSISTENT",
             decision_signal=signal,
             intelligence_recommendation=recommendation,
-            reason="Decision and Intelligence agree on the actionable direction.",
+            intelligence_direction=direction,
+            reason="Decision and Intelligence agree on direction and actionability.",
+        )
+
+    if recommendation in {"", "WAIT", "NO_TRADE", "NO TRADE", "HOLD"}:
+        return DecisionIntelligenceConsistency(
+            status="DEFERRED",
+            decision_signal=signal,
+            intelligence_recommendation=recommendation,
+            intelligence_direction=direction,
+            reason=(
+                "Intelligence supports the Decision direction but does not endorse "
+                f"execution: decision={signal}, intelligence={recommendation or 'UNAVAILABLE'}."
+            ),
         )
 
     return DecisionIntelligenceConsistency(
         status="CONFLICT",
         decision_signal=signal,
         intelligence_recommendation=recommendation,
+        intelligence_direction=direction,
         reason=(
             "Intelligence does not endorse the actionable Decision: "
             f"decision={signal}, intelligence={recommendation or 'UNAVAILABLE'}."
