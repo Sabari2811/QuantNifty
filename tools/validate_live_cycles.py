@@ -48,6 +48,8 @@ def main() -> int:
 
     for cycle in range(args.cycles):
         current = dashboard.load(args.symbol, args.levels)
+        analytics = current.analytics or {}
+        oi_flow = analytics.get("oi_flow", {})
         results.append(
             {
                 "iteration": cycle + 1,
@@ -55,7 +57,7 @@ def main() -> int:
                 "spot": current.spot,
                 "expiry": current.expiry,
                 "provenance": _provenance_state(current),
-                "oi": (current.analytics or {}).get("oi", {}),
+                "oi_flow": oi_flow,
             }
         )
         if cycle + 1 < args.cycles and args.sleep_seconds:
@@ -73,15 +75,29 @@ def main() -> int:
             and item["provenance"]["option_chain"]["coverage_status"] == "COMPLETE"
             for item in results
         ),
+        "all_oi_flow_reported": all(
+            isinstance(item["oi_flow"], dict)
+            and bool(item["oi_flow"].get("summary"))
+            and "status" in item["oi_flow"]["summary"]
+            for item in results
+        ),
     }
 
-    # OI state is deliberately reported rather than asserted: the first
-    # cycle should establish the baseline, while later cycles may classify
-    # flow only when the provider returns changed OI values.
+    # OI state is deliberately reported rather than over-asserted: the first
+    # cycle should establish the baseline, while later cycles classify flow
+    # only when the provider returns comparable values. The canonical
+    # AnalyticsPipeline key is `oi_flow`; do not silently read a non-existent
+    # `oi` key and report a false empty result.
     if results:
-        checks["first_cycle_oi_reported"] = "oi" in results[0]
+        first_summary = results[0]["oi_flow"].get("summary", {})
+        checks["first_cycle_oi_baseline"] = (
+            first_summary.get("status") == "AWAITING_PREVIOUS_SNAPSHOT"
+        )
     if len(results) > 1:
-        checks["subsequent_cycle_oi_reported"] = all("oi" in item for item in results[1:])
+        checks["subsequent_cycle_oi_ready"] = all(
+            item["oi_flow"].get("summary", {}).get("status") == "READY"
+            for item in results[1:]
+        )
 
     print(json.dumps({"cycles": results, "checks": checks}, indent=2, default=str))
 
