@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -76,24 +75,16 @@ def websocket_instrument(segment: str, security_id: int | str) -> str:
 
 
 class IndmoneyPriceFeed:
-    """Small synchronous price-feed client with explicit timestamp propagation.
+    """Small synchronous price-feed client with explicit timestamp propagation."""
 
-    The client is intentionally transport-focused. It does not mutate the
-    canonical runtime state; callers decide which tick is authoritative.
-    """
-
-    def __init__(
-        self,
-        access_token: str,
-        *,
-        url: str = PRICE_FEED_URL,
-        timeout: float = 10.0,
-    ) -> None:
+    def __init__(self, access_token: str, *, url: str = PRICE_FEED_URL, timeout: float = 10.0) -> None:
         if not access_token:
             raise ValueError("access_token is required")
+        if timeout <= 0:
+            raise ValueError("timeout must be positive")
         self.access_token = access_token
         self.url = url
-        self.timeout = timeout
+        self.timeout = float(timeout)
         self._socket: websocket.WebSocket | None = None
 
     def connect(self) -> None:
@@ -120,13 +111,18 @@ class IndmoneyPriceFeed:
     def recv_tick(self) -> LiveQuoteTick | None:
         if self._socket is None:
             raise RuntimeError("price feed is not connected")
+        # The socket-level timeout is essential: a coordinator-level deadline
+        # cannot expire while websocket.recv() is blocked inside SSL.
+        self._socket.settimeout(self.timeout)
         return parse_price_feed_message(self._socket.recv())
 
     def iter_ticks(self, *, max_ticks: int | None = None, timeout: float | None = None):
         if self._socket is None:
             raise RuntimeError("price feed is not connected")
-        if timeout is not None:
-            self._socket.settimeout(timeout)
+        effective_timeout = self.timeout if timeout is None else float(timeout)
+        if effective_timeout <= 0:
+            raise ValueError("timeout must be positive")
+        self._socket.settimeout(effective_timeout)
         received = 0
         while max_ticks is None or received < max_ticks:
             tick = self.recv_tick()
