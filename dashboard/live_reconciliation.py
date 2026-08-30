@@ -25,7 +25,9 @@ def build_live_reconciliation(dashboard) -> dict:
     """
     summary = adapt_market_summary(dashboard)
     decision = adapt_decision(dashboard)
+    canonical_intelligence = getattr(dashboard, "canonical_intelligence", None)
     intelligence = dashboard.intelligence
+    canonical_intelligence_ui = adapt_intelligence(canonical_intelligence)
     provenance = adapt_provenance(dashboard.data_provenance)
 
     option_chain = dashboard.option_chain
@@ -95,6 +97,9 @@ def build_live_reconciliation(dashboard) -> dict:
                         option_projection_gap = "ui_projection_value_mismatch"
             option_projection_matches = source_values_match and greek_values_match
 
+    intelligence_matches = canonical_intelligence_ui == intelligence
+    intelligence_gap = None if intelligence_matches else "ui_intelligence_value_mismatch"
+
     fields = {
         "market_summary": {
             "spot": {"backend": dashboard.spot, "ui": summary["spot"]},
@@ -107,10 +112,15 @@ def build_live_reconciliation(dashboard) -> dict:
             "expiry": {"backend": dashboard.expiry, "ui": summary["expiry"]},
         },
         "decision": {
-            key: {"backend": value, "ui": decision[key]}
+            key: {"backend": dashboard.signal.get(key) if key == "signal" else dashboard.probability.get(key) if key in dashboard.probability else dashboard.trade_plan.get(key), "ui": value}
             for key, value in decision.items()
         },
-        "intelligence": intelligence,
+        "intelligence": {
+            "status": _status(intelligence_matches),
+            "backend": canonical_intelligence_ui,
+            "ui": intelligence,
+            "gap": intelligence_gap,
+        },
         "option_chain": {
             "backend_rows": option_chain_rows,
             "greek_rows": greek_rows,
@@ -135,6 +145,8 @@ def build_live_reconciliation(dashboard) -> dict:
     for key, values in fields["decision"].items():
         if values["backend"] != values["ui"]:
             field_gaps.append(f"decision.{key}")
+    if not intelligence_matches:
+        field_gaps.append("intelligence")
     if identity_gap:
         field_gaps.append("option_chain.contract_identity")
     if not option_projection_matches:
