@@ -25,6 +25,8 @@ class DashboardController:
         if ctx.option_chain is not None:
             option_chain_integrity = ctx.option_chain.attrs.get("quote_integrity")
 
+        canonical_intelligence = ctx.intelligence
+
         return DashboardData(
             provider=PROVIDER,
             symbol=ctx.symbol,
@@ -54,10 +56,11 @@ class DashboardController:
             signal=analytics.get("signal", {}),
             trade_plan=analytics.get("trade_plan", {}),
             risk=analytics.get("risk", {}),
-            analytics=analytics,
-            intelligence=adapt_intelligence(ctx.intelligence),
-            option_chain=ctx.option_chain,
             institutional_score=analytics.get("institutional_score", {}),
+            analytics=analytics,
+            intelligence=adapt_intelligence(canonical_intelligence),
+            canonical_intelligence=canonical_intelligence,
+            option_chain=ctx.option_chain,
             greeks=ctx.greeks_df,
             data_provenance=ctx.data_provenance,
             option_chain_integrity=option_chain_integrity,
