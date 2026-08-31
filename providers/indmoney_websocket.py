@@ -4,7 +4,6 @@ import json
 import select
 import socket
 import threading
-import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -111,7 +110,7 @@ class IndmoneyPriceFeed:
                     timeout=self.timeout,
                     header=[f"Authorization: {self.access_token}"],
                 )
-            except BaseException as exc:  # propagate transport errors to caller
+            except BaseException as exc:
                 result["error"] = exc
             finally:
                 finished.set()
@@ -119,9 +118,7 @@ class IndmoneyPriceFeed:
         thread = threading.Thread(target=worker, name="indstocks-ws-connect", daemon=True)
         thread.start()
         if not finished.wait(self.timeout):
-            raise LiveQuoteConnectTimeout(
-                f"WebSocket connection exceeded {self.timeout:.1f}s"
-            )
+            raise LiveQuoteConnectTimeout(f"WebSocket connection exceeded {self.timeout:.1f}s")
         error = result.get("error")
         if error is not None:
             raise error
@@ -134,11 +131,7 @@ class IndmoneyPriceFeed:
             raise ValueError("mode must be 'ltp' or 'quote'")
         if self._socket is None:
             raise RuntimeError("price feed is not connected")
-        payload = {
-            "action": "subscribe",
-            "mode": mode,
-            "instruments": list(instruments),
-        }
+        payload = {"action": "subscribe", "mode": mode, "instruments": list(instruments)}
         if not payload["instruments"]:
             raise ValueError("at least one instrument is required")
         self._socket.send(json.dumps(payload))
@@ -150,26 +143,37 @@ class IndmoneyPriceFeed:
         if effective_timeout <= 0:
             raise ValueError("timeout must be positive")
 
-        raw_socket = getattr(self._socket, "sock", None)
-        if raw_socket is None:
-            raise RuntimeError("price feed socket is unavailable")
-        raw_socket.settimeout(effective_timeout)
-        try:
-            readable, _, _ = select.select([raw_socket], [], [], effective_timeout)
-        except (OSError, ValueError) as exc:
-            raise LiveQuoteReceiveTimeout(
-                f"WebSocket socket readiness check failed within {effective_timeout:.1f}s"
-            ) from exc
-        if not readable:
-            raise LiveQuoteReceiveTimeout(
-                f"no WebSocket price message received within {effective_timeout:.1f}s"
-            )
-        try:
-            return parse_price_feed_message(self._socket.recv())
-        except (websocket.WebSocketTimeoutException, TimeoutError, socket.timeout) as exc:
+        result: dict[str, Any] = {}
+        finished = threading.Event()
+        socket_obj = self._socket
+
+        def worker() -> None:
+            try:
+                result["message"] = socket_obj.recv()
+            except BaseException as exc:
+                result["error"] = exc
+            finally:
+                finished.set()
+
+        thread = threading.Thread(target=worker, name="indstocks-ws-recv", daemon=True)
+        thread.start()
+        if not finished.wait(effective_timeout):
+            try:
+                socket_obj.close()
+            finally:
+                self._socket = None
             raise LiveQuoteReceiveTimeout(
                 f"WebSocket price receive exceeded {effective_timeout:.1f}s"
-            ) from exc
+            )
+
+        error = result.get("error")
+        if error is not None:
+            if isinstance(error, (websocket.WebSocketTimeoutException, TimeoutError, socket.timeout)):
+                raise LiveQuoteReceiveTimeout(
+                    f"WebSocket price receive exceeded {effective_timeout:.1f}s"
+                ) from error
+            raise error
+        return parse_price_feed_message(result.get("message"))
 
     def iter_ticks(self, *, max_ticks: int | None = None, timeout: float | None = None):
         if self._socket is None:
