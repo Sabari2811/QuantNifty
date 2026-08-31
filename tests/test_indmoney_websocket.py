@@ -77,21 +77,27 @@ def test_price_feed_requires_token():
         IndmoneyPriceFeed("")
 
 
-def test_recv_tick_hard_deadline_prevents_blocking_recv(monkeypatch):
-    feed = IndmoneyPriceFeed("token", timeout=0.1)
+def test_recv_tick_hard_deadline_prevents_blocking_recv():
+    feed = IndmoneyPriceFeed("token", timeout=0.05)
 
     class Socket:
-        def settimeout(self, value):
-            self.timeout = value
-
         def recv(self):
-            raise AssertionError("recv must not be entered after select timeout")
+            time.sleep(1.0)
+            return "never-reached"
 
-    feed._socket = type("WebSocket", (), {"sock": Socket()})()
-    monkeypatch.setattr("providers.indmoney_websocket.select.select", lambda *args: ([], [], []))
+        def close(self):
+            self.closed = True
 
-    with pytest.raises(LiveQuoteReceiveTimeout, match="no WebSocket price message"):
+    socket = Socket()
+    feed._socket = socket
+    started = time.monotonic()
+
+    with pytest.raises(LiveQuoteReceiveTimeout, match="price receive exceeded"):
         feed.recv_tick()
+
+    assert time.monotonic() - started < 0.5
+    assert feed._socket is None
+    assert socket.closed is True
 
 
 def test_connect_has_hard_wall_clock_deadline(monkeypatch):
