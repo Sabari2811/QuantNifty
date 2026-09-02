@@ -115,6 +115,12 @@ def build_live_reconciliation(dashboard) -> dict:
     intelligence_matches = canonical_intelligence_ui == intelligence
     intelligence_gap = None if intelligence_matches else "ui_intelligence_value_mismatch"
 
+    decision_intelligence = getattr(dashboard, "decision_intelligence_consistency", None)
+    if decision_intelligence is None:
+        decision_intelligence_gap = "dashboard_decision_intelligence_status_missing"
+    else:
+        decision_intelligence_gap = None
+
     fields = {
         "market_summary": {
             "spot": {"backend": dashboard.spot, "ui": summary["spot"]},
@@ -135,6 +141,11 @@ def build_live_reconciliation(dashboard) -> dict:
             "backend": canonical_intelligence_ui,
             "ui": intelligence,
             "gap": intelligence_gap,
+        },
+        "decision_intelligence": {
+            "status": "MATCH" if decision_intelligence is not None else "GAP",
+            "value": decision_intelligence,
+            "gap": decision_intelligence_gap,
         },
         "option_chain": {
             "backend_rows": option_chain_rows,
@@ -162,6 +173,8 @@ def build_live_reconciliation(dashboard) -> dict:
             field_gaps.append(f"decision.{key}")
     if not intelligence_matches:
         field_gaps.append("intelligence")
+    if decision_intelligence_gap:
+        field_gaps.append("decision_intelligence")
     if identity_gap:
         field_gaps.append("option_chain.contract_identity")
     if not option_projection_matches:
