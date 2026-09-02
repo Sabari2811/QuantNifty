@@ -60,7 +60,7 @@ def test_market_banner_renders_degraded_dashboard_without_canonical_signal(monke
     first_group, second_group, third_group = rendered_groups
     assert first_group[0].warning_values == ["UNAVAILABLE"]
     assert ("Spot", "24100.00") in first_group[1].metric_values
-    assert ("Bullish %", "UNAVAILABLE%") in second_group[2].metric_values
+    assert ("Bullish %", "UNAVAILABLE") in second_group[2].metric_values
     assert ("Confidence", "UNAVAILABLE") in second_group[3].metric_values
     assert ("Recommended", "UNAVAILABLE") in third_group[0].metric_values
     assert ("Risk Reward", "UNAVAILABLE") in third_group[1].metric_values
