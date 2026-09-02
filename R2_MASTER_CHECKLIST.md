@@ -71,6 +71,7 @@
 - [x] Authoritative live Greeks mapped into option-chain UI by contract identity
 - [x] Build backend field inventory for option-chain/provenance fields consumed by UI
 - [x] Add a live reconciliation report/runner that consumes one DashboardData cycle and reports backend → UI adapter gaps
+- [x] Add deterministic Streamlit AppTest runtime contract for the real dashboard entrypoint; live execution remains a separate evidence gate
 - [ ] Compare option-chain values field-by-field against a fresh captured UI/runtime snapshot
 - [x] Data-quality/provenance fields are mapped independently: coverage, integrity, freshness, source, counts, reasons
 - [x] Exact backend integrity contract findings are surfaced in the option-chain UI data-quality details
