@@ -83,7 +83,10 @@ market_banner.render(dashboard)
 market_regime.render(dashboard)
 runtime_card.render(dashboard)
 
-intelligence_card.render(dashboard.intelligence)
+intelligence_card.render(
+    dashboard.intelligence,
+    dashboard.decision_intelligence_consistency,
+)
 decision = adapt_decision(dashboard)
 signal_card.render(decision, dashboard.dealer)
 institutional_score_card.render(dashboard.institutional_score)
