@@ -105,9 +105,9 @@ expected_move_card.render(
     }
 )
 
-# Expose an audit-only contract containing the exact canonical values supplied
-# to the affected UI sections. AppTest uses this to validate the real
-# Streamlit entrypoint without scraping presentation text.
+# Expose audit-only values from this exact DashboardData cycle. These are not
+# presentation state and are consumed only by the Streamlit runtime validator.
+st.session_state["_quantnifty_dashboard_audit"] = dashboard
 st.session_state["_quantnifty_ui_contract"] = build_ui_runtime_contract(dashboard)
 
 max_pain_card.render(dashboard.max_pain)
