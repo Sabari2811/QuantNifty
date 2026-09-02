@@ -5,7 +5,8 @@ import pandas as pd
 
 from core.data_provenance import AcquisitionProvenance, RuntimeDataProvenance
 from engine.market_data_pipeline import MarketDataPipeline
-from providers.indmoney_websocket import LiveQuoteBatch, LiveQuoteTick
+from providers.indmoney_websocket import LiveQuoteTick
+from providers.live_quote_coordinator import LiveQuoteBatch
 
 
 def _chain():
