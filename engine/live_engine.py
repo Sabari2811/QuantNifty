@@ -113,6 +113,15 @@ class LiveEngine:
             previous_greeks_df=getattr(self, "_previous_greeks_df", None),
         )
 
+        # AnalyticsPipeline returns the authoritative enriched Greeks dataframe
+        # inside its canonical MarketContext. Preserve that projection on the
+        # runtime context so DashboardData and downstream UI consumers receive
+        # the same GEX/DEX-enriched data used by analytics.
+        computed_context = computed_analytics.get("context")
+        computed_greeks_df = getattr(computed_context, "greeks", None)
+        if hasattr(computed_greeks_df, "copy"):
+            self.ctx.greeks_df = computed_greeks_df.copy(deep=True)
+
         if replay_recompute:
             expected_analytics = getattr(self.ctx, "replay_expected_analytics", None)
             if expected_analytics:
