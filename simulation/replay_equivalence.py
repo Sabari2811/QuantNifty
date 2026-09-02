@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
 from math import isclose
+from types import SimpleNamespace
 from typing import Any
 
 import pandas as pd
@@ -24,6 +25,8 @@ class ReplayEquivalence:
 def _normalize(value):
     if is_dataclass(value):
         return _normalize(asdict(value))
+    if isinstance(value, SimpleNamespace):
+        return _normalize(vars(value))
     if isinstance(value, dict):
         return {str(k): _normalize(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
