@@ -35,8 +35,8 @@
 - [x] Historical candle older than the live freshness threshold is STALE rather than VERIFIED
 - [x] Timestamp-bearing INDstocks WebSocket price-feed adapter implemented with provider timestamp preservation
 - [x] Timestamp-bearing live feed wired into canonical market-data provenance behind explicit live-feed configuration
-- [ ] Live quote freshness behavior validated with a timestamp-bearing source/session
-- [ ] Consecutive-cycle freshness behavior validated with timestamp-bearing quotes
+- [x] Live quote freshness behavior validated with a timestamp-bearing source/session
+- [x] Consecutive-cycle freshness behavior validated with timestamp-bearing quotes
 
 ### Integrity
 - [x] Option-chain integrity validator
