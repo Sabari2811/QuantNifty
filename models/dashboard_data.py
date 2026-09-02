@@ -53,3 +53,4 @@ class DashboardData:
     cycle_no: int = 0
 
     canonical_intelligence: Any = None
+    decision_intelligence_consistency: dict | None = None
