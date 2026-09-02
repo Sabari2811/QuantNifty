@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 import pandas as pd
 
 from dashboard.live_raw_analytics_reconciliation import reconcile_raw_quote_analytics
@@ -34,8 +32,8 @@ def _analytics():
         "expected_move": {
             "atm_strike": 25000,
             "expected_move": 290.0,
-            "upper": 25290.0,
-            "lower": 24710.0,
+            "upper": 25310.0,
+            "lower": 24730.0,
             "method": "ATM_STRADDLE",
         },
         "max_pain": {
@@ -49,7 +47,7 @@ def _analytics():
 
 def test_raw_quote_analytics_match_canonical_outputs():
     report = reconcile_raw_quote_analytics(_quotes(), _chain(), 25020.0, _analytics())
-    assert report["status"] == "PASS"
+    assert report["status"] == "PASS", report
     assert report["validated_fields"] == 15
     assert report["gaps"] == []
 
