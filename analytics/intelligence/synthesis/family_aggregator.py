@@ -52,7 +52,12 @@ class FamilyEvidenceAggregator:
         groups: dict[str, list[EvidenceItem]] = {}
 
         for item in items:
-            family = self._matrix.classify(item.feature).name
+            feature_family = self._matrix.classify(item.feature)
+            if feature_family.name != "OTHER":
+                family = feature_family.name
+            else:
+                family = self._matrix.classify(item.source_family).name
+
             groups.setdefault(family, []).append(item)
 
         results: list[FamilyEvidence] = []
