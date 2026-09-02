@@ -5,6 +5,7 @@ from models.dealer_data import DealerData
 
 from runtime.runtime_manager import RuntimeManager
 from dashboard.intelligence_adapter import adapt_intelligence
+from dashboard.decision_intelligence_status import build_decision_intelligence_status
 
 
 class DashboardController:
@@ -26,6 +27,12 @@ class DashboardController:
             option_chain_integrity = ctx.option_chain.attrs.get("quote_integrity")
 
         canonical_intelligence = ctx.intelligence
+        decision_intelligence_consistency = None
+        if ctx.decision is not None and canonical_intelligence is not None:
+            decision_intelligence_consistency = build_decision_intelligence_status(
+                ctx.decision,
+                canonical_intelligence,
+            )
 
         return DashboardData(
             provider=PROVIDER,
@@ -74,4 +81,5 @@ class DashboardController:
             trade_block_reason=ctx.trade_block_reason,
             runtime_status=ctx.runtime_status,
             cycle_no=ctx.cycle_no,
+            decision_intelligence_consistency=decision_intelligence_consistency,
         )
