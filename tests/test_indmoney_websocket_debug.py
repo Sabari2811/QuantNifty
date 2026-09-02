@@ -39,6 +39,27 @@ def test_summarize_websocket_message_reports_price_metadata_without_payload():
     }
 
 
+def test_summarize_websocket_message_classifies_plain_text():
+    assert summarize_websocket_message("ping") == {
+        "message_type": "non_json",
+        "value_type": "str",
+        "raw_length": 4,
+        "string_kind": "ping",
+    }
+
+
+def test_summarize_websocket_message_bounds_and_redacts_plain_text_preview():
+    message = "Authorization: SECRET_TOKEN " + ("x" * 200)
+    summary = summarize_websocket_message(message)
+    assert summary["message_type"] == "non_json"
+    assert summary["value_type"] == "str"
+    assert summary["raw_length"] == len(message)
+    assert summary["preview_truncated"] is True
+    assert "SECRET_TOKEN" not in summary["preview"]
+    assert "[REDACTED]" in summary["preview"]
+    assert len(summary["preview"]) <= 160
+
+
 def test_recv_debug_returns_safe_message_summary():
     feed = IndmoneyPriceFeed("token", timeout=0.05)
 
@@ -59,6 +80,24 @@ def test_recv_debug_returns_safe_message_summary():
     assert summary["message_type"] == "control_or_other"
     assert summary["type"] == "heartbeat"
     assert summary["data_keys"] == ["serverTime"]
+
+
+def test_recv_debug_reports_plain_text_message():
+    feed = IndmoneyPriceFeed("token", timeout=0.05)
+
+    class Socket:
+        def recv(self):
+            return "subscription acknowledged"
+
+        def close(self):
+            self.closed = True
+
+    feed._socket = Socket()
+    summary = feed.recv_debug(timeout=0.05)
+    assert summary["message_type"] == "non_json"
+    assert summary["value_type"] == "str"
+    assert summary["preview"] == "subscription acknowledged"
+    assert summary["preview_truncated"] is False
 
 
 def test_recv_debug_hard_deadline_prevents_blocking_recv():
