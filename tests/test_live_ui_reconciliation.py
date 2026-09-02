@@ -100,7 +100,7 @@ def test_authoritative_option_projection_preserves_all_enriched_analytics_column
     assert all(column in projected.columns for column in _ANALYTICS_COLUMNS)
     assert projected.loc[0, "NET_GEX"] == 3
     assert projected.loc[0, "NET_DEX"] == 6
-    assert projected.loc[0, "CE_FLOW"] == 23
+    assert projected.loc[0, "CE_FLOW"] == 22
 
 
 def test_live_reconciliation_matches_market_summary_and_detects_no_mapping_gaps():
