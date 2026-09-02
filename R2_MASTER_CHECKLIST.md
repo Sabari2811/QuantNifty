@@ -110,7 +110,7 @@
 - [ ] Coverage state matches backend in a fresh running UI session
 - [ ] Integrity state matches backend in a fresh running UI session
 - [x] Live degraded-data presentation validated at runtime boundary (analytics/trading blocked; UI rendering still pending)
-- [ ] Decision ↔ Intelligence conflict/deferred state is surfaced clearly in the UI
+- [x] Decision ↔ Intelligence conflict/deferred state is surfaced clearly in the UI path and covered by regression assertions
 
 ## Release Gate
 - [ ] Fresh live-session backend validation complete
