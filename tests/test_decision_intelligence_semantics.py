@@ -43,6 +43,7 @@ def test_matching_actionable_recommendation_is_executable():
     assert result.status == "CONSISTENT"
     assert result.semantic_status == "CONSISTENT"
     assert result.actionable is True
+    assert result.vetoed is False
 
 
 def test_non_actionable_decision_remains_consistent():
@@ -51,4 +52,7 @@ def test_non_actionable_decision_remains_consistent():
         intelligence("WAIT", "BULLISH"),
     )
     assert result.status == "CONSISTENT"
-    assert result.actionable is True
+    assert result.semantic_status == "CONSISTENT"
+    assert result.consistent is True
+    assert result.actionable is False
+    assert result.vetoed is False
