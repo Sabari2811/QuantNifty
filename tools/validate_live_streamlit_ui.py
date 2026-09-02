@@ -25,7 +25,26 @@ def main() -> int:
     parser.add_argument("--levels", type=int, default=5)
     args = parser.parse_args()
 
+    # AppTest initially has no rendered elements. Run once to construct the
+    # sidebar controls, then set the requested values and rerun for the live
+    # validation cycle.
     app = AppTest.from_file("dashboard/app.py")
+    app.run(timeout=120)
+
+    if app.exception:
+        print("STREAMLIT_RUNTIME=FAIL")
+        for exc in app.exception:
+            print(str(exc))
+        return 2
+
+    if len(app.selectbox) == 0 or len(app.slider) == 0:
+        print("STREAMLIT_RUNTIME=FAIL")
+        print(
+            "Expected sidebar controls were not rendered: "
+            f"selectboxes={len(app.selectbox)}, sliders={len(app.slider)}"
+        )
+        return 2
+
     app.selectbox[0].set_value(args.symbol)
     app.slider[0].set_value(args.levels)
     app.run(timeout=120)
