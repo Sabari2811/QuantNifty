@@ -18,6 +18,13 @@ class Decision:
     Strategy identity is also preserved explicitly so downstream
     intelligence layers do not need to infer it from the
     Python strategy class name.
+
+    The pre-execution signal is preserved separately because
+    execution preparation/validation may legitimately change
+    ``signal.name`` to WAIT when a trade cannot be executed.
+    Audit and reconciliation layers must compare Intelligence
+    against this authoritative pre-execution decision, not the
+    post-validation execution state.
     """
 
     # ------------------------------------------------------------------
@@ -31,6 +38,12 @@ class Decision:
     # ------------------------------------------------------------------
 
     strategy_name: str = ""
+
+    # ------------------------------------------------------------------
+    # Authoritative pre-execution signal
+    # ------------------------------------------------------------------
+
+    authoritative_signal: str = ""
 
     signal: Signal = field(
         default_factory=Signal
