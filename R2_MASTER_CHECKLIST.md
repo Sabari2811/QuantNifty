@@ -57,7 +57,9 @@
 - [x] Decision ↔ Intelligence consistency contract implemented
 - [x] Decision ↔ Intelligence semantic model distinguishes direction from actionability
 - [x] Decision ↔ Intelligence consistency contract validated against fresh live runtime
-- [ ] Fresh live Decision ↔ Intelligence directional conflict investigated and dispositioned without weakening the semantic contract
+- [x] Fresh live Decision ↔ Intelligence directional conflict traced to gamma-flip directional misclassification
+- [x] Gamma flip retained as GEX regime/level evidence, not converted to BULLISH/BEARISH direction
+- [x] IV skew directional mapping retained as an explicit project strategy heuristic because ProbabilityEngine independently uses CALLS_EXPENSIVE → bullish and PUTS_EXPENSIVE → bearish; it is not treated as a standalone directional theorem
 
 ## Backend → UI Reconciliation
 - [x] Capture fresh canonical live snapshot
