@@ -30,7 +30,22 @@ def test_live_streamlit_validator_constructs_controls_before_setting(monkeypatch
                 self.selectbox = [FakeControl()]
                 self.slider = [FakeControl()]
             else:
-                self.session_state["_quantnifty_dashboard_audit"] = object()
+                dashboard = type(
+                    "Dashboard",
+                    (),
+                    {
+                        "symbol": "NIFTY",
+                        "cycle_no": 1,
+                        "runtime_status": "IDLE",
+                        "intelligence": None,
+                        "decision_intelligence_consistency": None,
+                        "data_provenance": None,
+                        "option_chain_integrity": None,
+                        "option_chain": None,
+                        "greeks": None,
+                    },
+                )()
+                self.session_state["_quantnifty_dashboard_audit"] = dashboard
                 self.session_state["_quantnifty_ui_contract"] = {
                     "decision": {},
                     "intelligence": None,
@@ -47,20 +62,6 @@ def test_live_streamlit_validator_constructs_controls_before_setting(monkeypatch
             assert path == "dashboard/app.py"
             return FakeApp()
 
-    class Dashboard:
-        symbol = "NIFTY"
-        cycle_no = 1
-        runtime_status = "IDLE"
-        intelligence = None
-        decision_intelligence_consistency = None
-        data_provenance = None
-        option_chain_integrity = None
-        option_chain = None
-        greeks = None
-        probability = {}
-        signal = {}
-        trade_plan = {}
-
     monkeypatch.setattr("tools.validate_live_streamlit_ui.AppTest", FakeAt)
     monkeypatch.setattr(
         "tools.validate_live_streamlit_ui.adapt_decision",
@@ -74,10 +75,6 @@ def test_live_streamlit_validator_constructs_controls_before_setting(monkeypatch
         "tools.validate_live_streamlit_ui.build_live_reconciliation",
         lambda dashboard: {"gaps": []},
     )
-
-    # The fake state deliberately does not satisfy identity/dataframe checks,
-    # so this test only asserts that the validator survives the control
-    # construction phase instead of indexing missing AppTest elements.
     monkeypatch.setattr(
         "tools.validate_live_streamlit_ui.pd.testing.assert_frame_equal",
         lambda left, right: None,
@@ -86,15 +83,10 @@ def test_live_streamlit_validator_constructs_controls_before_setting(monkeypatch
         "tools.validate_live_streamlit_ui.json.dumps",
         lambda *args, **kwargs: "{}",
     )
-
-    # Avoid argparse consuming pytest arguments.
     monkeypatch.setattr("sys.argv", ["validate_live_streamlit_ui.py"])
 
-    fake_app = None
-    try:
-        result = main()
-    finally:
-        fake_app = FakeApp.instances[-1]
+    result = main()
+    fake_app = FakeApp.instances[-1]
 
     assert fake_app.runs == 2
     assert fake_app.selectbox[0].value == "NIFTY"
