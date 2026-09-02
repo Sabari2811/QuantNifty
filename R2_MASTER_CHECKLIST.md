@@ -52,7 +52,7 @@
 - [x] Unmatched current strikes are classified UNKNOWN rather than using a fabricated zero baseline
 - [x] Consecutive-cycle OI flow classification validated with known live ΔPrice/ΔOI behavior
 - [x] Live Greeks now produce values for the live selected expiry and are covered by regression tests
-- [ ] Live analytics outputs reconciled against raw provider data
+- [x] Live analytics outputs reconciled against raw provider data for 15 independently checked raw-provider-derived fields (LIVE_RAW_ANALYTICS=PASS)
 - [x] Decision/intelligence values reconciled against canonical backend snapshot
 - [x] Decision ↔ Intelligence consistency contract implemented
 - [x] Decision ↔ Intelligence semantic model distinguishes direction from actionability
