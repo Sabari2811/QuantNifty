@@ -21,8 +21,8 @@ def main() -> int:
     parser.add_argument("--levels", type=int, default=5)
     args = parser.parse_args()
 
-    dashboard = DashboardController()
-    provider = dashboard.runtime.get_provider()
+    controller = DashboardController()
+    provider = controller.runtime.get_provider()
     captured = {}
     original_get_quotes = provider.get_quotes
 
@@ -34,11 +34,17 @@ def main() -> int:
 
     provider.get_quotes = capture_quotes
     try:
-        dashboard.load(symbol=args.symbol, levels=args.levels)
+        dashboard_data = controller.load(symbol=args.symbol, levels=args.levels)
     finally:
         provider.get_quotes = original_get_quotes
 
-    ctx = dashboard.runtime.get_context()
+    ctx = controller.runtime.get_context()
+    # The DashboardController returns the exact DashboardData instance consumed
+    # by the Streamlit UI. Attach it to the runtime context only for this audit
+    # report so the existing provider reconciliation can validate backend -> UI
+    # mappings from the same canonical cycle. No analytics are recomputed.
+    ctx.dashboard = dashboard_data
+
     report = build_raw_provider_reconciliation(captured.get("quotes", {}), ctx)
 
     print(json.dumps(report, indent=2, default=str))
