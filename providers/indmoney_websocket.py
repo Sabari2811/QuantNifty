@@ -41,6 +41,17 @@ class LiveQuoteTick:
             return None
 
 
+@dataclass(frozen=True, slots=True)
+class LiveQuoteFreshness:
+    """Freshness assessment that preserves provider/local clock skew explicitly."""
+
+    provider_timestamp: datetime
+    received_at: datetime
+    transport_age_ms: int
+    clock_skew_ms: int
+    status: str
+
+
 def parse_timestamp_ms(value: Any) -> tuple[datetime, int]:
     """Normalize a WebSocket epoch-millisecond timestamp to UTC."""
     try:
@@ -82,6 +93,43 @@ def parse_price_feed_message(message: str | bytes | dict[str, Any]) -> LiveQuote
     )
 
 
+def assess_quote_freshness(
+    tick: LiveQuoteTick,
+    *,
+    received_at: datetime,
+    max_age_ms: int = 2000,
+    max_clock_skew_ms: int = 2000,
+) -> LiveQuoteFreshness:
+    """Assess freshness without clamping future provider timestamps.
+
+    A small negative transport age is retained as explicit clock skew. A timestamp
+    materially ahead of the local receive clock is classified as ``clock_skew``.
+    """
+    if max_age_ms < 0 or max_clock_skew_ms < 0:
+        raise ValueError("freshness thresholds must be non-negative")
+    if received_at.tzinfo is None:
+        raise ValueError("received_at must be timezone-aware")
+    received_at = received_at.astimezone(timezone.utc)
+    provider_timestamp = tick.timestamp.astimezone(timezone.utc)
+    transport_age_ms = int(round((received_at - provider_timestamp).total_seconds() * 1000))
+    clock_skew_ms = max(0, -transport_age_ms)
+    if transport_age_ms < -max_clock_skew_ms:
+        status = "clock_skew"
+    elif transport_age_ms < 0:
+        status = "fresh_with_clock_skew"
+    elif transport_age_ms <= max_age_ms:
+        status = "fresh"
+    else:
+        status = "stale"
+    return LiveQuoteFreshness(
+        provider_timestamp=provider_timestamp,
+        received_at=received_at,
+        transport_age_ms=transport_age_ms,
+        clock_skew_ms=clock_skew_ms,
+        status=status,
+    )
+
+
 def websocket_instrument(segment: str, security_id: int | str) -> str:
     """Build the SEGMENT:TOKEN format required by the INDstocks WebSocket."""
     normalized = str(segment).upper().strip()
@@ -94,34 +142,12 @@ def _sanitize_non_json_text(message: str) -> dict[str, Any]:
     """Classify a bounded non-JSON message without exposing credentials or full text."""
     text = message.strip()
     lower = text.lower()
-    known = {
-        "ping": "ping",
-        "pong": "pong",
-        "heartbeat": "heartbeat",
-        "ok": "ok",
-        "ack": "ack",
-        "success": "success",
-    }
+    known = {"ping": "ping", "pong": "pong", "heartbeat": "heartbeat", "ok": "ok", "ack": "ack", "success": "success"}
     if lower in known:
-        return {
-            "message_type": "non_json",
-            "value_type": "str",
-            "raw_length": len(message),
-            "string_kind": known[lower],
-        }
+        return {"message_type": "non_json", "value_type": "str", "raw_length": len(message), "string_kind": known[lower]}
     preview = text[:160]
-    preview = re.sub(
-        r"(?i)(authorization|access[_-]?token|token|bearer)(\s*[:=]\s+)([^\s,;]+)",
-        r"\1\2[REDACTED]",
-        preview,
-    )
-    return {
-        "message_type": "non_json",
-        "value_type": "str",
-        "raw_length": len(message),
-        "preview": preview,
-        "preview_truncated": len(text) > 160,
-    }
+    preview = re.sub(r"(?i)(authorization|access[_-]?token|token|bearer)(\s*[:=]\s+)([^\s,;]+)", r"\1\2[REDACTED]", preview)
+    return {"message_type": "non_json", "value_type": "str", "raw_length": len(message), "preview": preview, "preview_truncated": len(text) > 160}
 
 
 def summarize_websocket_message(message: str | bytes | dict[str, Any]) -> dict[str, Any]:
@@ -131,10 +157,7 @@ def summarize_websocket_message(message: str | bytes | dict[str, Any]) -> dict[s
     try:
         payload: Any = json.loads(message) if isinstance(message, str) else message
     except (TypeError, ValueError):
-        return _sanitize_non_json_text(message) if isinstance(message, str) else {
-            "message_type": "non_json",
-            "raw_length": None,
-        }
+        return _sanitize_non_json_text(message) if isinstance(message, str) else {"message_type": "non_json", "raw_length": None}
     if isinstance(payload, str):
         try:
             payload = json.loads(payload)
@@ -142,10 +165,7 @@ def summarize_websocket_message(message: str | bytes | dict[str, Any]) -> dict[s
             return _sanitize_non_json_text(payload)
     if not isinstance(payload, dict):
         return {"message_type": "non_object", "value_type": type(payload).__name__}
-    summary: dict[str, Any] = {
-        "message_type": "price" if payload.get("mode") in {"ltp", "quote"} else "control_or_other",
-        "keys": sorted(str(key) for key in payload.keys()),
-    }
+    summary: dict[str, Any] = {"message_type": "price" if payload.get("mode") in {"ltp", "quote"} else "control_or_other", "keys": sorted(str(key) for key in payload.keys())}
     for key in ("mode", "instrument", "type", "action", "status", "event"):
         if key in payload:
             summary[key] = payload[key]
@@ -174,11 +194,7 @@ class IndmoneyPriceFeed:
         finished = threading.Event()
         def worker() -> None:
             try:
-                result["socket"] = websocket.create_connection(
-                    self.url,
-                    timeout=self.timeout,
-                    header=[f"Authorization: {self.access_token}"],
-                )
+                result["socket"] = websocket.create_connection(self.url, timeout=self.timeout, header=[f"Authorization: {self.access_token}"])
             except BaseException as exc:
                 result["error"] = exc
             finally:
