@@ -31,6 +31,14 @@ class EvidenceAdapter:
     - create a new trading signal
     - make a BUY/SELL decision
     - execute trades
+
+    Important semantic boundary
+    ---------------------------
+    Gamma flip is a regime/level transition, not a directional
+    price forecast. The producer's NEGATIVE_TO_POSITIVE and
+    POSITIVE_TO_NEGATIVE values describe the sign transition of
+    the GEX profile across strikes. They must not be converted
+    into BULLISH/BEARISH market direction here.
     """
 
     # ==========================================================
@@ -81,21 +89,6 @@ class EvidenceAdapter:
             return "BULLISH"
 
         if signal == "BUY PUT":
-            return "BEARISH"
-
-        return "NEUTRAL"
-
-    @staticmethod
-    def _direction_from_gamma_flip(
-        direction: str,
-    ) -> str:
-
-        direction = str(direction or "").upper()
-
-        if direction == "NEGATIVE_TO_POSITIVE":
-            return "BULLISH"
-
-        if direction == "POSITIVE_TO_NEGATIVE":
             return "BEARISH"
 
         return "NEUTRAL"
@@ -152,31 +145,12 @@ class EvidenceAdapter:
         # ======================================================
         # GAMMA FLIP
         # ======================================================
-
-        gamma_flip = self._mapping(
-            analytics.get("gamma_flip")
-        )
-
-        flip_direction = (
-            self._direction_from_gamma_flip(
-                gamma_flip.get("direction")
-            )
-        )
-
-        if flip_direction != "NEUTRAL":
-
-            self._append(
-                items,
-                source_family="GAMMA",
-                feature="gamma_flip",
-                direction=flip_direction,
-                strength=100.0,
-                confidence=100.0,
-                reason=(
-                    "Gamma flip direction: "
-                    f"{gamma_flip.get('direction')}."
-                ),
-            )
+        # Gamma flip is intentionally NOT emitted as directional
+        # evidence. NEGATIVE_TO_POSITIVE / POSITIVE_TO_NEGATIVE
+        # describe the GEX sign transition across the strike axis;
+        # they do not establish bullish/bearish price direction.
+        # The raw analytics result remains available to consumers
+        # that need the regime/level information.
 
         # ======================================================
         # DEALER GAMMA
@@ -264,6 +238,11 @@ class EvidenceAdapter:
         # ======================================================
         # IV SKEW
         # ======================================================
+        # IV skew remains directional here because the existing
+        # ProbabilityEngine explicitly treats CALLS_EXPENSIVE as
+        # bullish and PUTS_EXPENSIVE as bearish. This is a project
+        # strategy heuristic, not a claim that IV skew alone is a
+        # standalone price-direction predictor.
 
         iv_skew = self._mapping(
             analytics.get("iv_skew")
