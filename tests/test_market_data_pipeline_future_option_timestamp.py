@@ -32,26 +32,28 @@ def test_future_live_option_timestamp_does_not_create_negative_freshness(monkeyp
     pipeline.chain_manager = SimpleNamespace(
         get_live_option_chain=lambda symbol, spot, strike_levels: _chain()
     )
+    future_timestamp = datetime(2026, 9, 2, 5, 30, tzinfo=timezone.utc)
+    fixed_now = datetime(2026, 9, 2, 5, 29, tzinfo=timezone.utc)
     pipeline.live_feed = SimpleNamespace(
         option_instrument=lambda value: f"NFO:{int(value)}",
         collect=lambda instruments, mode: LiveQuoteBatch(
-            {"NFO:111": LiveQuoteTick(
+            ticks={"NFO:111": LiveQuoteTick(
                 "111",
-                datetime(2026, 9, 2, 5, 30, tzinfo=timezone.utc),
+                future_timestamp,
                 1788327000000,
                 "quote",
                 {"ltp": 151},
             )},
-            datetime(2026, 9, 2, 5, 29, tzinfo=timezone.utc),
-            datetime(2026, 9, 2, 5, 29, tzinfo=timezone.utc),
-            datetime(2026, 9, 2, 5, 29, tzinfo=timezone.utc),
+            received_at={"NFO:111": fixed_now},
+            acquired_at=fixed_now,
+            connected_at=fixed_now,
+            completed_at=fixed_now,
         ),
     )
 
     # _fetch_option_chain uses its local wall clock for the provenance age.
     # Pin it so the provider timestamp is unambiguously in the future.
     import engine.market_data_pipeline as module
-    fixed_now = datetime(2026, 9, 2, 5, 29, tzinfo=timezone.utc)
     class _Clock:
         @staticmethod
         def now(tz=None):
@@ -84,4 +86,4 @@ def test_future_live_option_timestamp_does_not_create_negative_freshness(monkeyp
     assert result.freshness_verified is False
     assert result.freshness_seconds is None
     assert result.reasons == ("provider_quote_timestamp_in_future",)
-    assert result.provider_timestamp == datetime(2026, 9, 2, 5, 30, tzinfo=timezone.utc)
+    assert result.provider_timestamp == future_timestamp
