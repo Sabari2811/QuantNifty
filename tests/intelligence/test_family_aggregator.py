@@ -141,3 +141,31 @@ def test_family_strength_is_bounded():
     assert 0 <= result[0].confidence <= 100
     assert 0 <= result[0].freshness <= 100
     assert 0 <= result[0].conflict_score <= 100
+
+
+def test_unregistered_feature_uses_authoritative_source_family():
+    aggregator = FamilyEvidenceAggregator()
+
+    result = aggregator.aggregate(
+        [
+            EvidenceItem(
+                source_family="SCORE",
+                feature="probability",
+                direction="BEARISH",
+                strength=80,
+                confidence=55,
+            ),
+            EvidenceItem(
+                source_family="SCORE",
+                feature="signal",
+                direction="BEARISH",
+                strength=55,
+                confidence=55,
+            ),
+        ]
+    )
+
+    assert len(result) == 1
+    assert result[0].family == "SCORE"
+    assert result[0].evidence_count == 2
+    assert result[0].bearish_count == 2
