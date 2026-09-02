@@ -20,9 +20,37 @@ _GREEK_COLUMNS = [
     "PE_RHO",
 ]
 
+# These columns are produced by the canonical analytics pipeline and must not
+# be dropped at the DashboardData -> UI projection boundary.
+_ANALYTICS_COLUMNS = [
+    "CE_GEX",
+    "PE_GEX",
+    "NET_GEX",
+    "CE_DEX",
+    "PE_DEX",
+    "NET_DEX",
+    "CE_VANNA",
+    "PE_VANNA",
+    "NET_VANNA",
+    "CE_CHARM",
+    "PE_CHARM",
+    "NET_CHARM",
+    "PREV_CE_LTP",
+    "PREV_CE_OI",
+    "PREV_PE_LTP",
+    "PREV_PE_OI",
+    "_PREV_SNAPSHOT_MATCH",
+    "CE_PRICE_CHANGE",
+    "PE_PRICE_CHANGE",
+    "CE_OI_CHANGE",
+    "PE_OI_CHANGE",
+    "CE_FLOW",
+    "PE_FLOW",
+]
+
 
 def _merge_authoritative_greeks(option_chain: pd.DataFrame, greeks: pd.DataFrame | None):
-    """Join Greeks from the same runtime cycle without inventing values."""
+    """Join same-cycle Greeks and analytics without inventing or dropping values."""
     if greeks is None or greeks.empty:
         return option_chain.copy()
 
@@ -30,15 +58,24 @@ def _merge_authoritative_greeks(option_chain: pd.DataFrame, greeks: pd.DataFrame
     if not required.issubset(greeks.columns):
         return option_chain.copy()
 
-    greek_columns = ["Strike", "CE_ID", "PE_ID", *_GREEK_COLUMNS]
-    greek_view = greeks[greek_columns].copy()
+    projection_columns = [
+        column
+        for column in [*_GREEK_COLUMNS, *_ANALYTICS_COLUMNS]
+        if column in greeks.columns
+    ]
+    greek_view = greeks[["Strike", "CE_ID", "PE_ID", *projection_columns]].copy()
 
-    merged = option_chain.merge(
+    # The Greeks dataframe is authoritative for projected analytics. Remove
+    # overlapping UI columns before the identity-safe one-to-one merge so the
+    # result has canonical column names rather than *_greeks suffixes.
+    overlapping = [column for column in projection_columns if column in option_chain.columns]
+    base = option_chain.drop(columns=overlapping, errors="ignore")
+
+    merged = base.merge(
         greek_view,
         on=["Strike", "CE_ID", "PE_ID"],
         how="left",
         validate="one_to_one",
-        suffixes=("", "_greeks"),
     )
     return merged
 
@@ -114,6 +151,10 @@ def render(df, greeks=None, provenance=None, integrity=None):
 
     _render_provenance(provenance, integrity)
     table = _merge_authoritative_greeks(df, greeks)
+    # Provider provenance lives on dataframe.attrs and is rendered separately
+    # above. Do not pass non-serializable provenance objects into Streamlit's
+    # Arrow/Stylers serialization path.
+    table.attrs = {}
 
     max_ce_oi = table["CE_OI"].max()
     max_pe_oi = table["PE_OI"].max()
@@ -135,4 +176,4 @@ def render(df, greeks=None, provenance=None, integrity=None):
         return style
 
     styled = table.style.apply(highlight, axis=1)
-    st.dataframe(styled, use_container_width=True, height=420)
+    st.dataframe(styled, width="stretch", height=420)
