@@ -90,6 +90,19 @@ class LiveEngine:
     def _is_replay_recompute(self):
         return self._is_replay() and self.provider.runtime_mode == RuntimeMode.REPLAY_RECOMPUTE
 
+    @staticmethod
+    def _option_chain_ready_for_analytics(ctx):
+        """Allow analytics only when the canonical option chain is complete and valid."""
+        provenance = getattr(ctx, "data_provenance", None)
+        option = getattr(provenance, "option_chain", None) if provenance else None
+        if option is None:
+            return False, "option_chain_provenance_unavailable"
+        if option.coverage_status != "COMPLETE":
+            return False, f"option_chain_coverage:{option.coverage_status}"
+        if option.integrity_status == "INVALID":
+            return False, "option_chain_integrity:INVALID"
+        return True, ""
+
     def _run_analytics(self):
         replay_recompute = self._is_replay_recompute()
         computed_analytics = self.pipeline.run(
@@ -168,6 +181,21 @@ class LiveEngine:
         self.ctx.timestamp = datetime.now().strftime("%d-%b-%Y %H:%M:%S")
         try:
             self.market_pipeline.run(self.ctx)
+
+            chain_ready, block_reason = self._option_chain_ready_for_analytics(self.ctx)
+            if not chain_ready:
+                self.ctx.runtime_status = "DEGRADED"
+                self.ctx.trade_status = "BLOCKED"
+                self.ctx.trade_block_reason = block_reason
+                logger.warning(
+                    "LIVE ENGINE DEGRADED | analytics/trading blocked | reason=%s",
+                    block_reason,
+                )
+                self.trade_pipeline.sync_context(self.ctx)
+                if not self._is_replay():
+                    self.recording_manager.record(self.ctx)
+                return self.ctx
+
             closed_before = len(self.paper_broker.portfolio.closed_positions)
             self.paper_broker.update_positions(self.ctx.option_chain)
             closed_after = len(self.paper_broker.portfolio.closed_positions)
@@ -193,7 +221,7 @@ class LiveEngine:
             self.ctx.runtime_status = "ERROR"
             raise
         finally:
-            if self.ctx.runtime_status != "ERROR":
+            if self.ctx.runtime_status not in {"ERROR", "DEGRADED"}:
                 self.ctx.runtime_status = "IDLE"
 
     def build_context(self):
