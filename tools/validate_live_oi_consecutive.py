@@ -35,16 +35,18 @@ def main() -> int:
     args = parser.parse_args()
 
     dashboard = DashboardController()
-    first = dashboard.load(args.symbol, args.levels)
+    dashboard.load(args.symbol, args.levels)
     first_ctx = dashboard.runtime.get_context()
+    first_cycle = first_ctx.cycle_no
     if first_ctx.greeks_df is None:
         print(json.dumps({"status": "GAP", "reason": "first_greeks_missing"}, indent=2))
         print("LIVE_OI_CONSECUTIVE=GAP")
         return 1
     first_chain = first_ctx.greeks_df.copy(deep=True)
 
-    second = dashboard.load(args.symbol, args.levels)
+    dashboard.load(args.symbol, args.levels)
     second_ctx = dashboard.runtime.get_context()
+    second_cycle = second_ctx.cycle_no
     if second_ctx.greeks_df is None:
         print(json.dumps({"status": "GAP", "reason": "second_greeks_missing"}, indent=2))
         print("LIVE_OI_CONSECUTIVE=GAP")
@@ -114,8 +116,8 @@ def main() -> int:
 
     report = {
         "status": "PASS" if not gaps else "GAP",
-        "first_cycle": first_ctx.cycle_no,
-        "second_cycle": second_ctx.cycle_no,
+        "first_cycle": first_cycle,
+        "second_cycle": second_cycle,
         "first_rows": len(first_chain),
         "second_rows": len(second_chain),
         "oi_status": oi_result.get("summary", {}).get("status"),
