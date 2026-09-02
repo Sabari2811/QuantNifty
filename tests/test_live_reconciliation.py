@@ -106,6 +106,17 @@ def _dashboard():
         trade_plan={"signal": "WAIT"},
         intelligence=adapt_intelligence(canonical_intelligence),
         canonical_intelligence=canonical_intelligence,
+        decision_intelligence_consistency=SimpleNamespace(
+            status="CONSISTENT",
+            semantic_status="CONSISTENT",
+            consistent=True,
+            actionable=False,
+            vetoed=False,
+            decision_signal="WAIT",
+            intelligence_recommendation="WAIT",
+            intelligence_direction="NEUTRAL",
+            reason="Decision is non-actionable; Intelligence does not veto it.",
+        ),
         option_chain=chain,
         greeks=pd.DataFrame([greek_row]),
         data_provenance=None,
@@ -117,6 +128,7 @@ def test_live_reconciliation_reports_zero_field_gaps_for_canonical_mapping():
     assert report["field_status"] == "MATCH"
     assert report["gaps"] == ()
     assert report["intelligence"]["status"] == "MATCH"
+    assert report["decision_intelligence"]["status"] == "MATCH"
     assert report["option_chain"]["contract_identity"]["gap"] is None
 
 
