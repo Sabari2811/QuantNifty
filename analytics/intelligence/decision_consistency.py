@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from analytics.intelligence.evidence.models import HistoricalEvidence
+
 
 @dataclass(frozen=True, slots=True)
 class DecisionIntelligenceConsistency:
@@ -43,8 +45,38 @@ def _direction(intelligence) -> str:
     return str(getattr(intelligence, "direction", "") or "").upper()
 
 
+def _recommendation_is_historical_validation(intelligence) -> bool:
+    """Return True when the exposed recommendation is historical evidence output.
+
+    The current IntelligenceService assigns IntelligenceResult.recommendation
+    from HistoricalEvidence.recommendation. That value is a historical
+    validation recommendation, not a canonical final trade-actionability
+    decision. It must not be interpreted as an execution veto merely because
+    it is WAIT while the synthesized intelligence direction agrees with the
+    authoritative Decision.
+
+    A future final-actionability producer can be introduced explicitly without
+    changing this direction contract.
+    """
+    evidence = getattr(intelligence, "evidence", None)
+    recommendation = _recommendation(intelligence)
+
+    return (
+        isinstance(evidence, HistoricalEvidence)
+        and bool(recommendation)
+        and str(getattr(evidence, "recommendation", "") or "").upper()
+        == recommendation
+    )
+
+
 def reconcile_decision_intelligence(decision, intelligence) -> DecisionIntelligenceConsistency:
     """Reconcile authoritative Decision direction with Intelligence semantics.
+
+    The current ``IntelligenceResult.recommendation`` field is populated from
+    ``HistoricalEvidence.recommendation`` by ``IntelligenceService``. Until a
+    separate canonical final-actionability producer exists, that historical
+    recommendation is diagnostic context and must not be used as an execution
+    veto. Direction remains the authoritative synthesized Intelligence thesis.
 
     ``Decision.authoritative_signal`` is preferred over the mutable execution
     signal. Execution preparation may change ``signal.name`` to WAIT when a
@@ -85,6 +117,22 @@ def reconcile_decision_intelligence(decision, intelligence) -> DecisionIntellige
                 f"decision={signal}, intelligence_direction={direction}."
             ),
             semantic_status="CONFLICT",
+        )
+
+    # Historical validation is not final actionability. If the synthesized
+    # direction agrees with the Decision, a historical WAIT must not create a
+    # false deferred/vetoed state.
+    if _recommendation_is_historical_validation(intelligence):
+        return DecisionIntelligenceConsistency(
+            status="CONSISTENT",
+            decision_signal=signal,
+            intelligence_recommendation=recommendation,
+            intelligence_direction=direction,
+            reason=(
+                "Intelligence direction agrees with the Decision; "
+                "historical validation recommendation is diagnostic and "
+                "does not veto execution."
+            ),
         )
 
     if recommendation in expected_recommendations:
