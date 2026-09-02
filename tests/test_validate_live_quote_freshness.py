@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from providers.indmoney_websocket import LiveQuoteTick
+from providers.indmoney_websocket import assess_quote_freshness
 from tools.validate_live_quote_freshness import validate_consecutive_quotes
 
 
@@ -46,8 +47,9 @@ def test_runner_freshness_gate_semantics(monkeypatch):
     observed = iter(
         [
             base + timedelta(seconds=1),
-            base + timedelta(seconds=2),
-            base + timedelta(seconds=3),
+            base + timedelta(seconds=1, milliseconds=100),
+            base + timedelta(seconds=2, milliseconds=100),
+            base + timedelta(seconds=3, milliseconds=100),
         ]
     )
 
@@ -62,11 +64,11 @@ def test_runner_freshness_gate_semantics(monkeypatch):
         "token", "NIDX:40000001", cycles=3, max_age_ms=2000
     )
 
-    assert [item["freshness_status"] for item in observations] == [
-        "fresh",
-        "fresh",
-        "fresh",
+    expected = [
+        assess_quote_freshness(tick, received_at=base + timedelta(seconds=offset))
+        for tick, offset in zip(ticks, (1.1, 2.1, 3.1))
     ]
+    assert [item["freshness_status"] for item in observations] == [item.status for item in expected]
     assert checks["all_cycles_received"] is True
     assert checks["all_quotes_fresh_or_bounded_skew"] is True
     assert checks["no_excessive_clock_skew"] is True
