@@ -4,9 +4,9 @@ import streamlit as st
 def render(dashboard):
 
     dealer = dashboard.dealer
-    signal = dashboard.signal
-    trade = dashboard.trade_plan
-    probability = dashboard.probability
+    signal = dashboard.signal or {}
+    trade = dashboard.trade_plan or {}
+    probability = dashboard.probability or {}
 
     st.markdown("## 📊 Live Market Summary")
 
@@ -14,14 +14,20 @@ def render(dashboard):
 
     # ----------------------------------------
 
-    if signal["signal"] == "BUY CALL":
-        c1.success(signal["signal"])
+    signal_value = signal.get("signal")
+    if signal_value == "BUY CALL":
+        c1.success(signal_value)
 
-    elif signal["signal"] == "BUY PUT":
-        c1.error(signal["signal"])
+    elif signal_value == "BUY PUT":
+        c1.error(signal_value)
+
+    elif signal_value:
+        c1.warning(signal_value)
 
     else:
-        c1.warning(signal["signal"])
+        # Degraded runtime cycles intentionally block analytics/trading. Do not
+        # crash the dashboard when the blocked cycle has no canonical signal.
+        c1.warning("UNAVAILABLE")
 
     # ----------------------------------------
 
@@ -60,26 +66,29 @@ def render(dashboard):
 
     c7.metric(
         "Bullish %",
-        f"{probability['bullish_probability']}%"
+        f"{probability.get('bullish_probability', 'UNAVAILABLE')}%"
     )
 
+    confidence = signal.get("confidence")
     c8.metric(
         "Confidence",
-        f"{signal['confidence']}%"
+        f"{confidence}%" if confidence is not None else "UNAVAILABLE"
     )
 
     st.divider()
 
     c9, c10 = st.columns(2)
 
+    recommended_strike = trade.get("recommended_strike")
+    option_type = trade.get("option_type", "")
     c9.metric(
         "Recommended",
-        f"{trade['recommended_strike']} {trade.get('option_type', '')}"
+        f"{recommended_strike} {option_type}" if recommended_strike is not None else "UNAVAILABLE"
     )
 
     c10.metric(
         "Risk Reward",
-        trade["risk_reward"]
+        trade.get("risk_reward", "UNAVAILABLE")
     )
 
     st.divider()
