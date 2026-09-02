@@ -60,6 +60,14 @@ def test_summarize_websocket_message_bounds_and_redacts_plain_text_preview():
     assert len(summary["preview"]) <= 160
 
 
+def test_summarize_websocket_message_classifies_json_scalar_string():
+    summary = summarize_websocket_message(json.dumps("subscription acknowledged"))
+    assert summary["message_type"] == "non_json"
+    assert summary["value_type"] == "str"
+    assert summary["preview"] == "subscription acknowledged"
+    assert summary["preview_truncated"] is False
+
+
 def test_recv_debug_returns_safe_message_summary():
     feed = IndmoneyPriceFeed("token", timeout=0.05)
 
