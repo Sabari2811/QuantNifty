@@ -22,11 +22,13 @@ class DecisionIntelligenceConsistency:
 
     @property
     def actionable(self) -> bool:
-        return self.semantic_status == "CONSISTENT"
+        """Whether the reconciled state represents an actionable Decision."""
+        return self.consistent and self.decision_signal not in {"", "WAIT"}
 
     @property
     def vetoed(self) -> bool:
-        return not self.actionable
+        """Whether Intelligence prevents an otherwise actionable Decision."""
+        return self.semantic_status in {"CONFLICT", "DEFERRED"}
 
 
 def _decision_signal(decision) -> str:
@@ -46,18 +48,7 @@ def _direction(intelligence) -> str:
 
 
 def _recommendation_is_historical_validation(intelligence) -> bool:
-    """Return True when the exposed recommendation is historical evidence output.
-
-    The current IntelligenceService assigns IntelligenceResult.recommendation
-    from HistoricalEvidence.recommendation. That value is a historical
-    validation recommendation, not a canonical final trade-actionability
-    decision. It must not be interpreted as an execution veto merely because
-    it is WAIT while the synthesized intelligence direction agrees with the
-    authoritative Decision.
-
-    A future final-actionability producer can be introduced explicitly without
-    changing this direction contract.
-    """
+    """Return True when the exposed recommendation is historical evidence output."""
     evidence = getattr(intelligence, "evidence", None)
     recommendation = _recommendation(intelligence)
 
@@ -72,16 +63,9 @@ def _recommendation_is_historical_validation(intelligence) -> bool:
 def reconcile_decision_intelligence(decision, intelligence) -> DecisionIntelligenceConsistency:
     """Reconcile authoritative Decision direction with Intelligence semantics.
 
-    The current ``IntelligenceResult.recommendation`` field is populated from
-    ``HistoricalEvidence.recommendation`` by ``IntelligenceService``. Until a
-    separate canonical final-actionability producer exists, that historical
-    recommendation is diagnostic context and must not be used as an execution
-    veto. Direction remains the authoritative synthesized Intelligence thesis.
-
-    ``Decision.authoritative_signal`` is preferred over the mutable execution
-    signal. Execution preparation may change ``signal.name`` to WAIT when a
-    trade cannot be prepared or validated; that mutation must not erase the
-    original Decision used for semantic reconciliation.
+    Consistency, actionability, and veto state are intentionally separate:
+    WAIT is a valid consistent non-actionable state, while CONFLICT/DEFERRED
+    indicate that Intelligence prevents an otherwise actionable Decision.
     """
     signal = _decision_signal(decision)
     recommendation = _recommendation(intelligence)
@@ -119,9 +103,6 @@ def reconcile_decision_intelligence(decision, intelligence) -> DecisionIntellige
             semantic_status="CONFLICT",
         )
 
-    # Historical validation is not final actionability. If the synthesized
-    # direction agrees with the Decision, a historical WAIT must not create a
-    # false deferred/vetoed state.
     if _recommendation_is_historical_validation(intelligence):
         return DecisionIntelligenceConsistency(
             status="CONSISTENT",
