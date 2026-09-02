@@ -89,8 +89,25 @@ def compare_replay_outputs(
     *,
     tolerance: float = 1e-9,
 ) -> ReplayEquivalence:
-    """Compare canonical recorded outputs with replay-recomputed outputs."""
+    """Compare canonical recorded outputs with replay-recomputed outputs.
+
+    ``authoritative_signal`` is execution-mutation provenance captured on the
+    recomputed Decision so the original signal survives downstream mutation.
+    Older recorded snapshots predate that field, so its absence in the
+    recorded artifact must not create replay drift. When both artifacts carry
+    the field, it remains part of the equivalence comparison.
+    """
     mismatches: list[str] = []
-    _compare(expected_decision, actual_decision, "decision", mismatches, tolerance)
+
+    expected_decision_normalized = _normalize(expected_decision)
+    actual_decision_normalized = _normalize(actual_decision)
+    if (
+        isinstance(expected_decision_normalized, dict)
+        and isinstance(actual_decision_normalized, dict)
+        and "authoritative_signal" not in expected_decision_normalized
+    ):
+        actual_decision_normalized.pop("authoritative_signal", None)
+
+    _compare(expected_decision_normalized, actual_decision_normalized, "decision", mismatches, tolerance)
     _compare(expected_intelligence, actual_intelligence, "intelligence", mismatches, tolerance)
     return ReplayEquivalence(not mismatches, tuple(mismatches))
