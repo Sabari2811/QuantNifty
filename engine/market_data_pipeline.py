@@ -113,20 +113,27 @@ class MarketDataPipeline:
     def _fetch_option_chain(self, ctx):
         ctx.expiry = self.instrument.get_nearest_weekly_expiry(ctx.symbol)
         ctx.option_chain = self.chain_manager.get_live_option_chain(ctx.symbol, ctx.spot, ctx.strike_levels)
+        acquired_at = datetime.now(timezone.utc)
         if self.live_feed is not None and not ctx.option_chain.empty:
             instruments = []
+            instrument_map = {}
             for column in ("CE_ID", "PE_ID"):
                 if column in ctx.option_chain.columns:
-                    instruments.extend(self.live_feed.option_instrument(value) for value in ctx.option_chain[column].dropna())
+                    for value in ctx.option_chain[column].dropna():
+                        websocket_id = self.live_feed.option_instrument(value)
+                        instruments.append(websocket_id)
+                        instrument_map[websocket_id] = int(value)
             option_timestamp = None
             if instruments:
                 batch = self.live_feed.collect(instruments, mode="quote")
+                acquired_at = batch.acquired_at
                 option_timestamp = batch.latest_provider_timestamp
                 for id_column, price_column in (("CE_ID", "CE_LTP"), ("PE_ID", "PE_LTP")):
                     if id_column not in ctx.option_chain.columns or price_column not in ctx.option_chain.columns:
                         continue
                     for index, security_id in ctx.option_chain[id_column].items():
-                        tick = batch.ticks.get(self.live_feed.option_instrument(security_id))
+                        ws_instrument = self.live_feed.option_instrument(security_id)
+                        tick = batch.ticks.get(ws_instrument)
                         if tick is not None and tick.ltp is not None:
                             ctx.option_chain.at[index, price_column] = tick.ltp
         else:
@@ -135,7 +142,10 @@ class MarketDataPipeline:
         if option_provenance is None:
             option_provenance = AcquisitionProvenance(source="INDMoney option quotes", expected_count=len(ctx.option_chain) * 2, received_count=len(ctx.option_chain) * 2, missing_count=0, freshness_verified=False, reasons=("provider_quote_timestamp_unavailable",))
         if option_timestamp is not None:
-            option_provenance = replace(option_provenance, provider_timestamp=option_timestamp, freshness_verified=True, freshness_seconds=(datetime.now(timezone.utc) - option_timestamp).total_seconds(), reasons=("provider_quote_timestamp",))
+            freshness_verified = option_timestamp <= acquired_at
+            freshness_seconds = (acquired_at - option_timestamp).total_seconds() if freshness_verified else None
+            freshness_reasons = ("provider_quote_timestamp",) if freshness_verified else ("provider_quote_timestamp_in_future",)
+            option_provenance = replace(option_provenance, provider_timestamp=option_timestamp, freshness_verified=freshness_verified, freshness_seconds=freshness_seconds, reasons=freshness_reasons)
         integrity = assess_option_chain(ctx.option_chain, ctx.spot)
         option_provenance = replace(option_provenance, integrity_status=integrity.status, integrity_reasons=integrity.reasons)
         ctx.option_chain.attrs["quote_integrity"] = integrity.as_dict()
