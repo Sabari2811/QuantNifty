@@ -35,6 +35,23 @@ def test_parse_ltp_tick_preserves_provider_timestamp_and_ltp():
     assert tick.timestamp.tzinfo == timezone.utc
 
 
+def test_parse_double_encoded_ltp_tick_preserves_provider_fields():
+    provider_payload = {
+        "mode": "ltp",
+        "instrument": "40000001",
+        "timestamp": 1788325219350,
+        "data": {"ltp": 23886.25},
+    }
+    message = json.dumps(json.dumps(provider_payload, separators=(",", ":")))
+    tick = parse_price_feed_message(message)
+    assert tick is not None
+    assert tick.instrument == "40000001"
+    assert tick.timestamp_ms == 1788325219350
+    assert tick.mode == "ltp"
+    assert tick.data == {"ltp": 23886.25}
+    assert tick.ltp == 23886.25
+
+
 def test_parse_quote_tick_preserves_full_payload():
     payload = {
         "mode": "quote",
