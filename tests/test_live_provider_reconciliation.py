@@ -98,3 +98,31 @@ def test_live_decision_intelligence_deferred_state_is_explicit():
     assert report["consistent"] is False
     assert report["actionable"] is False
     assert report["vetoed"] is True
+
+
+def test_live_reconciliation_preserves_pre_execution_consistency():
+    stored = SimpleNamespace(
+        status="CONFLICT",
+        semantic_status="CONFLICT",
+        consistent=False,
+        actionable=False,
+        vetoed=True,
+        decision_signal="BUY PUT",
+        intelligence_recommendation="WAIT",
+        intelligence_direction="BULLISH",
+        reason="Intelligence direction conflicts with the actionable Decision.",
+    )
+    ctx = SimpleNamespace(
+        decision=_decision("WAIT"),
+        intelligence=_intelligence("WAIT", "BULLISH"),
+        decision_intelligence_consistency=stored,
+    )
+
+    report = compare_decision_intelligence_runtime(ctx)
+
+    assert report["status"] == "CONFLICT"
+    assert report["semantic_status"] == "CONFLICT"
+    assert report["decision_signal"] == "BUY PUT"
+    assert report["intelligence_direction"] == "BULLISH"
+    assert report["actionable"] is False
+    assert report["vetoed"] is True
