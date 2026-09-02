@@ -50,7 +50,7 @@ def test_market_regime_renders_missing_probability_and_dealer_values(monkeypatch
     assert ("Dealer Gamma", "UNAVAILABLE") in first[0].metrics
     assert ("Market Mode", "UNAVAILABLE") in first[1].metrics
     assert ("Expected Volatility", "UNAVAILABLE") in first[2].metrics
-    assert ("Confidence", "UNAVAILABLE%") in first[3].metrics
+    assert ("Confidence", "UNAVAILABLE") in first[3].metrics
     assert ("Bullish", "UNAVAILABLE%") in second[0].metrics
     assert ("Bearish", "UNAVAILABLE%") in second[1].metrics
     assert ("Mean Reversion", "UNAVAILABLE%") in second[2].metrics
