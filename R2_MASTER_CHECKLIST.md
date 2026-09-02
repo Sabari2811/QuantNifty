@@ -56,7 +56,7 @@
 - [x] Decision/intelligence values reconciled against canonical backend snapshot
 - [x] Decision ↔ Intelligence consistency contract implemented
 - [x] Decision ↔ Intelligence semantic model distinguishes direction from actionability
-- [ ] Decision ↔ Intelligence consistency contract validated against fresh live runtime
+- [x] Decision ↔ Intelligence consistency contract validated against fresh live runtime
 
 ## Backend → UI Reconciliation
 - [x] Capture fresh canonical live snapshot
@@ -109,7 +109,7 @@
 ## Release Gate
 - [ ] Fresh live-session backend validation complete
 - [x] Backend → UI single-cycle reconciliation complete
-- [ ] Decision ↔ Intelligence semantic reconciliation validated against fresh live runtime
+- [x] Decision ↔ Intelligence semantic reconciliation validated against fresh live runtime
 - [x] Targeted tests pass for previously implemented R2-013 fixes
 - [x] Real snapshot replay gate passes
 - [ ] Full regression after final live reconciliation
