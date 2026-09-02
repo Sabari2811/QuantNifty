@@ -37,12 +37,20 @@ def main() -> int:
     dashboard = DashboardController()
     first = dashboard.load(args.symbol, args.levels)
     first_ctx = dashboard.runtime.get_context()
-    first_chain = first_ctx.greeks.copy(deep=True)
+    if first_ctx.greeks_df is None:
+        print(json.dumps({"status": "GAP", "reason": "first_greeks_missing"}, indent=2))
+        print("LIVE_OI_CONSECUTIVE=GAP")
+        return 1
+    first_chain = first_ctx.greeks_df.copy(deep=True)
 
     second = dashboard.load(args.symbol, args.levels)
     second_ctx = dashboard.runtime.get_context()
-    second_chain = second_ctx.greeks.copy(deep=True)
-    oi_result = second_ctx.analytics.get("oi_flow", {})
+    if second_ctx.greeks_df is None:
+        print(json.dumps({"status": "GAP", "reason": "second_greeks_missing"}, indent=2))
+        print("LIVE_OI_CONSECUTIVE=GAP")
+        return 1
+    second_chain = second_ctx.greeks_df.copy(deep=True)
+    oi_result = (second_ctx.analytics or {}).get("oi_flow", {})
     table = oi_result.get("table", pd.DataFrame())
 
     if table.empty:
@@ -50,22 +58,50 @@ def main() -> int:
         print("LIVE_OI_CONSECUTIVE=GAP")
         return 1
 
-    previous = first_chain[["Strike", "CE_LTP", "CE_OI", "PE_LTP", "PE_OI"]].copy()
-    current = second_chain[["Strike", "CE_LTP", "CE_OI", "PE_LTP", "PE_OI"]].copy()
+    required = ["Strike", "CE_LTP", "CE_OI", "PE_LTP", "PE_OI"]
+    missing_first = [column for column in required if column not in first_chain.columns]
+    missing_second = [column for column in required if column not in second_chain.columns]
+    if missing_first or missing_second:
+        report = {
+            "status": "GAP",
+            "reason": "required_oi_columns_missing",
+            "first_missing": missing_first,
+            "second_missing": missing_second,
+        }
+        print(json.dumps(report, indent=2, default=str))
+        print("LIVE_OI_CONSECUTIVE=GAP")
+        return 1
+
+    previous = first_chain[required].copy()
+    current = second_chain[required].copy()
     merged = current.merge(previous, on="Strike", how="left", suffixes=("", "_PREV"), indicator=True)
 
+    if "Strike" not in table.columns:
+        print(json.dumps({"status": "GAP", "reason": "oi_table_strike_missing"}, indent=2))
+        print("LIVE_OI_CONSECUTIVE=GAP")
+        return 1
+
+    table_by_strike = table.reset_index(drop=True).set_index("Strike", drop=False)
     checks = []
     gaps = []
-    for row_no, row in merged.iterrows():
+    for _, row in merged.iterrows():
         matched = row["_merge"] == "both"
+        strike = row["Strike"]
+        if strike not in table_by_strike.index:
+            for side in ("CE", "PE"):
+                gaps.append(f"strike:{strike}|side:{side}|actual_row_missing")
+            continue
+        result_row = table_by_strike.loc[strike]
+        if isinstance(result_row, pd.DataFrame):
+            result_row = result_row.iloc[0]
         for side in ("CE", "PE"):
             price_change = None if not matched else row[f"{side}_LTP"] - row[f"{side}_LTP_PREV"]
             oi_change = None if not matched else row[f"{side}_OI"] - row[f"{side}_OI_PREV"]
             expected = _expected_flow(price_change, oi_change)
-            actual = table.iloc[row_no][f"{side}_FLOW"] if row_no < len(table) else None
+            actual = result_row.get(f"{side}_FLOW")
             passed = expected == actual
             checks.append({
-                "strike": row["Strike"],
+                "strike": strike,
                 "side": side,
                 "price_change": price_change,
                 "oi_change": oi_change,
@@ -74,7 +110,7 @@ def main() -> int:
                 "status": "PASS" if passed else "MISMATCH",
             })
             if not passed:
-                gaps.append(f"strike:{row['Strike']}|side:{side}|expected:{expected}|actual:{actual}")
+                gaps.append(f"strike:{strike}|side:{side}|expected:{expected}|actual:{actual}")
 
     report = {
         "status": "PASS" if not gaps else "GAP",
