@@ -83,6 +83,23 @@ def test_live_decision_intelligence_consistency_is_consistent():
     assert report["semantic_status"] == "CONSISTENT"
     assert report["consistent"] is True
     assert report["actionable"] is True
+    assert report["vetoed"] is False
+
+
+def test_live_wait_is_consistent_but_non_actionable_and_not_vetoed():
+    ctx = SimpleNamespace(
+        decision=_decision("WAIT"),
+        intelligence=_intelligence("WAIT", "BEARISH"),
+    )
+
+    report = compare_decision_intelligence_runtime(ctx)
+
+    assert report["status"] == "CONSISTENT"
+    assert report["semantic_status"] == "CONSISTENT"
+    assert report["consistent"] is True
+    assert report["actionable"] is False
+    assert report["vetoed"] is False
+    assert report["reason"] == "Decision is non-actionable; Intelligence does not veto it."
 
 
 def test_live_decision_intelligence_deferred_state_is_explicit():
