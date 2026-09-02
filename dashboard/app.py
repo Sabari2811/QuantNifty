@@ -14,6 +14,7 @@ from config.settings import PROVIDER
 from dashboard.dashboard_controller import DashboardController
 from dashboard.market_summary_adapter import adapt_market_summary
 from dashboard.decision_adapter import adapt_decision
+from dashboard.ui_runtime_contract import build_ui_runtime_contract
 from dashboard.components import institutional_score_card
 from dashboard.components import intelligence_card
 
@@ -103,6 +104,11 @@ expected_move_card.render(
         "method": summary["expected_move_method"],
     }
 )
+
+# Expose an audit-only contract containing the exact canonical values supplied
+# to the affected UI sections. AppTest uses this to validate the real
+# Streamlit entrypoint without scraping presentation text.
+st.session_state["_quantnifty_ui_contract"] = build_ui_runtime_contract(dashboard)
 
 max_pain_card.render(dashboard.max_pain)
 pcr_card.render(dashboard.pcr)
