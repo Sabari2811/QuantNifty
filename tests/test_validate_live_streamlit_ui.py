@@ -69,7 +69,7 @@ def test_live_streamlit_validator_constructs_controls_before_setting(monkeypatch
     )
     monkeypatch.setattr(
         "tools.validate_live_streamlit_ui.compare_dashboard_ui_runtime",
-        lambda dashboard: {"gaps": []},
+        lambda dashboard: {"gaps": ["forced_test_gap"]},
     )
     monkeypatch.setattr(
         "tools.validate_live_streamlit_ui.build_live_reconciliation",
