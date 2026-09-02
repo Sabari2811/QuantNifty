@@ -73,14 +73,18 @@ def _dashboard():
         analytics={},
         canonical_intelligence=None,
         intelligence=None,
+        decision_intelligence_consistency={},
     )
 
 
-def test_live_reconciliation_detects_market_summary_and_decision_mappings():
+def test_live_reconciliation_matches_market_summary_and_detects_missing_intelligence_mapping():
     dashboard = _dashboard()
     report = build_live_reconciliation(dashboard)
     assert report["field_status"] == "GAP"
-    assert "market_summary.pcr" in report["gaps"]
+    assert "market_summary.pcr" not in report["gaps"]
+    assert report["market_summary"]["pcr"]["backend"] == 1.2
+    assert report["market_summary"]["pcr"]["ui"] == 1.2
+    assert "decision_intelligence" in report["gaps"]
 
 
 def test_live_reconciliation_can_match_option_projection_with_authoritative_columns():
