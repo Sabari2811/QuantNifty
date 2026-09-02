@@ -28,6 +28,9 @@ class DecisionIntelligenceConsistency:
 
 
 def _decision_signal(decision) -> str:
+    authoritative = str(getattr(decision, "authoritative_signal", "") or "").upper()
+    if authoritative:
+        return authoritative
     signal = getattr(getattr(decision, "signal", None), "name", "")
     return str(signal or "").upper()
 
@@ -41,13 +44,12 @@ def _direction(intelligence) -> str:
 
 
 def reconcile_decision_intelligence(decision, intelligence) -> DecisionIntelligenceConsistency:
-    """Reconcile decision direction separately from Intelligence actionability.
+    """Reconcile authoritative Decision direction with Intelligence semantics.
 
-    Intelligence ``direction`` is the market thesis; ``recommendation`` is the
-    execution endorsement. Thus BUY CALL + BULLISH/WAIT is directionally
-    compatible but execution-deferred, not an opposite-direction conflict.
-    ``status`` retains the historical CONFLICT value for compatibility while
-    ``semantic_status`` distinguishes the reason for the veto.
+    ``Decision.authoritative_signal`` is preferred over the mutable execution
+    signal. Execution preparation may change ``signal.name`` to WAIT when a
+    trade cannot be prepared or validated; that mutation must not erase the
+    original Decision used for semantic reconciliation.
     """
     signal = _decision_signal(decision)
     recommendation = _recommendation(intelligence)
