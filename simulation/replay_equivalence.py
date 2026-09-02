@@ -106,6 +106,9 @@ def compare_replay_outputs(
         and isinstance(actual_decision_normalized, dict)
         and "authoritative_signal" not in expected_decision_normalized
     ):
+        # Legacy snapshots did not persist this execution-mutation
+        # provenance field. Ignore only that metadata key so all other
+        # canonical decision fields remain strictly comparable.
         actual_decision_normalized.pop("authoritative_signal", None)
 
     _compare(expected_decision_normalized, actual_decision_normalized, "decision", mismatches, tolerance)
