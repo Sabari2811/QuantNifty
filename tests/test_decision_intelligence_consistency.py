@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from analytics.intelligence.decision_consistency import (
     reconcile_decision_intelligence,
 )
+from analytics.intelligence.evidence.models import HistoricalEvidence
 
 
 def decision(signal, authoritative_signal=""):
@@ -12,8 +13,12 @@ def decision(signal, authoritative_signal=""):
     )
 
 
-def intelligence(recommendation, direction=""):
-    return SimpleNamespace(recommendation=recommendation, direction=direction)
+def intelligence(recommendation, direction="", evidence=None):
+    return SimpleNamespace(
+        recommendation=recommendation,
+        direction=direction,
+        evidence=evidence,
+    )
 
 
 def test_actionable_decision_conflicts_with_waiting_intelligence():
@@ -46,6 +51,26 @@ def test_wait_decision_does_not_create_a_false_conflict():
 
     assert result.status == "CONSISTENT"
     assert result.consistent is True
+
+
+def test_historical_wait_does_not_veto_matching_direction():
+    historical = HistoricalEvidence(
+        recommendation="WAIT",
+        confidence_adjustment=-5.0,
+        explanation="Historical validation produced no actionable edge.",
+    )
+
+    result = reconcile_decision_intelligence(
+        decision("BUY PUT"),
+        intelligence("WAIT", "BEARISH", evidence=historical),
+    )
+
+    assert result.status == "CONSISTENT"
+    assert result.semantic_status == "CONSISTENT"
+    assert result.consistent is True
+    assert result.actionable is True
+    assert result.vetoed is False
+    assert "historical validation recommendation is diagnostic" in result.reason
 
 
 def test_authoritative_signal_survives_post_execution_wait_mutation():
