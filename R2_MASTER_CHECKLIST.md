@@ -60,6 +60,9 @@
 - [x] Fresh live Decision ↔ Intelligence directional conflict traced to gamma-flip directional misclassification
 - [x] Gamma flip retained as GEX regime/level evidence, not converted to BULLISH/BEARISH direction
 - [x] IV skew directional mapping retained as an explicit project strategy heuristic because ProbabilityEngine independently uses CALLS_EXPENSIVE → bullish and PUTS_EXPENSIVE → bearish; it is not treated as a standalone directional theorem
+- [x] Fresh live Intelligence recommendation=WAIT traced to HistoricalEvidence.recommendation, not to ConvictionEngine, OpportunityQualityEngine, or the structural data-quality gate
+- [x] Historical validation recommendation explicitly treated as diagnostic context; it cannot veto an otherwise direction-consistent Decision
+- [x] Regression coverage added for BUY PUT + BEARISH Intelligence direction + historical WAIT recommendation
 
 ## Backend → UI Reconciliation
 - [x] Capture fresh canonical live snapshot
