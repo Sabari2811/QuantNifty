@@ -88,7 +88,7 @@
 - [x] Dashboard header acquisition time uses canonical runtime provenance rather than local render time
 - [x] Option-chain UI exposes provider timestamp and verified quote age when backend provenance supplies them
 - [x] Validate only affected UI sections with a fresh live provider session — Streamlit UI reconciliation PASS; option chain, decision, intelligence, provenance, and consistency paths all matched
-- [ ] Full regression after final live reconciliation
+- [x] Full regression after final live reconciliation — 435 passed in 19.47s on 2026-09-02 local validation after final degraded-market test contract fixes
 
 ### Test-environment integrity
 - [x] Pytest collection does not execute the live INDMoney diagnostic script
@@ -119,7 +119,7 @@
 - [x] Decision ↔ Intelligence semantic reconciliation validated against fresh live runtime
 - [x] Targeted tests pass for previously implemented R2-013 fixes
 - [x] Real snapshot replay gate passes
-- [ ] Full regression after final live reconciliation
+- [x] Full regression after final live reconciliation — 435 passed in 19.47s on 2026-09-02
 - [ ] Master checklist fully green for R2-013
 
 ### Fresh live evidence note
