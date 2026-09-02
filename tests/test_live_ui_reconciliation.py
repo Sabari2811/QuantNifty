@@ -3,8 +3,21 @@ from types import SimpleNamespace
 import pandas as pd
 
 from dashboard.components.intelligence_card import _render_consistency
+from dashboard.components.option_chain import _merge_authoritative_greeks
 from dashboard.live_reconciliation import build_live_reconciliation
 from dashboard.live_provider_reconciliation import compare_dashboard_ui_runtime
+
+
+_ANALYTICS_COLUMNS = [
+    "CE_GEX", "PE_GEX", "NET_GEX",
+    "CE_DEX", "PE_DEX", "NET_DEX",
+    "CE_VANNA", "PE_VANNA", "NET_VANNA",
+    "CE_CHARM", "PE_CHARM", "NET_CHARM",
+    "PREV_CE_LTP", "PREV_CE_OI", "PREV_PE_LTP", "PREV_PE_OI",
+    "_PREV_SNAPSHOT_MATCH",
+    "CE_PRICE_CHANGE", "PE_PRICE_CHANGE", "CE_OI_CHANGE", "PE_OI_CHANGE",
+    "CE_FLOW", "PE_FLOW",
+]
 
 
 def _dashboard():
@@ -36,6 +49,8 @@ def _dashboard():
     greeks["PE_THETA"] = -1.0
     greeks["PE_VEGA"] = 2.0
     greeks["PE_RHO"] = -1.0
+    for index, column in enumerate(_ANALYTICS_COLUMNS, start=1):
+        greeks[column] = index
 
     return SimpleNamespace(
         symbol="NIFTY",
@@ -79,6 +94,15 @@ def _dashboard():
     )
 
 
+def test_authoritative_option_projection_preserves_all_enriched_analytics_columns():
+    dashboard = _dashboard()
+    projected = _merge_authoritative_greeks(dashboard.option_chain, dashboard.greeks)
+    assert all(column in projected.columns for column in _ANALYTICS_COLUMNS)
+    assert projected.loc[0, "NET_GEX"] == 3
+    assert projected.loc[0, "NET_DEX"] == 6
+    assert projected.loc[0, "CE_FLOW"] == 23
+
+
 def test_live_reconciliation_matches_market_summary_and_detects_no_mapping_gaps():
     dashboard = _dashboard()
     report = build_live_reconciliation(dashboard)
@@ -94,6 +118,7 @@ def test_live_reconciliation_can_match_option_projection_with_authoritative_colu
     report = build_live_reconciliation(dashboard)
     assert report["option_chain"]["contract_identity"]["option_chain_unique"] is True
     assert report["option_chain"]["contract_identity"]["greeks_unique"] is True
+    assert report["option_chain"]["ui_projection"]["status"] == "MATCH"
 
 
 def test_intelligence_card_has_explicit_direction_consistency_ui_path():
