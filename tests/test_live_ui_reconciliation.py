@@ -4,6 +4,7 @@ import pandas as pd
 
 from dashboard.components.intelligence_card import _render_consistency
 from dashboard.live_reconciliation import build_live_reconciliation
+from dashboard.live_provider_reconciliation import compare_dashboard_ui_runtime
 
 
 def _dashboard():
@@ -101,3 +102,13 @@ def test_intelligence_card_has_explicit_direction_consistency_ui_path():
     assert "Semantic status:" in source
     assert "Actionable:" in source
     assert "Vetoed:" in source
+
+
+def test_dashboard_ui_runtime_report_exposes_field_level_decision_checks():
+    dashboard = _dashboard()
+    report = compare_dashboard_ui_runtime(dashboard)
+
+    assert report["decision"]["status"] == "PASS"
+    assert all(item["status"] == "PASS" for item in report["decision"]["fields"].values())
+    assert report["decision"]["fields"]["signal"]["backend"] == "BUY CALL"
+    assert report["decision"]["fields"]["signal"]["ui"] == "BUY CALL"
