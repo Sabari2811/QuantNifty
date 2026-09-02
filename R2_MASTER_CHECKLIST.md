@@ -50,13 +50,14 @@
 - [x] First live cycle OI baseline validated mechanically
 - [x] Deterministic ΔPrice/ΔOI classification validated for all four flow types and NO_CHANGE
 - [x] Unmatched current strikes are classified UNKNOWN rather than using a fabricated zero baseline
-- [ ] Consecutive-cycle OI flow classification validated with known live ΔPrice/ΔOI behavior
+- [x] Consecutive-cycle OI flow classification validated with known live ΔPrice/ΔOI behavior
 - [x] Live Greeks now produce values for the live selected expiry and are covered by regression tests
 - [ ] Live analytics outputs reconciled against raw provider data
 - [x] Decision/intelligence values reconciled against canonical backend snapshot
 - [x] Decision ↔ Intelligence consistency contract implemented
 - [x] Decision ↔ Intelligence semantic model distinguishes direction from actionability
 - [x] Decision ↔ Intelligence consistency contract validated against fresh live runtime
+- [ ] Fresh live Decision ↔ Intelligence directional conflict investigated and dispositioned without weakening the semantic contract
 
 ## Backend → UI Reconciliation
 - [x] Capture fresh canonical live snapshot
