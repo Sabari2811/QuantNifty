@@ -10,11 +10,36 @@ def test_live_quote_batch_latest_timestamp():
     completed = datetime(2026, 8, 30, 4, 0, 2, tzinfo=timezone.utc)
     batch = LiveQuoteBatch(
         {first.instrument: first, second.instrument: second},
+        {first.instrument: completed, second.instrument: completed},
         completed,
         completed,
         completed,
     )
     assert batch.latest_provider_timestamp == second.timestamp
+
+
+def test_provider_instrument_without_segment_matches_requested():
+    tick = LiveQuoteTick(
+        "40000001",
+        datetime(2026, 9, 2, 5, 0, tzinfo=timezone.utc),
+        1000,
+        "ltp",
+        {"ltp": 23880},
+    )
+    assert LiveQuoteCoordinator._matches_requested(tick, {"NIDX:40000001"}) == "NIDX:40000001"
+
+
+def test_ambiguous_suffix_does_not_match():
+    tick = LiveQuoteTick(
+        "40000001",
+        datetime(2026, 9, 2, 5, 0, tzinfo=timezone.utc),
+        1000,
+        "ltp",
+        {"ltp": 23880},
+    )
+    assert LiveQuoteCoordinator._matches_requested(
+        tick, {"NIDX:40000001", "NFO:40000001"}
+    ) is None
 
 
 def test_websocket_instrument_mapping():
