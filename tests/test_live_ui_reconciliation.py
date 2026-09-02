@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pandas as pd
 
+from dashboard.components.intelligence_card import _render_consistency
 from dashboard.live_reconciliation import build_live_reconciliation
 
 
@@ -92,3 +93,11 @@ def test_live_reconciliation_can_match_option_projection_with_authoritative_colu
     report = build_live_reconciliation(dashboard)
     assert report["option_chain"]["contract_identity"]["option_chain_unique"] is True
     assert report["option_chain"]["contract_identity"]["greeks_unique"] is True
+
+
+def test_intelligence_card_has_explicit_direction_consistency_ui_path():
+    source = open("dashboard/components/intelligence_card.py", encoding="utf-8").read()
+    assert "def _render_consistency(consistency):" in source
+    assert "Semantic status:" in source
+    assert "Actionable:" in source
+    assert "Vetoed:" in source
