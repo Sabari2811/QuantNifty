@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import socket
 import threading
 from dataclasses import dataclass
@@ -84,6 +85,38 @@ def websocket_instrument(segment: str, security_id: int | str) -> str:
     return f"{normalized}:{security_id}"
 
 
+def _sanitize_non_json_text(message: str) -> dict[str, Any]:
+    """Classify a bounded non-JSON message without exposing credentials or full text."""
+    text = message.strip()
+    lower = text.lower()
+    known = {
+        "ping": "ping",
+        "pong": "pong",
+        "heartbeat": "heartbeat",
+        "ok": "ok",
+        "ack": "ack",
+        "success": "success",
+    }
+    if lower in known:
+        return {
+            "message_type": "non_json",
+            "value_type": "str",
+            "raw_length": len(message),
+            "string_kind": known[lower],
+        }
+
+    # Keep diagnostics bounded and redact common credential-bearing forms.
+    preview = text[:160]
+    preview = re.sub(r"(?i)(authorization|access[_-]?token|token|bearer)(\s*[:=]\s+)([^\s,;]+)", r"\1\2[REDACTED]", preview)
+    return {
+        "message_type": "non_json",
+        "value_type": "str",
+        "raw_length": len(message),
+        "preview": preview,
+        "preview_truncated": len(text) > 160,
+    }
+
+
 def summarize_websocket_message(message: str | bytes | dict[str, Any]) -> dict[str, Any]:
     """Return safe diagnostic metadata without exposing credentials or raw payloads."""
     if isinstance(message, bytes):
@@ -91,7 +124,10 @@ def summarize_websocket_message(message: str | bytes | dict[str, Any]) -> dict[s
     try:
         payload = json.loads(message) if isinstance(message, str) else message
     except (TypeError, ValueError):
-        return {"message_type": "non_json", "raw_length": len(message) if isinstance(message, str) else None}
+        return _sanitize_non_json_text(message) if isinstance(message, str) else {
+            "message_type": "non_json",
+            "raw_length": None,
+        }
 
     if not isinstance(payload, dict):
         return {"message_type": "non_object", "value_type": type(payload).__name__}
