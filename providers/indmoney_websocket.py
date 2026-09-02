@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import select
 import socket
 import threading
 from dataclasses import dataclass
@@ -83,6 +82,31 @@ def websocket_instrument(segment: str, security_id: int | str) -> str:
     if normalized not in {"NSE", "BSE", "NFO", "BFO", "NIDX", "BIDX"}:
         raise ValueError(f"unsupported WebSocket segment: {segment}")
     return f"{normalized}:{security_id}"
+
+
+def summarize_websocket_message(message: str | bytes | dict[str, Any]) -> dict[str, Any]:
+    """Return safe diagnostic metadata without exposing credentials or raw payloads."""
+    if isinstance(message, bytes):
+        message = message.decode("utf-8", errors="replace")
+    try:
+        payload = json.loads(message) if isinstance(message, str) else message
+    except (TypeError, ValueError):
+        return {"message_type": "non_json", "raw_length": len(message) if isinstance(message, str) else None}
+
+    if not isinstance(payload, dict):
+        return {"message_type": "non_object", "value_type": type(payload).__name__}
+
+    summary: dict[str, Any] = {
+        "message_type": "price" if payload.get("mode") in {"ltp", "quote"} else "control_or_other",
+        "keys": sorted(str(key) for key in payload.keys()),
+    }
+    for key in ("mode", "instrument", "type", "action", "status", "event"):
+        if key in payload:
+            summary[key] = payload[key]
+    data = payload.get("data")
+    if isinstance(data, dict):
+        summary["data_keys"] = sorted(str(key) for key in data.keys())
+    return summary
 
 
 class IndmoneyPriceFeed:
@@ -174,6 +198,46 @@ class IndmoneyPriceFeed:
                 ) from error
             raise error
         return parse_price_feed_message(result.get("message"))
+
+    def recv_debug(self, timeout: float | None = None) -> dict[str, Any]:
+        """Receive one bounded message and return safe metadata for feed diagnostics."""
+        if self._socket is None:
+            raise RuntimeError("price feed is not connected")
+        effective_timeout = self.timeout if timeout is None else float(timeout)
+        if effective_timeout <= 0:
+            raise ValueError("timeout must be positive")
+
+        result: dict[str, Any] = {}
+        finished = threading.Event()
+        socket_obj = self._socket
+
+        def worker() -> None:
+            try:
+                result["message"] = socket_obj.recv()
+            except BaseException as exc:
+                result["error"] = exc
+            finally:
+                finished.set()
+
+        thread = threading.Thread(target=worker, name="indstocks-ws-debug-recv", daemon=True)
+        thread.start()
+        if not finished.wait(effective_timeout):
+            try:
+                socket_obj.close()
+            finally:
+                self._socket = None
+            raise LiveQuoteReceiveTimeout(
+                f"WebSocket debug receive exceeded {effective_timeout:.1f}s"
+            )
+
+        error = result.get("error")
+        if error is not None:
+            if isinstance(error, (websocket.WebSocketTimeoutException, TimeoutError, socket.timeout)):
+                raise LiveQuoteReceiveTimeout(
+                    f"WebSocket debug receive exceeded {effective_timeout:.1f}s"
+                ) from error
+            raise error
+        return summarize_websocket_message(result.get("message"))
 
     def iter_ticks(self, *, max_ticks: int | None = None, timeout: float | None = None):
         if self._socket is None:
