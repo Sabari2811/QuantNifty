@@ -52,7 +52,7 @@ def test_adapter_accepts_analytics_pipeline_result():
         build_analytics()
     )
 
-    assert len(items) == 7
+    assert len(items) == 6
 
 
 def test_adapter_extracts_expected_features():
@@ -67,7 +67,6 @@ def test_adapter_extracts_expected_features():
         item.feature
         for item in items
     } == {
-        "gamma_flip",
         "dealer_gamma",
         "oi_flow_market_bias",
         "iv_skew",
@@ -75,6 +74,54 @@ def test_adapter_extracts_expected_features():
         "signal",
         "market_structure",
     }
+
+
+def test_gamma_flip_is_not_converted_to_directional_evidence():
+
+    analytics = build_analytics()
+
+    analytics["dealer"] = {
+        "dealer_gamma": "SHORT",
+    }
+
+    analytics["oi_flow"] = {
+        "summary": {
+            "market_bias": "BEARISH",
+        }
+    }
+
+    analytics["iv_skew"] = {
+        "iv_bias": "PUTS_EXPENSIVE",
+    }
+
+    analytics["probability"] = {
+        "bullish_probability": 25,
+        "bearish_probability": 75,
+        "confidence": 50,
+    }
+
+    analytics["signal"] = {
+        "signal": "BUY PUT",
+        "confidence": 50,
+    }
+
+    analytics["market_structure"] = {
+        "direction": "BEARISH",
+        "strength": 80,
+        "confidence": 75,
+    }
+
+    items = EvidenceAdapter().extract(analytics)
+
+    assert "gamma_flip" not in {
+        item.feature
+        for item in items
+    }
+
+    assert all(
+        item.direction == "BEARISH"
+        for item in items
+    )
 
 
 def test_adapter_preserves_bullish_direction():
