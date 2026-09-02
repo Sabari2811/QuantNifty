@@ -76,18 +76,7 @@ def compare_raw_quotes_to_option_chain(raw_quotes: dict, option_chain) -> dict:
     }
 
 
-def compare_decision_intelligence_runtime(ctx) -> dict:
-    """Validate the semantic Decision ↔ Intelligence contract for one live cycle."""
-    decision = getattr(ctx, "decision", None)
-    intelligence = getattr(ctx, "intelligence", None)
-    if decision is None or intelligence is None:
-        return {
-            "status": "GAP",
-            "semantic_status": "UNAVAILABLE",
-            "reason": "decision_or_intelligence_missing",
-        }
-
-    result = reconcile_decision_intelligence(decision, intelligence)
+def _consistency_payload(result) -> dict:
     return {
         "status": result.status,
         "semantic_status": result.semantic_status,
@@ -99,6 +88,31 @@ def compare_decision_intelligence_runtime(ctx) -> dict:
         "intelligence_direction": result.intelligence_direction,
         "reason": result.reason,
     }
+
+
+def compare_decision_intelligence_runtime(ctx) -> dict:
+    """Validate the semantic Decision ↔ Intelligence contract for one live cycle.
+
+    Prefer the consistency result captured immediately after Decision and
+    Intelligence synthesis, before the execution pipeline can mutate an
+    invalid/unexecutable Decision signal to WAIT. This preserves the
+    authoritative pre-execution decision semantics for runtime audit output.
+    """
+    stored = getattr(ctx, "decision_intelligence_consistency", None)
+    if stored is not None:
+        return _consistency_payload(stored)
+
+    decision = getattr(ctx, "decision", None)
+    intelligence = getattr(ctx, "intelligence", None)
+    if decision is None or intelligence is None:
+        return {
+            "status": "GAP",
+            "semantic_status": "UNAVAILABLE",
+            "reason": "decision_or_intelligence_missing",
+        }
+
+    result = reconcile_decision_intelligence(decision, intelligence)
+    return _consistency_payload(result)
 
 
 def build_raw_provider_reconciliation(raw_quotes: dict, ctx) -> dict:
