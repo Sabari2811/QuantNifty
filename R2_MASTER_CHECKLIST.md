@@ -43,8 +43,8 @@
 - [x] INVALID vs SUSPECT separation
 - [x] Integrity reasons preserved in provenance
 - [x] Live cycle observed complete coverage with a separate SUSPECT integrity state
-- [ ] Real live-chain integrity validated during market hours
-- [ ] Real degraded-data case validated
+- [x] Real live-chain integrity validated during market hours
+- [x] Real degraded-data case validated
 
 ### OI / Greeks / Analytics
 - [x] First live cycle OI baseline validated mechanically
@@ -103,7 +103,7 @@
 - [ ] Freshness state matches backend in a fresh running UI session
 - [ ] Coverage state matches backend in a fresh running UI session
 - [ ] Integrity state matches backend in a fresh running UI session
-- [ ] Live degraded-data presentation validated
+- [x] Live degraded-data presentation validated at runtime boundary (analytics/trading blocked; UI rendering still pending)
 - [ ] Decision ↔ Intelligence conflict/deferred state is surfaced clearly in the UI
 
 ## Release Gate
