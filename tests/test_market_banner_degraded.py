@@ -23,10 +23,22 @@ def test_market_banner_renders_degraded_dashboard_without_canonical_signal(monke
         def metric(self, label, value):
             self.metric_values.append((label, value))
 
-    columns = [Column() for _ in range(9)]
+    column_groups = iter(
+        [
+            [Column() for _ in range(4)],
+            [Column() for _ in range(4)],
+            [Column() for _ in range(2)],
+        ]
+    )
+    rendered_groups = []
 
-    iterator = iter(columns)
-    monkeypatch.setattr("dashboard.components.market_banner.st.columns", lambda count: [next(iterator) for _ in range(count)])
+    def columns(count):
+        group = next(column_groups)
+        assert len(group) == count
+        rendered_groups.append(group)
+        return group
+
+    monkeypatch.setattr("dashboard.components.market_banner.st.columns", columns)
     monkeypatch.setattr("dashboard.components.market_banner.st.markdown", lambda *args, **kwargs: None)
     monkeypatch.setattr("dashboard.components.market_banner.st.divider", lambda: None)
 
@@ -45,10 +57,10 @@ def test_market_banner_renders_degraded_dashboard_without_canonical_signal(monke
 
     render(dashboard)
 
-    first = columns[0]
-    assert first.warning_values == ["UNAVAILABLE"]
-    assert ("Spot", "24100.00") in columns[4].metric_values
-    assert ("Bullish %", "UNAVAILABLE%") in columns[6].metric_values
-    assert ("Confidence", "UNAVAILABLE") in columns[7].metric_values
-    assert ("Recommended", "UNAVAILABLE") in columns[8].metric_values
-    assert ("Risk Reward", "UNAVAILABLE") in columns[8].metric_values
+    first_group, second_group, third_group = rendered_groups
+    assert first_group[0].warning_values == ["UNAVAILABLE"]
+    assert ("Spot", "24100.00") in first_group[1].metric_values
+    assert ("Bullish %", "UNAVAILABLE%") in second_group[2].metric_values
+    assert ("Confidence", "UNAVAILABLE") in second_group[3].metric_values
+    assert ("Recommended", "UNAVAILABLE") in third_group[0].metric_values
+    assert ("Risk Reward", "UNAVAILABLE") in third_group[1].metric_values
