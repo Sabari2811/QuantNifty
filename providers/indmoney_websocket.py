@@ -57,7 +57,12 @@ def parse_price_feed_message(message: str | bytes | dict[str, Any]) -> LiveQuote
     """Parse one INDstocks price-feed message; ignore heartbeat/non-price payloads."""
     if isinstance(message, bytes):
         message = message.decode("utf-8")
-    payload = json.loads(message) if isinstance(message, str) else message
+    payload: Any = json.loads(message) if isinstance(message, str) else message
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except (TypeError, ValueError):
+            return None
     if not isinstance(payload, dict):
         return None
     mode = str(payload.get("mode", ""))
@@ -104,8 +109,6 @@ def _sanitize_non_json_text(message: str) -> dict[str, Any]:
             "raw_length": len(message),
             "string_kind": known[lower],
         }
-
-    # Keep diagnostics bounded and redact common credential-bearing forms.
     preview = text[:160]
     preview = re.sub(
         r"(?i)(authorization|access[_-]?token|token|bearer)(\s*[:=]\s+)([^\s,;]+)",
@@ -126,21 +129,19 @@ def summarize_websocket_message(message: str | bytes | dict[str, Any]) -> dict[s
     if isinstance(message, bytes):
         message = message.decode("utf-8", errors="replace")
     try:
-        payload = json.loads(message) if isinstance(message, str) else message
+        payload: Any = json.loads(message) if isinstance(message, str) else message
     except (TypeError, ValueError):
         return _sanitize_non_json_text(message) if isinstance(message, str) else {
             "message_type": "non_json",
             "raw_length": None,
         }
-
-    # JSON scalar strings are still text messages after decoding. Classify them
-    # through the same bounded sanitizer instead of treating them as objects.
     if isinstance(payload, str):
-        return _sanitize_non_json_text(payload)
-
+        try:
+            payload = json.loads(payload)
+        except (TypeError, ValueError):
+            return _sanitize_non_json_text(payload)
     if not isinstance(payload, dict):
         return {"message_type": "non_object", "value_type": type(payload).__name__}
-
     summary: dict[str, Any] = {
         "message_type": "price" if payload.get("mode") in {"ltp", "quote"} else "control_or_other",
         "keys": sorted(str(key) for key in payload.keys()),
@@ -171,7 +172,6 @@ class IndmoneyPriceFeed:
         """Establish the socket without allowing a blocking transport to freeze the caller."""
         result: dict[str, Any] = {}
         finished = threading.Event()
-
         def worker() -> None:
             try:
                 result["socket"] = websocket.create_connection(
@@ -183,7 +183,6 @@ class IndmoneyPriceFeed:
                 result["error"] = exc
             finally:
                 finished.set()
-
         thread = threading.Thread(target=worker, name="indstocks-ws-connect", daemon=True)
         thread.start()
         if not finished.wait(self.timeout):
@@ -211,11 +210,9 @@ class IndmoneyPriceFeed:
         effective_timeout = self.timeout if timeout is None else float(timeout)
         if effective_timeout <= 0:
             raise ValueError("timeout must be positive")
-
         result: dict[str, Any] = {}
         finished = threading.Event()
         socket_obj = self._socket
-
         def worker() -> None:
             try:
                 result["message"] = socket_obj.recv()
@@ -223,7 +220,6 @@ class IndmoneyPriceFeed:
                 result["error"] = exc
             finally:
                 finished.set()
-
         thread = threading.Thread(target=worker, name="indstocks-ws-recv", daemon=True)
         thread.start()
         if not finished.wait(effective_timeout):
@@ -231,16 +227,11 @@ class IndmoneyPriceFeed:
                 socket_obj.close()
             finally:
                 self._socket = None
-            raise LiveQuoteReceiveTimeout(
-                f"WebSocket price receive exceeded {effective_timeout:.1f}s"
-            )
-
+            raise LiveQuoteReceiveTimeout(f"WebSocket price receive exceeded {effective_timeout:.1f}s")
         error = result.get("error")
         if error is not None:
             if isinstance(error, (websocket.WebSocketTimeoutException, TimeoutError, socket.timeout)):
-                raise LiveQuoteReceiveTimeout(
-                    f"WebSocket price receive exceeded {effective_timeout:.1f}s"
-                ) from error
+                raise LiveQuoteReceiveTimeout(f"WebSocket price receive exceeded {effective_timeout:.1f}s") from error
             raise error
         return parse_price_feed_message(result.get("message"))
 
@@ -251,11 +242,9 @@ class IndmoneyPriceFeed:
         effective_timeout = self.timeout if timeout is None else float(timeout)
         if effective_timeout <= 0:
             raise ValueError("timeout must be positive")
-
         result: dict[str, Any] = {}
         finished = threading.Event()
         socket_obj = self._socket
-
         def worker() -> None:
             try:
                 result["message"] = socket_obj.recv()
@@ -263,7 +252,6 @@ class IndmoneyPriceFeed:
                 result["error"] = exc
             finally:
                 finished.set()
-
         thread = threading.Thread(target=worker, name="indstocks-ws-debug-recv", daemon=True)
         thread.start()
         if not finished.wait(effective_timeout):
@@ -271,16 +259,11 @@ class IndmoneyPriceFeed:
                 socket_obj.close()
             finally:
                 self._socket = None
-            raise LiveQuoteReceiveTimeout(
-                f"WebSocket debug receive exceeded {effective_timeout:.1f}s"
-            )
-
+            raise LiveQuoteReceiveTimeout(f"WebSocket debug receive exceeded {effective_timeout:.1f}s")
         error = result.get("error")
         if error is not None:
             if isinstance(error, (websocket.WebSocketTimeoutException, TimeoutError, socket.timeout)):
-                raise LiveQuoteReceiveTimeout(
-                    f"WebSocket debug receive exceeded {effective_timeout:.1f}s"
-                ) from error
+                raise LiveQuoteReceiveTimeout(f"WebSocket debug receive exceeded {effective_timeout:.1f}s") from error
             raise error
         return summarize_websocket_message(result.get("message"))
 
