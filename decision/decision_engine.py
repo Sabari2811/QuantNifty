@@ -22,54 +22,6 @@ class DecisionEngine:
     QuantNifty Decision Engine
 
     R2-003 Direction-Aware Architecture
-    ------------------------------------
-
-        Market Snapshot
-                │
-                ▼
-        Market Analyzer
-                │
-                ├───────────────┐
-                │               │
-                ▼               ▼
-        Signal / Direction   Advanced Score
-                │               │
-                │               ▼
-                │       Institutional Quality
-                │               │
-                │               ▼
-                │      DirectionalScoreAdapter
-                │               │
-                └───────────────┤
-                                ▼
-                         Strategy Selector
-                                │
-                                ▼
-                         Decision Builder
-                                │
-                                ▼
-                         Execution Engine
-
-    Direction
-        Comes from SignalEngine / snapshot signal.
-
-    Quality
-        Comes from analytics.scoring.ScoreEngine.
-
-    The DirectionalScoreAdapter converts:
-
-        BUY CALL + quality → positive score
-        BUY PUT  + quality → negative score
-        WAIT     + quality → zero score
-
-    Migration behavior
-    ------------------
-    Older snapshots without a valid signal temporarily use the
-    legacy ScoringEngine so existing historical/unit fixtures remain
-    compatible.
-
-    The legacy scorer will be removed only after the comparison and
-    regression phases are completed.
     """
 
     VALID_DIRECTIONS = {
@@ -79,104 +31,30 @@ class DecisionEngine:
     }
 
     def __init__(self):
-
         self.analyzer = MarketAnalyzer()
-
-        # --------------------------------------------------------
-        # R2-003 Advanced Scoring
-        # --------------------------------------------------------
-
         self.scoring = ScoreEngine()
-
         self.directional_adapter = DirectionalScoreAdapter()
-
-        # --------------------------------------------------------
-        # Temporary backward compatibility
-        # --------------------------------------------------------
-
         self.legacy_scoring = ScoringEngine()
-
-        # --------------------------------------------------------
-        # Existing decision pipeline
-        # --------------------------------------------------------
-
         self.selector = StrategySelector()
-
         self.builder = DecisionBuilder()
-
         self.execution = ExecutionEngine()
 
     def _extract_direction(self, snapshot):
-        """
-        Extract the authoritative SignalEngine direction.
-
-        Canonical MarketSnapshot stores the signal inside its
-        analytics dictionary.
-
-        Expected structure:
-
-            {
-                "signal": "BUY CALL",
-                "confidence": ...,
-                "spot": ...,
-                "reasons": [...]
-            }
-
-        Returns:
-            "BUY CALL"
-            "BUY PUT"
-            "WAIT"
-            None
-        """
-
         signal_payload = snapshot.get("signal", None)
-
         if isinstance(signal_payload, dict):
-
-            direction = signal_payload.get(
-                "signal"
-            )
-
+            direction = signal_payload.get("signal")
         elif isinstance(signal_payload, str):
-
             direction = signal_payload
-
         else:
-
             direction = None
-
         if direction in self.VALID_DIRECTIONS:
             return direction
-
         return None
 
-    def _calculate_advanced_score(
-        self,
-        snapshot,
-        direction,
-    ):
-        """
-        Calculate institutional quality using the advanced
-        analytics ScoreEngine.
-
-        Returns:
-            score_result
-            signed_score
-            direction
-        """
-
-        signal_payload = snapshot.get(
-            "signal",
-            {
-                "signal": direction
-            }
-        )
-
+    def _calculate_advanced_score(self, snapshot, direction):
+        signal_payload = snapshot.get("signal", {"signal": direction})
         if not isinstance(signal_payload, dict):
-            signal_payload = {
-                "signal": direction
-            }
-
+            signal_payload = {"signal": direction}
         score_result = self.scoring.calculate(
             dealer=snapshot.dealer,
             dealer_flow=snapshot.dealer_flow,
@@ -190,106 +68,37 @@ class DecisionEngine:
             spot=snapshot.spot,
             signal=signal_payload,
         )
-
-        institutional = score_result.get(
-            "institutional",
-            {}
-        )
-
-        quality_score = institutional.get(
-            "score",
-            0
-        )
-
+        institutional = score_result.get("institutional", {})
+        quality_score = institutional.get("score", 0)
         adapted = self.directional_adapter.adapt(
             direction=direction,
             quality_score=quality_score,
         )
+        return score_result, adapted["signed_score"], direction
 
-        return (
-            score_result,
-            adapted["signed_score"],
-            direction,
-        )
-
-    def _build_legacy_score(
-        self,
-        market,
-    ):
-        """
-        Temporary compatibility path for old snapshots that do
-        not contain the new authoritative signal contract.
-        """
-
-        score_result = self.legacy_scoring.score(
-            market
-        )
-
+    def _build_legacy_score(self, market):
+        score_result = self.legacy_scoring.score(market)
         return (
             score_result["score"],
             score_result["reasons"],
             score_result["breakdown"],
         )
 
-    def build(
-        self,
-        snapshot,
-        config: RuntimeConfig | None = None,
-    ):
-
-        # --------------------------------------------
-        # Runtime Configuration
-        # --------------------------------------------
-
+    def build(self, snapshot, config: RuntimeConfig | None = None):
         if config is None:
             config = RuntimeConfig()
 
-        # --------------------------------------------
-        # Market Analysis
-        # --------------------------------------------
-
-        market = self.analyzer.analyze(
-            snapshot
-        )
-
-        # --------------------------------------------
-        # Direction
-        # --------------------------------------------
-
-        direction = self._extract_direction(
-            snapshot
-        )
-
-        # --------------------------------------------
-        # Scoring
-        # --------------------------------------------
+        market = self.analyzer.analyze(snapshot)
+        direction = self._extract_direction(snapshot)
 
         if direction is not None:
-
-            # ====================================================
-            # R2-003 NEW PATH
-            # ====================================================
-
-            score_result, score, direction = (
-                self._calculate_advanced_score(
-                    snapshot=snapshot,
-                    direction=direction,
-                )
+            score_result, score, direction = self._calculate_advanced_score(
+                snapshot=snapshot,
+                direction=direction,
             )
+            institutional = score_result.get("institutional", {})
+            reasons = list(institutional.get("reasons", []))
 
-            institutional = score_result.get(
-                "institutional",
-                {}
-            )
-
-            reasons = list(
-                institutional.get(
-                    "reasons",
-                    []
-                )
-            )
-
-            # Collect component reasons when available.
             for component_name in (
                 "dealer_score",
                 "liquidity_score",
@@ -297,24 +106,12 @@ class DecisionEngine:
                 "structure_score",
                 "volatility_score",
             ):
-
-                component = score_result.get(
-                    component_name,
-                    {}
-                )
-
-                component_reasons = component.get(
-                    "reasons",
-                    []
-                )
-
+                component = score_result.get(component_name, {})
+                component_reasons = component.get("reasons", [])
                 if component_reasons:
-                    reasons.extend(
-                        component_reasons
-                    )
+                    reasons.extend(component_reasons)
 
             breakdown = {}
-
             for component_name in (
                 "dealer_score",
                 "liquidity_score",
@@ -322,115 +119,38 @@ class DecisionEngine:
                 "structure_score",
                 "volatility_score",
             ):
+                component = score_result.get(component_name, {})
+                breakdown[component_name] = component.get("score", 0)
 
-                component = score_result.get(
-                    component_name,
-                    {}
-                )
-
-                breakdown[component_name] = component.get(
-                    "score",
-                    0
-                )
-
-            breakdown["institutional"] = (
-                institutional.get(
-                    "score",
-                    0
-                )
-            )
-
+            breakdown["institutional"] = institutional.get("score", 0)
             breakdown["direction"] = direction
-
-            breakdown["quality_score"] = (
-                institutional.get(
-                    "score",
-                    0
-                )
-            )
-
+            breakdown["quality_score"] = institutional.get("score", 0)
             breakdown["signed_score"] = score
-
         else:
+            score, reasons, breakdown = self._build_legacy_score(market)
 
-            # ====================================================
-            # LEGACY COMPATIBILITY PATH
-            # ====================================================
-
-            (
-                score,
-                reasons,
-                breakdown,
-            ) = self._build_legacy_score(
-                market
-            )
-
-        # --------------------------------------------
-        # Strategy Adjustment
-        # --------------------------------------------
-
-        strategy = self.selector.select(
-            market
-        )
-
-        # --------------------------------------------
-        # Strategy Provenance
-        # --------------------------------------------
-        #
-        # Strategy identity is an explicit contract.
-        # Do not infer identity from the Python class name.
-
+        strategy = self.selector.select(market)
         strategy_name = strategy.name
-
         score_before_strategy = score
-
-        score, strategy_reasons = strategy.adjust(
-            score,
-            market
-        )
-
-        reasons.extend(
-            strategy_reasons
-        )
-
-        breakdown["strategy"] = (
-            score - score_before_strategy
-        )
-
+        score, strategy_reasons = strategy.adjust(score, market)
+        reasons.extend(strategy_reasons)
+        breakdown["strategy"] = score - score_before_strategy
         breakdown["final"] = score
-
-        # --------------------------------------------
-        # Decision
-        # --------------------------------------------
 
         decision = self.builder.build(
             market=market,
-
             score=score,
-
             breakdown=breakdown,
-
             reasons=reasons,
             direction=direction,
         )
-
-        # --------------------------------------------
-        # Preserve Strategy Provenance
-        # --------------------------------------------
-        #
-        # The selected strategy is the authoritative
-        # source of strategy identity for this decision.
-
         decision.strategy_name = strategy_name
 
-        # --------------------------------------------
-        # Execution Plan
-        # --------------------------------------------
+        # Capture the authoritative Decision signal before execution planning.
+        # ExecutionEngine may later change signal.name to WAIT when validation
+        # or contract preparation fails; that is an execution state, not a
+        # replacement for the market Decision used by reconciliation.
+        decision.authoritative_signal = decision.signal.name
 
-        decision = self.execution.prepare(
-            decision,
-            snapshot,
-            config
-        )
-
+        decision = self.execution.prepare(decision, snapshot, config)
         return decision
