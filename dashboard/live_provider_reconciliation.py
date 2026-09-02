@@ -7,6 +7,7 @@ from analytics.intelligence.decision_consistency import reconcile_decision_intel
 from dashboard.decision_adapter import adapt_decision
 from dashboard.intelligence_adapter import adapt_intelligence
 from dashboard.live_reconciliation import build_live_reconciliation
+from dashboard.provenance_adapter import adapt_provenance
 
 
 QUOTE_FIELDS = (
@@ -112,6 +113,52 @@ def compare_decision_intelligence_runtime(ctx) -> dict:
     return _consistency_payload(result)
 
 
+def _compare_provenance(dashboard, backend_provenance: dict) -> dict:
+    """Validate the provenance contract consumed by affected UI components."""
+    adapted = adapt_provenance(dashboard.data_provenance)
+    option_backend = backend_provenance.get("option_chain")
+    option_ui = adapted.get("option_chain")
+    if option_backend is None or option_ui is None:
+        return {
+            "status": "GAP",
+            "backend": option_backend,
+            "ui_contract": option_ui,
+            "gaps": ["option_chain_provenance_missing"],
+        }
+
+    fields = (
+        "coverage_ratio",
+        "coverage_status",
+        "expected_count",
+        "received_count",
+        "missing_count",
+        "integrity_status",
+        "integrity_reasons",
+        "freshness_status",
+        "freshness_verified",
+        "freshness_seconds",
+        "provider_timestamp",
+        "source",
+        "reasons",
+    )
+    checks = {
+        field: {
+            "backend": option_backend.get(field),
+            "ui": option_ui.get(field),
+            "status": "PASS" if _equal(option_backend.get(field), option_ui.get(field)) else "MISMATCH",
+        }
+        for field in fields
+    }
+    gaps = [field for field, item in checks.items() if item["status"] != "PASS"]
+    return {
+        "status": "PASS" if not gaps else "GAP",
+        "backend": option_backend,
+        "ui_contract": option_ui,
+        "fields": checks,
+        "gaps": gaps,
+    }
+
+
 def compare_dashboard_ui_runtime(dashboard) -> dict:
     """Reconcile one DashboardData cycle against the canonical UI adapters.
 
@@ -143,9 +190,7 @@ def compare_dashboard_ui_runtime(dashboard) -> dict:
         }
 
     provenance = report.get("provenance") or {}
-    option_provenance = provenance.get("option_chain")
-    provenance_status = "PASS" if option_provenance is not None else "GAP"
-
+    provenance_report = _compare_provenance(dashboard, provenance)
     option_projection = report["option_chain"]["ui_projection"]
 
     decision_status = "PASS" if all(
@@ -156,16 +201,14 @@ def compare_dashboard_ui_runtime(dashboard) -> dict:
     ) else "GAP"
     option_status = "PASS" if option_projection["status"] == "MATCH" else "GAP"
 
+    overall = (
+        decision_status,
+        intelligence_status,
+        option_status,
+        provenance_report["status"],
+    )
     return {
-        "status": "PASS" if all(
-            status == "PASS"
-            for status in (
-                decision_status,
-                intelligence_status,
-                option_status,
-                provenance_status,
-            )
-        ) else "GAP",
+        "status": "PASS" if all(status == "PASS" for status in overall) else "GAP",
         "decision": {
             "status": decision_status,
             "fields": decision_checks,
@@ -179,16 +222,7 @@ def compare_dashboard_ui_runtime(dashboard) -> dict:
             "projection": option_projection,
             "contract_identity": report["option_chain"]["contract_identity"],
         },
-        "provenance": {
-            "status": provenance_status,
-            "backend": option_provenance,
-            "ui_contract": {
-                "coverage": None if option_provenance is None else option_provenance.get("coverage_ratio"),
-                "integrity": None if option_provenance is None else option_provenance.get("integrity_status"),
-                "freshness": None if option_provenance is None else option_provenance.get("freshness_status"),
-                "source": None if option_provenance is None else option_provenance.get("source"),
-            },
-        },
+        "provenance": provenance_report,
         "decision_intelligence": report["decision_intelligence"],
     }
 
@@ -202,9 +236,16 @@ def build_raw_provider_reconciliation(raw_quotes: dict, ctx) -> dict:
         gaps.append("provider_to_option_chain")
     if decision_report["status"] != "CONSISTENT":
         gaps.append("decision_intelligence")
+
+    dashboard = getattr(ctx, "dashboard", None)
+    dashboard_ui = compare_dashboard_ui_runtime(dashboard) if dashboard is not None else None
+    if dashboard_ui is None:
+        gaps.append("dashboard_ui")
+
     return {
         "option_chain": option_report,
         "decision_intelligence": decision_report,
+        "dashboard_ui": dashboard_ui,
         "status": "PASS" if not gaps else "GAP",
         "gaps": gaps,
     }
