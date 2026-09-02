@@ -28,11 +28,56 @@ def _compact_provenance_reasons(reasons):
     return compact
 
 
-def render(intelligence):
+def _render_consistency(consistency):
+    """Render canonical Decision ↔ Intelligence semantics without recomputation."""
+    if not consistency:
+        return
+
+    status = consistency.get("status")
+    semantic_status = consistency.get("semantic_status")
+    actionable = consistency.get("actionable")
+    vetoed = consistency.get("vetoed")
+    reason = consistency.get("reason")
+
+    st.divider()
+    st.markdown("**Decision ↔ Intelligence**")
+
+    if status == "CONSISTENT" and actionable:
+        st.success(
+            f"Consistent — Decision: {consistency.get('decision_signal', '-')} · "
+            f"Intelligence direction: {consistency.get('intelligence_direction', '-')}"
+        )
+    elif status == "DEFERRED" or semantic_status == "DEFERRED":
+        st.warning(
+            f"Deferred — Decision: {consistency.get('decision_signal', '-')} · "
+            f"Intelligence recommendation: {consistency.get('intelligence_recommendation', '-') }"
+        )
+    elif status == "CONFLICT":
+        st.error(
+            f"Conflict — Decision: {consistency.get('decision_signal', '-')} · "
+            f"Intelligence direction: {consistency.get('intelligence_direction', '-')}"
+        )
+    else:
+        st.info(
+            f"Semantic status: {semantic_status or status or 'UNAVAILABLE'}"
+        )
+
+    details = [
+        f"Semantic status: {semantic_status or '-'}",
+        f"Actionable: {'YES' if actionable else 'NO'}",
+        f"Vetoed: {'YES' if vetoed else 'NO'}",
+    ]
+    if reason:
+        details.append(str(reason))
+    st.caption(" · ".join(details))
+
+
+def render(intelligence, decision_intelligence_consistency=None):
     """Render canonical IntelligenceResult data without recomputation."""
     st.subheader("🧠 Intelligence")
     if not intelligence:
         st.info("Intelligence unavailable for this runtime cycle.")
+        _render_consistency(decision_intelligence_consistency)
         return
 
     quality = _value(intelligence, "data_quality", {})
@@ -66,6 +111,8 @@ def render(intelligence):
         with st.expander("View data-quality details", expanded=False):
             for reason in _compact_provenance_reasons(reasons):
                 st.write(f"• {reason}")
+
+    _render_consistency(decision_intelligence_consistency)
 
     primary = _value(intelligence, "primary_scenario")
     alternative = _value(intelligence, "alternative_scenario")
