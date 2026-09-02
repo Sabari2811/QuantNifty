@@ -107,7 +107,11 @@ def _sanitize_non_json_text(message: str) -> dict[str, Any]:
 
     # Keep diagnostics bounded and redact common credential-bearing forms.
     preview = text[:160]
-    preview = re.sub(r"(?i)(authorization|access[_-]?token|token|bearer)(\s*[:=]\s+)([^\s,;]+)", r"\1\2[REDACTED]", preview)
+    preview = re.sub(
+        r"(?i)(authorization|access[_-]?token|token|bearer)(\s*[:=]\s+)([^\s,;]+)",
+        r"\1\2[REDACTED]",
+        preview,
+    )
     return {
         "message_type": "non_json",
         "value_type": "str",
@@ -128,6 +132,11 @@ def summarize_websocket_message(message: str | bytes | dict[str, Any]) -> dict[s
             "message_type": "non_json",
             "raw_length": None,
         }
+
+    # JSON scalar strings are still text messages after decoding. Classify them
+    # through the same bounded sanitizer instead of treating them as objects.
+    if isinstance(payload, str):
+        return _sanitize_non_json_text(payload)
 
     if not isinstance(payload, dict):
         return {"message_type": "non_object", "value_type": type(payload).__name__}
