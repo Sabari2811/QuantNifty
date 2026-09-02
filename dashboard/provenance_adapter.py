@@ -4,7 +4,11 @@ from core.data_provenance import AcquisitionProvenance, RuntimeDataProvenance
 
 
 def adapt_provenance(provenance: RuntimeDataProvenance | None) -> dict:
-    """Expose canonical backend provenance without collapsing independent states."""
+    """Expose canonical backend provenance without collapsing independent states.
+
+    The adapter is also safe for lightweight dashboard test doubles that only
+    provide a subset of provenance attributes.
+    """
     if provenance is None:
         provenance = RuntimeDataProvenance()
 
@@ -30,9 +34,9 @@ def adapt_provenance(provenance: RuntimeDataProvenance | None) -> dict:
         }
 
     return {
-        "spot": adapt(provenance.spot),
-        "option_chain": adapt(provenance.option_chain),
-        "candles": adapt(provenance.candles),
-        "coverage_ratio": provenance.coverage_ratio,
-        "complete": provenance.complete,
+        "spot": adapt(getattr(provenance, "spot", None)),
+        "option_chain": adapt(getattr(provenance, "option_chain", None)),
+        "candles": adapt(getattr(provenance, "candles", None)),
+        "coverage_ratio": getattr(provenance, "coverage_ratio", 0.0),
+        "complete": getattr(provenance, "complete", False),
     }
