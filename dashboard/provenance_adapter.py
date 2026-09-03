@@ -33,9 +33,24 @@ def adapt_provenance(provenance: RuntimeDataProvenance | None) -> dict:
             "reasons": item.reasons,
         }
 
+    option_chain = adapt(getattr(provenance, "option_chain", None))
+
+    # This is presentation state only. It does not replace or merge the
+    # independent canonical coverage/integrity fields above.
+    if option_chain is None:
+        option_chain_quality = "UNAVAILABLE"
+    elif (
+        option_chain["coverage_status"] != "COMPLETE"
+        or option_chain["integrity_status"] in ("SUSPECT", "INVALID")
+    ):
+        option_chain_quality = "DEGRADED"
+    else:
+        option_chain_quality = "READY"
+
     return {
         "spot": adapt(getattr(provenance, "spot", None)),
-        "option_chain": adapt(getattr(provenance, "option_chain", None)),
+        "option_chain": option_chain,
+        "option_chain_quality": option_chain_quality,
         "candles": adapt(getattr(provenance, "candles", None)),
         "coverage_ratio": getattr(provenance, "coverage_ratio", 0.0),
         "complete": getattr(provenance, "complete", False),
