@@ -130,13 +130,10 @@ class LiveEngine:
         if hasattr(computed_greeks_df, "copy"):
             self.ctx.greeks_df = computed_greeks_df.copy(deep=True)
 
-        if replay_recompute:
-            expected_analytics = getattr(self.ctx, "replay_expected_analytics", None)
-            if expected_analytics:
-                self.ctx.replay_computed_analytics = computed_analytics
-                self.ctx.analytics = expected_analytics
-            else:
-                self.ctx.analytics = computed_analytics
+        expected_analytics = getattr(self.ctx, "replay_expected_analytics", None) if replay_recompute else None
+        if replay_recompute and expected_analytics:
+            self.ctx.replay_computed_analytics = computed_analytics
+            self.ctx.analytics = expected_analytics
         else:
             self.ctx.analytics = computed_analytics
 
@@ -186,6 +183,8 @@ class LiveEngine:
                     self.ctx.decision,
                     expected_intelligence,
                     actual_intelligence,
+                    expected_analytics=expected_analytics,
+                    actual_market_context=computed_context,
                 )
             else:
                 self.ctx.replay_equivalence = None
