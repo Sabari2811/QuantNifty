@@ -46,6 +46,22 @@ def _oi_summary(dashboard):
     return oi
 
 
+def _decision_intelligence_gate_ok(cycle: dict) -> bool:
+    """Require semantic Decision ↔ Intelligence consistency for each cycle.
+
+    UI reconciliation and semantic consistency are separate contracts. A
+    DashboardData cycle can map identical values to the UI while still being
+    semantically conflicted or deferred. Such a cycle must not pass the live
+    decision/intelligence release gate.
+    """
+    consistency = cycle.get("decision_intelligence") or {}
+    return (
+        consistency.get("status") == "MATCH"
+        and consistency.get("value", {}).get("consistent") is True
+        and consistency.get("value", {}).get("semantic_status") == "CONSISTENT"
+    )
+
+
 def _ensure_parent(path: str) -> None:
     parent = os.path.dirname(os.path.abspath(path))
     if parent:
@@ -145,6 +161,7 @@ def main() -> int:
             "option_chain": report["option_chain"],
             "decision": report["decision"],
             "intelligence": report["intelligence"],
+            "decision_intelligence": report["decision_intelligence"],
             "provenance": provenance,
             "oi": oi,
         }
@@ -178,7 +195,7 @@ def main() -> int:
         for state in oi_states[1:]
     )
     decision_ok = all(
-        c["intelligence"]["status"] == "MATCH"
+        _decision_intelligence_gate_ok(c)
         and not any(gap.startswith("decision.") for gap in c["gaps"])
         for c in reports
     )
@@ -200,7 +217,7 @@ def main() -> int:
         "freshness": _gate(freshness["status"], "consecutive live spot and option-chain sources are timestamped and non-stale" if freshness["status"] == "PASS" else "timestamp-bearing consecutive live quote evidence is not yet sufficient to prove freshness"),
         "integrity": _gate("PASS" if not integrity_invalid and not integrity_suspect else "DEGRADED", "all live quote sources passed integrity" if not integrity_invalid and not integrity_suspect else "suspect or invalid quote integrity remains explicit"),
         "oi_consecutive_state": _gate("PASS" if oi_ready else "NOT_VERIFIED", "consecutive cycles reached READY/NO_CHANGE" if oi_ready else "insufficient consecutive OI evidence"),
-        "decision_intelligence": _gate("PASS" if decision_ok else "FAIL", "canonical decision/intelligence values matched UI" if decision_ok else "decision/intelligence mismatch recorded"),
+        "decision_intelligence": _gate("PASS" if decision_ok else "FAIL", "canonical Decision ↔ Intelligence semantics are consistent in every cycle" if decision_ok else "Decision ↔ Intelligence semantic conflict or deferral recorded"),
         "analytics_raw_reconciliation": _gate("NOT_VERIFIED", "requires a fresh market-session raw-provider numerical reconciliation; successful analytics generation alone is not proof"),
         "degraded_data_ui": _gate("OBSERVED" if integrity_suspect else "NOT_VERIFIED", "live suspect integrity state observed; controlled UI degradation test still required" if integrity_suspect else "requires a controlled missing/invalid-data UI session"),
     }
