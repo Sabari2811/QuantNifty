@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from models.market_context import MarketContext
+
 
 class MarketSnapshot:
     """
@@ -8,6 +10,10 @@ class MarketSnapshot:
     Every downstream module (Decision Engine, Dashboard,
     Alerts, Backtesting, Paper Trading) should consume only
     this object.
+
+    The typed MarketContext is the canonical analytics source when supplied
+    by the runtime. The analytics dictionary remains the serialized and
+    backward-compatible projection for legacy callers and replay artifacts.
     """
 
     def __init__(self):
@@ -25,6 +31,7 @@ class MarketSnapshot:
         # Analytics
         # --------------------------------------------------
 
+        self.market_context = None
         self.analytics = {}
         self.regime = None
 
@@ -32,7 +39,8 @@ class MarketSnapshot:
         self,
         greeks_df,
         spot,
-        analytics
+        analytics,
+        market_context=None,
     ):
         self.timestamp = datetime.now()
         self.spot = float(spot)
@@ -42,7 +50,14 @@ class MarketSnapshot:
             else None
         )
         self.analytics = analytics.copy()
+        self.market_context = market_context
         return self
+
+    def _canonical_or_legacy(self, field_name):
+        """Read typed canonical analytics, falling back only for legacy callers."""
+        if self.market_context is not None:
+            return getattr(self.market_context, field_name)
+        return self.analytics.get(field_name, {})
 
     # =====================================================
     # SHORTCUT PROPERTIES
@@ -50,12 +65,12 @@ class MarketSnapshot:
 
     @property
     def dealer(self):
-        return self.analytics.get("dealer", {})
+        return self._canonical_or_legacy("dealer")
 
     @property
     def probability(self):
         """Canonical probability output from the analytics pipeline."""
-        return self.analytics.get("probability", {})
+        return self._canonical_or_legacy("probability")
 
     @property
     def prediction(self):
@@ -63,12 +78,16 @@ class MarketSnapshot:
         return self.probability
 
     @property
+    def signal(self):
+        return self._canonical_or_legacy("signal")
+
+    @property
     def trade_plan(self):
-        return self.analytics.get("trade_plan", {})
+        return self._canonical_or_legacy("trade_plan")
 
     @property
     def max_pain(self):
-        return self.analytics.get("max_pain", {})
+        return self._canonical_or_legacy("max_pain")
 
     @property
     def market_regime(self):
@@ -76,40 +95,49 @@ class MarketSnapshot:
 
     @property
     def pcr(self):
-        return self.analytics.get("pcr", {})
+        return self._canonical_or_legacy("pcr")
 
     @property
     def expected_move(self):
-        return self.analytics.get("expected_move", {})
+        return self._canonical_or_legacy("expected_move")
 
     @property
     def institutional(self):
-        return self.analytics.get("institutional_score", {})
+        return self._canonical_or_legacy("institutional_score")
 
     @property
     def atr(self):
-        return self.analytics.get("atr", {})
+        return self._canonical_or_legacy("atr")
 
     @property
     def market_structure(self):
-        return self.analytics.get("market_structure", {})
+        return self._canonical_or_legacy("market_structure")
 
     @property
     def dealer_flow(self):
-        return self.analytics.get("dealer_flow", {})
+        return self._canonical_or_legacy("dealer_flow")
 
     @property
     def liquidity(self):
-        return self.analytics.get("liquidity", {})
+        return self._canonical_or_legacy("liquidity")
+
+    @property
+    def iv_skew(self):
+        return self._canonical_or_legacy("iv_skew")
+
+    @property
+    def iv_smile(self):
+        return self._canonical_or_legacy("iv_smile")
 
     @property
     def iv(self):
+        """Backward-compatible legacy IV surface alias."""
         return self.analytics.get("iv", {})
 
     @property
     def oi_flow(self):
         """Canonical option-interest-flow output."""
-        return self.analytics.get("oi_flow", {})
+        return self._canonical_or_legacy("oi_flow")
 
     @property
     def oi(self):
@@ -121,4 +149,7 @@ class MarketSnapshot:
     # =====================================================
 
     def get(self, key, default=None):
+        """Read declared canonical analytics before the legacy projection."""
+        if self.market_context is not None and hasattr(self.market_context, key):
+            return getattr(self.market_context, key)
         return self.analytics.get(key, default)
