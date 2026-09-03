@@ -174,7 +174,7 @@ Consecutive OI validation also passed on the same live evidence path: cycle 1 â†
 - [x] Identified missing regression coverage for parity between typed `MarketContext`, pipeline return keys, and runtime analytics assignment
 - [x] Slice 3 audit baseline committed as `0b5840e`
 - [x] Slice 3 structural regression committed as `9bf8488`
-- [ ] Targeted Slice 3 regression pass
+- [x] Targeted Slice 3 regression pass â€” local repository execution: 6 passed in 2.39s across the Slice 1 + Slice 2 + Slice 3 targeted contract files
 - [ ] Existing replay/backward-compatibility regression pass
 - [ ] Full regression pass
 - [ ] Project state updated from actual implementation/test evidence
