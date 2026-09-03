@@ -89,9 +89,12 @@
 - [x] Route DecisionEngine direction and advanced-score IV/signal reads through canonical snapshot accessors
 - [x] Preserve `oi` and `prediction` as backward-compatible aliases without changing their semantic mapping
 - [x] Add regression coverage for canonical-vs-conflicting-analytics precedence and legacy snapshot compatibility
-- [ ] Local targeted regression
-- [ ] Replay/backward-compatibility regression
-- [ ] Full regression
+- [ ] Local targeted regression — **3 passed in 1.83s**, but full suite exposed compatibility failures
+- [x] Replay/backward-compatibility regression — **40 passed, 414 deselected in 7.87s**
+- [ ] Full regression — **7 failed, 447 passed in 18.67s** on `7e9d62a`
+- [x] Fix DecisionEngine to use `snapshot.get()` for legacy/fake snapshot compatibility
+- [x] Fix LiveEngine to attach canonical `market_context` after the established `save()` call rather than expanding the required save contract for legacy/fake snapshots
+- [ ] Re-run full regression after compatibility fixes
 - [ ] Slice 8 release/green gate
 
 ### R2-014 Release Gate Status
@@ -103,17 +106,17 @@
 
 ### Downstream Canonical Consumer Audit — Active
 - [x] `RuntimeContext.market_context` → `MarketSnapshot` semantic identity
-- [x] `MarketSnapshot` → `DecisionEngine` source-of-truth and legacy aliases — implementation complete; validation pending
+- [x] `MarketSnapshot` → `DecisionEngine` source-of-truth and legacy aliases — implementation complete; compatibility fix pending validation
 - [x] `RuntimeContext.market_context` → `FeatureExtractor/MarketExtractor`
 - [ ] `DashboardData.analytics` generic projection versus dedicated fields
 - [ ] Streamlit generic analytics display and duplicate/default mappings
 - [ ] Field-by-field disposition for all canonical analytics fields
 
 ### Slice 7 Audit Finding / Implementation Disposition
-`MarketExtractor` now consumes the typed canonical `MarketContext` first for expected move, market structure, technical, institutional score, probability, PCR and ATR. The legacy `ctx.analytics` projection remains an explicit fallback when the typed field is empty, preserving compatibility for legacy/unit callers. Local validation is green: targeted 2/2, replay/backward 40/40, full suite 451/451. Slice 7 release gate is closed.
+`MarketExtractor` consumes the typed canonical `MarketContext` first for expected move, market structure, technical, institutional score, probability, PCR and ATR. The legacy `ctx.analytics` projection remains an explicit fallback when the typed field is empty, preserving compatibility for legacy/unit callers. Local validation is green: targeted 2/2, replay/backward 40/40, full suite 451/451. Slice 7 release gate is closed.
 
 ### Slice 8 Audit Finding / Implementation Disposition
-`MarketSnapshot` previously stored only the serialized analytics dictionary, so `DecisionEngine` and `MarketAnalyzer` could not distinguish canonical typed analytics from a conflicting compatibility projection. Slice 8 now passes `RuntimeContext.market_context` into `MarketSnapshot`, makes declared snapshot access canonical-first, and retains analytics-only behavior for legacy callers. `DecisionEngine` direction and IV/signal inputs now use explicit canonical snapshot accessors. Validation is pending local execution; no Slice 8 green status is claimed yet.
+`MarketSnapshot` now carries typed canonical analytics and its declared accessors are canonical-first. Initial Slice 8 validation exposed seven compatibility failures: five legacy/fake snapshot fixtures expected mapping-style `get()` compatibility, while two LiveEngine tests used a fake snapshot whose historical `save()` signature did not accept the new optional keyword. These were compatibility regressions introduced by the boundary implementation, not failures of the canonical precedence tests. The fixes preserve the canonical behavior while restoring the historical fake/legacy interfaces. Validation after those fixes is still pending; no Slice 8 green status is claimed.
 
 ### Integrity / provenance reminder
 R2-013 live evidence on 2026-09-03 remains `coverage=COMPLETE`, `freshness=VERIFIED`, `reconciliation=PASS`, with `integrity=SUSPECT` due `pe_ltp_below_intrinsic`. Do not relabel this caveat as VALID.
