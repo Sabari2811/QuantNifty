@@ -11,7 +11,8 @@ def adapt_decision(dashboard) -> dict:
         "signal": signal.get("signal"),
         "bullish_probability": probability.get("bullish_probability"),
         "bearish_probability": probability.get("bearish_probability"),
-        "confidence": probability.get("confidence"),
+        # Decision confidence is owned by Decision -> Signal, not Probability.
+        "confidence": signal.get("confidence"),
         "reasons": probability.get("reasons", ()),
         "trade_plan_signal": trade_plan.get("signal"),
     }
