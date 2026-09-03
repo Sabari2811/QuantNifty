@@ -1,8 +1,7 @@
 ﻿from __future__ import annotations
 
-from datetime import datetime
-
 from analytics.intelligence.extractors.base_extractor import BaseExtractor
+from models.market_context import MarketContext
 
 
 class MarketExtractor(BaseExtractor):
@@ -11,6 +10,11 @@ class MarketExtractor(BaseExtractor):
 
     This extractor performs field mapping only.
     It does not calculate or reinterpret analytics.
+
+    The typed RuntimeContext.market_context is the canonical analytics
+    source. The legacy RuntimeContext.analytics dictionary remains a
+    compatibility fallback for older callers/snapshots that do not populate
+    the typed fields.
     """
 
     @staticmethod
@@ -27,6 +31,24 @@ class MarketExtractor(BaseExtractor):
         except (TypeError, ValueError):
             return default
 
+    @staticmethod
+    def _canonical_mapping(market_context, analytics, field_name):
+        """Return typed canonical mapping, falling back only when empty.
+
+        A default/empty MarketContext is common in legacy unit callers. In
+        that case the established serialized projection remains usable. When
+        the typed field contains data, it always wins over the compatibility
+        projection, preventing silent divergence from changing intelligence.
+        """
+        typed = MarketExtractor._mapping(
+            getattr(market_context, field_name, None)
+        )
+        if typed:
+            return typed
+        return MarketExtractor._mapping(
+            analytics.get(field_name, {})
+        )
+
     def extract(
         self,
         ctx,
@@ -37,17 +59,20 @@ class MarketExtractor(BaseExtractor):
             getattr(ctx, "analytics", None)
         )
 
+        market_context = getattr(
+            ctx,
+            "market_context",
+            None,
+        )
+
+        if not isinstance(market_context, MarketContext):
+            market_context = None
+
         snapshot = getattr(
             ctx,
             "snapshot",
             None,
         )
-
-        #
-        # ------------------------------------------------------
-        # Metadata
-        # ------------------------------------------------------
-        #
 
         timestamp = getattr(
             snapshot,
@@ -61,6 +86,8 @@ class MarketExtractor(BaseExtractor):
                 "timestamp",
                 None,
             )
+
+        from datetime import datetime
 
         if isinstance(timestamp, datetime):
             record.timestamp = timestamp
@@ -91,44 +118,29 @@ class MarketExtractor(BaseExtractor):
             ),
         ) or ""
 
-        #
-        # ------------------------------------------------------
-        # Market
-        # ------------------------------------------------------
-        #
-
         record.spot_price = self._number(
             getattr(
                 ctx,
                 "spot",
-                0.0,
+                getattr(market_context, "spot", 0.0),
             )
         )
 
-        expected_move = self._mapping(
-            analytics.get(
-                "expected_move",
-                {},
-            )
+        expected_move = self._canonical_mapping(
+            market_context,
+            analytics,
+            "expected_move",
         )
 
         record.atm_strike = self._number(
-            expected_move.get(
-                "atm_strike",
-                0.0,
-            )
+            expected_move.get("atm_strike", 0.0)
         )
 
-        # These are intentionally read only if an authoritative
-        # runtime/analytics source actually exposes them.
         record.futures_price = self._number(
             getattr(
                 ctx,
                 "futures_price",
-                analytics.get(
-                    "futures_price",
-                    0.0,
-                ),
+                analytics.get("futures_price", 0.0),
             )
         )
 
@@ -136,217 +148,121 @@ class MarketExtractor(BaseExtractor):
             getattr(
                 ctx,
                 "india_vix",
-                analytics.get(
-                    "india_vix",
-                    0.0,
-                ),
+                analytics.get("india_vix", 0.0),
             )
         )
 
-        #
-        # ------------------------------------------------------
-        # Market Structure
-        # ------------------------------------------------------
-        #
-
-        market_structure = self._mapping(
-            analytics.get(
-                "market_structure",
-                {},
-            )
+        market_structure = self._canonical_mapping(
+            market_context,
+            analytics,
+            "market_structure",
         )
 
-        technical = self._mapping(
-            analytics.get(
-                "technical",
-                {},
-            )
+        technical = self._canonical_mapping(
+            market_context,
+            analytics,
+            "technical",
         )
 
         ema = self._mapping(
             technical.get(
                 "ema",
-                technical.get(
-                    "EMA",
-                    {},
-                ),
+                technical.get("EMA", {}),
             )
         )
 
         record.trend = str(
-            ema.get(
-                "trend",
-                "",
-            )
-            or ""
+            ema.get("trend", "") or ""
         )
 
         record.market_structure = str(
-            market_structure.get(
-                "structure",
-                "",
-            )
-            or ""
+            market_structure.get("structure", "") or ""
         )
 
-        #
-        # ------------------------------------------------------
-        # Institutional / Probability
-        # ------------------------------------------------------
-        #
-
-        institutional_score = self._mapping(
-            analytics.get(
-                "institutional_score",
-                {},
-            )
+        institutional_score = self._canonical_mapping(
+            market_context,
+            analytics,
+            "institutional_score",
         )
 
         institutional = self._mapping(
-            institutional_score.get(
-                "institutional",
-                {},
-            )
+            institutional_score.get("institutional", {})
         )
 
         record.institutional_bias = str(
-            institutional.get(
-                "bias",
-                "",
-            )
-            or ""
+            institutional.get("bias", "") or ""
         )
 
-        probability = self._mapping(
-            analytics.get(
-                "probability",
-                {},
-            )
+        probability = self._canonical_mapping(
+            market_context,
+            analytics,
+            "probability",
         )
 
         record.probability = self._number(
-            probability.get(
-                "bullish_probability",
-                0.0,
-            )
+            probability.get("bullish_probability", 0.0)
         )
 
-        #
-        # ------------------------------------------------------
-        # Technicals
-        # ------------------------------------------------------
-        #
-
         ad = self._mapping(
-            technical.get(
-                "ad_ratio",
-                {}
-            )
+            technical.get("ad_ratio", {})
         )
 
         if ad:
             record.ad_ratio = self._number(
-                ad.get(
-                    "value",
-                    ad.get(
-                        "ratio",
-                        0.0,
-                    ),
-                )
+                ad.get("value", ad.get("ratio", 0.0))
             )
 
-        pcr = self._mapping(
-            analytics.get(
-                "pcr",
-                {},
-            )
+        pcr = self._canonical_mapping(
+            market_context,
+            analytics,
+            "pcr",
         )
 
         record.pcr = self._number(
-            pcr.get(
-                "oi_pcr",
-                pcr.get(
-                    "pcr",
-                    0.0,
-                ),
-            )
+            pcr.get("oi_pcr", pcr.get("pcr", 0.0))
         )
 
         rsi = self._mapping(
-            technical.get(
-                "rsi",
-                {},
-            )
+            technical.get("rsi", {})
         )
 
         record.rsi = self._number(
-            rsi.get(
-                "rsi",
-                0.0,
-            )
+            rsi.get("rsi", 0.0)
         )
 
-        atr = self._mapping(
-            analytics.get(
-                "atr",
-                {},
-            )
+        atr = self._canonical_mapping(
+            market_context,
+            analytics,
+            "atr",
         )
 
         record.atr = self._number(
-            atr.get(
-                "atr",
-                0.0,
-            )
+            atr.get("atr", 0.0)
         )
 
         adx = self._mapping(
-            technical.get(
-                "adx",
-                {},
-            )
+            technical.get("adx", {})
         )
 
         record.adx = self._number(
-            adx.get(
-                "adx",
-                0.0,
-            )
+            adx.get("adx", 0.0)
         )
 
         vwap = self._mapping(
-            technical.get(
-                "vwap",
-                {},
-            )
+            technical.get("vwap", {})
         )
 
         record.vwap_distance = self._number(
-            vwap.get(
-                "distance",
-                0.0,
-            )
+            vwap.get("distance", 0.0)
         )
 
-        #
-        # ------------------------------------------------------
-        # Expected Move / AI fields
-        # ------------------------------------------------------
-        #
-
         record.expected_move = self._number(
-            expected_move.get(
-                "expected_move",
-                0.0,
-            )
+            expected_move.get("expected_move", 0.0)
         )
 
         record.expected_probability = self._number(
             expected_move.get(
                 "probability",
-                expected_move.get(
-                    "expected_probability",
-                    0.0,
-                ),
+                expected_move.get("expected_probability", 0.0),
             )
         )
