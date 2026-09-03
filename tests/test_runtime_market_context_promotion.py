@@ -41,7 +41,7 @@ def test_runtime_context_has_typed_market_context():
     assert isinstance(RuntimeContext().market_context, MarketContext)
 
 
-def test_live_engine_promotes_pipeline_context_before_analytics_projection():
+def test_live_engine_promotes_pipeline_context_and_preserves_projection_paths():
     engine_path = Path(__file__).parents[1] / "engine" / "live_engine.py"
     tree = ast.parse(engine_path.read_text(encoding="utf-8"))
 
@@ -73,11 +73,6 @@ def test_live_engine_promotes_pipeline_context_before_analytics_projection():
     assert market_context_assignments
     assert analytics_assignments
 
-    # The normal production path must first promote the typed context returned
-    # directly by AnalyticsPipeline. Replay recompute may later restore the
-    # recorded projection into the typed context, so select the direct
-    # ``computed_context`` assignment rather than assuming it is the earliest
-    # assignment in the function.
     direct_promotions = [
         node
         for node in market_context_assignments
@@ -86,10 +81,24 @@ def test_live_engine_promotes_pipeline_context_before_analytics_projection():
     ]
     assert direct_promotions
 
-    promotion = min(direct_promotions, key=lambda node: node.lineno)
-    projection = min(analytics_assignments, key=lambda node: node.lineno)
+    analytics_names = {
+        node.value.id
+        for node in analytics_assignments
+        if isinstance(node.value, ast.Name)
+    }
+    assert "computed_analytics" in analytics_names
+    assert "expected_analytics" in analytics_names
 
-    assert promotion.lineno < projection.lineno
+    # The direct computed-context promotion is the normal production
+    # canonicalization path. Replay recompute may later restore the recorded
+    # projection into the typed context, so global source-order comparisons
+    # against the earliest analytics assignment are invalid.
+    assert any(
+        node.lineno > direct_promotions[0].lineno
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "computed_analytics"
+        for node in analytics_assignments
+    )
 
 
 def test_market_context_and_serialized_analytics_surface_have_same_keys():
