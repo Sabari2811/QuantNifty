@@ -154,3 +154,14 @@ Consecutive OI validation also passed on the same live evidence path: cycle 1 �
 - [ ] Full regression pass — not yet executable in this session
 - [x] Runtime evidence for Slice 1 not required as a new provider/UI gate; slice is an internal typed-boundary change. A local structural smoke check passed for the 22 canonical analytics fields, but this is not substituted for the repository pytest suite
 - [ ] Update project state from actual implementation/test evidence
+
+### Slice 2 — Canonical Context → Snapshot / Replay
+- [x] Snapshot/replay boundary audited before implementation
+- [x] Confirmed snapshot architecture persists `ctx.analytics` as `analytics.json`; no redundant `MarketContext` artifact introduced
+- [x] Confirmed `ReplayLoader` restores the analytics artifact as the canonical replay analytics dictionary
+- [x] Deterministic recorder → replay regression added for all 22 canonical analytics fields — commit `4a658c0`
+- [ ] Targeted regression pass — not executable through the repository tooling available in this session
+- [ ] Full regression pass — not executable through the repository tooling available in this session
+- [ ] Backward-compatibility replay regression pass after Slice 2 change
+- [ ] Project state updated from actual implementation/test evidence
+- [ ] Slice 2 release/green gate
