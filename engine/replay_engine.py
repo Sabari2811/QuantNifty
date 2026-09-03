@@ -72,43 +72,11 @@ class ReplayEngine:
     @staticmethod
     def _restore_market_context(analytics, *, spot=0.0, greeks=None):
         """Restore the typed MarketContext from a recorded analytics payload."""
-        if not isinstance(analytics, dict):
-            context = MarketContext()
-            context.spot = spot
-            context.greeks = greeks
-            return context
-
-        context = MarketContext()
-        for field_name in (
-            "dealer",
-            "dealer_flow",
-            "liquidity",
-            "gamma_flip",
-            "gamma_wall",
-            "oi_flow",
-            "iv_skew",
-            "iv_smile",
-            "expected_move",
-            "max_pain",
-            "pcr",
-            "market_structure",
-            "atr",
-            "volatility",
-            "technical",
-            "probability",
-            "signal",
-            "smart_strike",
-            "trade_plan",
-            "risk",
-            "institutional_score",
-            "market_map",
-        ):
-            if field_name in analytics:
-                setattr(context, field_name, analytics[field_name])
-
-        context.spot = spot
-        context.greeks = greeks
-        return context
+        return MarketContext.from_analytics(
+            analytics,
+            spot=spot,
+            greeks=greeks,
+        )
 
     # ==========================================================
     # Helpers
