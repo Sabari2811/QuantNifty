@@ -84,7 +84,7 @@ class MarketDataPipeline:
         if assessment.status == "fresh":
             return assessment.provider_timestamp, True, max(0.0, assessment.transport_age_ms / 1000.0), ("provider_quote_timestamp",)
         if assessment.status == "fresh_with_clock_skew":
-            return assessment.provider_timestamp, True, assessment.transport_age_ms / 1000.0, ("provider_quote_timestamp", "provider_quote_timestamp_clock_skew")
+            return assessment.provider_timestamp, True, 0.0, ("provider_quote_timestamp", "provider_quote_timestamp_clock_skew")
         if assessment.status == "stale":
             return assessment.provider_timestamp, False, None, ("provider_quote_timestamp", "provider_quote_timestamp_stale")
         return assessment.provider_timestamp, False, None, ("provider_quote_timestamp", "provider_quote_timestamp_clock_skew_excessive")
