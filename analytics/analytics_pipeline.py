@@ -420,18 +420,14 @@ class AnalyticsPipeline:
         context.market_structure = market_structure
 
         context.atr = atr
-
         context.volatility = volatility
+        context.technical = technical
 
         context.probability = probability
-
         context.signal = signal
-
-        context.smart_strike = smart_strike
-
-        context.trade_plan = trade_plan
         context.institutional_score = institutional_score
-
+        context.smart_strike = smart_strike
+        context.trade_plan = trade_plan
         context.risk = risk
 
         # =====================================================
@@ -472,6 +468,10 @@ class AnalyticsPipeline:
             spot=spot_price
 
         )
+
+        # Market map is produced after the initial context assembly, so
+        # assign it explicitly rather than relying on a dynamic attribute.
+        context.market_map = market_map
 
         return {
 
