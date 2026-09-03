@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, is_dataclass
+from datetime import date, datetime
 from math import isclose
 from types import SimpleNamespace
 from typing import Any
@@ -37,6 +39,35 @@ def _normalize(value):
         except Exception:
             pass
     return value
+
+
+def _recorded_json_projection(value):
+    """Mirror SnapshotRecorder JSON conversion for replay parity checks.
+
+    Recorded analytics are JSON artifacts. DataFrames and other unsupported
+    objects therefore follow the recorder's ``str(value)`` fallback rather
+    than being compared as in-memory objects.
+    """
+    if is_dataclass(value):
+        return _recorded_json_projection(asdict(value))
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(k): _recorded_json_projection(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_recorded_json_projection(v) for v in value]
+    if isinstance(value, pd.DataFrame):
+        return str(value)
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            pass
+    try:
+        json.dumps(value)
+        return value
+    except (TypeError, ValueError):
+        return str(value)
 
 
 def _compare(expected, actual, path: str, mismatches: list[str], tolerance: float):
@@ -90,15 +121,16 @@ def compare_replay_outputs(
     expected_intelligence,
     actual_intelligence,
     *,
+    expected_analytics=None,
+    actual_market_context=None,
     tolerance: float = 1e-9,
 ) -> ReplayEquivalence:
-    """Compare canonical recorded outputs with replay-recomputed outputs.
+    """Compare recorded and recomputed replay outputs.
 
-    ``authoritative_signal`` is execution-mutation provenance captured on the
-    recomputed Decision so the original signal survives downstream mutation.
-    Older recorded snapshots predate that field, so its absence in the
-    recorded artifact must not create replay drift. When both artifacts carry
-    the field, it remains part of the equivalence comparison.
+    The optional analytics/context comparison validates the typed canonical
+    MarketContext against the recorded analytics projection. Only canonical
+    analytics fields actually present in the recorded artifact are compared,
+    preserving compatibility with older snapshots that predate a field.
     """
     mismatches: list[str] = []
 
@@ -116,4 +148,42 @@ def compare_replay_outputs(
 
     _compare(expected_decision_normalized, actual_decision_normalized, "decision", mismatches, tolerance)
     _compare(expected_intelligence, actual_intelligence, "intelligence", mismatches, tolerance)
+
+    if isinstance(expected_analytics, dict) and actual_market_context is not None:
+        canonical_fields = (
+            "dealer",
+            "dealer_flow",
+            "liquidity",
+            "gamma_flip",
+            "gamma_wall",
+            "oi_flow",
+            "iv_skew",
+            "iv_smile",
+            "expected_move",
+            "max_pain",
+            "pcr",
+            "market_structure",
+            "atr",
+            "volatility",
+            "technical",
+            "oi_shift",
+            "probability",
+            "signal",
+            "institutional_score",
+            "smart_strike",
+            "trade_plan",
+            "risk",
+            "market_map",
+        )
+        expected_surface = {
+            field_name: _recorded_json_projection(expected_analytics[field_name])
+            for field_name in canonical_fields
+            if field_name in expected_analytics
+        }
+        actual_surface = {
+            field_name: _recorded_json_projection(getattr(actual_market_context, field_name))
+            for field_name in expected_surface
+        }
+        _compare(expected_surface, actual_surface, "analytics", mismatches, tolerance)
+
     return ReplayEquivalence(not mismatches, tuple(mismatches))
