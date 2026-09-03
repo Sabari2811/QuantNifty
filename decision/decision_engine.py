@@ -40,7 +40,7 @@ class DecisionEngine:
         self.execution = ExecutionEngine()
 
     def _extract_direction(self, snapshot):
-        signal_payload = snapshot.get("signal", None)
+        signal_payload = snapshot.signal
         if isinstance(signal_payload, dict):
             direction = signal_payload.get("signal")
         elif isinstance(signal_payload, str):
@@ -52,7 +52,7 @@ class DecisionEngine:
         return None
 
     def _calculate_advanced_score(self, snapshot, direction):
-        signal_payload = snapshot.get("signal", {"signal": direction})
+        signal_payload = snapshot.signal
         if not isinstance(signal_payload, dict):
             signal_payload = {"signal": direction}
         score_result = self.scoring.calculate(
@@ -62,8 +62,8 @@ class DecisionEngine:
             market_structure=snapshot.market_structure,
             pcr=snapshot.pcr,
             expected_move=snapshot.expected_move,
-            iv_skew=snapshot.get("iv_skew", {}),
-            iv_smile=snapshot.get("iv_smile", {}),
+            iv_skew=snapshot.iv_skew,
+            iv_smile=snapshot.iv_smile,
             atr=snapshot.atr,
             spot=snapshot.spot,
             signal=signal_payload,
