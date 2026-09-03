@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from core.data_provenance import RuntimeDataProvenance
+from models.market_context import MarketContext
 
 
 @dataclass
@@ -11,6 +12,10 @@ class RuntimeContext:
 
     Shared by LiveEngine, Analytics Pipeline, Decision Engine,
     Intelligence Layer, Paper Trading, and Dashboard.
+
+    ``market_context`` is the typed canonical analytics artifact produced by
+    ``AnalyticsPipeline``. ``analytics`` remains the serialized dictionary
+    compatibility projection used by snapshots/replay and legacy consumers.
     """
 
     symbol: str = "NIFTY"
@@ -27,6 +32,12 @@ class RuntimeContext:
         default_factory=RuntimeDataProvenance
     )
 
+    # Canonical typed analytics state. This is the runtime authority for
+    # analytics produced by AnalyticsPipeline.
+    market_context: MarketContext = field(default_factory=MarketContext)
+
+    # Backward-compatible serialized analytics projection. Snapshot/replay
+    # continues to persist this established dictionary contract.
     analytics: dict = field(default_factory=dict)
     features: dict = field(default_factory=dict)
     regime: Any = None
