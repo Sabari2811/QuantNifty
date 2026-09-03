@@ -2,8 +2,8 @@ import ast
 from dataclasses import fields
 from pathlib import Path
 
-from models.market_context import MarketContext
 from core.runtime_context import RuntimeContext
+from models.market_context import MarketContext
 
 
 EXPECTED_ANALYTICS_FIELDS = {
@@ -45,27 +45,45 @@ def test_live_engine_promotes_pipeline_context_before_analytics_projection():
     engine_path = Path(__file__).parents[1] / "engine" / "live_engine.py"
     tree = ast.parse(engine_path.read_text(encoding="utf-8"))
 
-    assignments = []
+    market_context_assignments = []
+    analytics_assignments = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign):
             continue
         for target in node.targets:
+            if not isinstance(target, ast.Attribute):
+                continue
             if (
-                isinstance(target, ast.Attribute)
-                and isinstance(target.value, ast.Attribute)
+                isinstance(target.value, ast.Attribute)
                 and isinstance(target.value.value, ast.Name)
                 and target.value.value.id == "self"
-                and target.value.attr == "market_context"
+                and target.value.attr == "ctx"
+                and target.attr == "market_context"
             ):
-                assignments.append(node)
+                market_context_assignments.append(node)
+            if (
+                isinstance(target.value, ast.Attribute)
+                and isinstance(target.value.value, ast.Name)
+                and target.value.value.id == "self"
+                and target.value.attr == "ctx"
+                and target.attr == "analytics"
+            ):
+                analytics_assignments.append(node)
 
-    assert assignments
-    assignment = assignments[0]
-    assert isinstance(assignment.value, ast.Name)
-    assert assignment.value.id == "computed_context"
+    assert market_context_assignments
+    assert analytics_assignments
+
+    promotion = min(market_context_assignments, key=lambda node: node.lineno)
+    projection = min(analytics_assignments, key=lambda node: node.lineno)
+
+    assert isinstance(promotion.value, ast.Name)
+    assert promotion.value.id == "computed_context"
+    assert promotion.lineno < projection.lineno
 
 
 def test_market_context_and_serialized_analytics_surface_have_same_keys():
     context = MarketContext()
-    context_dict = {name: getattr(context, name) for name in EXPECTED_ANALYTICS_FIELDS}
+    context_dict = {
+        name: getattr(context, name) for name in EXPECTED_ANALYTICS_FIELDS
+    }
     assert set(context_dict) == EXPECTED_ANALYTICS_FIELDS
