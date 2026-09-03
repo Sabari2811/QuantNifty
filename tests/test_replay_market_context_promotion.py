@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from core.runtime_context import RuntimeContext
 from engine.replay_engine import ReplayEngine
 from models.market_context import MarketContext
+from simulation.replay_equivalence import compare_replay_outputs
 
 
 EXPECTED_FIELDS = {
@@ -82,3 +83,40 @@ def test_replay_missing_analytics_preserves_typed_context_without_fabrication():
     assert ctx.market_context.signal == {}
     assert ctx.market_context.spot == snapshot.spot
     assert ctx.market_context.greeks == "recorded-greeks"
+
+
+def test_replay_equivalence_includes_typed_market_context_parity():
+    context = MarketContext()
+    for field_name, expected in EXPECTED_FIELDS.items():
+        setattr(context, field_name, expected)
+
+    result = compare_replay_outputs(
+        expected_decision={"signal": "WAIT"},
+        actual_decision={"signal": "WAIT"},
+        expected_intelligence={"score": 73},
+        actual_intelligence={"score": 73},
+        expected_analytics=EXPECTED_FIELDS,
+        actual_market_context=context,
+    )
+
+    assert result.equivalent is True
+    assert result.mismatches == ()
+
+
+def test_replay_equivalence_flags_typed_market_context_drift():
+    context = MarketContext()
+    for field_name, expected in EXPECTED_FIELDS.items():
+        setattr(context, field_name, expected)
+    context.signal = {"signal": "BUY"}
+
+    result = compare_replay_outputs(
+        expected_decision={"signal": "WAIT"},
+        actual_decision={"signal": "WAIT"},
+        expected_intelligence={"score": 73},
+        actual_intelligence={"score": 73},
+        expected_analytics=EXPECTED_FIELDS,
+        actual_market_context=context,
+    )
+
+    assert result.equivalent is False
+    assert "analytics.signal.signal" in result.mismatches
