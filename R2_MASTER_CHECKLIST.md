@@ -150,8 +150,8 @@ Consecutive OI validation also passed on the same live evidence path: cycle 1 �
 - [x] Declare every analytics result currently attached by `AnalyticsPipeline.run()` in `MarketContext` — source audit and implementation commit `d2150c2` confirm the fields are explicitly declared
 - [x] Preserve existing pipeline computations and populate the declared fields without changing analytics semantics — implementation only canonicalizes existing assignments; no engine calculations changed
 - [x] Add regression coverage for canonical context surface and pipeline population — `tests/test_market_context_canonical_surface.py` added
-- [ ] Targeted regression pass — not yet executable in this session
-- [ ] Full regression pass — not yet executable in this session
+- [x] Targeted regression pass — local repository execution: 4 passed in 2.81s across the Slice 1 + Slice 2 targeted contract files
+- [ ] Full regression pass — not yet run after R2-014 changes
 - [x] Runtime evidence for Slice 1 not required as a new provider/UI gate; slice is an internal typed-boundary change. A local structural smoke check passed for the 22 canonical analytics fields, but this is not substituted for the repository pytest suite
 - [ ] Update project state from actual implementation/test evidence
 
@@ -160,8 +160,22 @@ Consecutive OI validation also passed on the same live evidence path: cycle 1 �
 - [x] Confirmed snapshot architecture persists `ctx.analytics` as `analytics.json`; no redundant `MarketContext` artifact introduced
 - [x] Confirmed `ReplayLoader` restores the analytics artifact as the canonical replay analytics dictionary
 - [x] Deterministic recorder → replay regression added for all 22 canonical analytics fields — commit `4a658c0`
-- [ ] Targeted regression pass — not executable through the repository tooling available in this session
-- [ ] Full regression pass — not executable through the repository tooling available in this session
+- [x] Targeted regression pass — local repository execution: 4 passed in 2.81s across the Slice 1 + Slice 2 targeted contract files
+- [ ] Full regression pass — not yet run after R2-014 changes
 - [ ] Backward-compatibility replay regression pass after Slice 2 change
 - [ ] Project state updated from actual implementation/test evidence
 - [ ] Slice 2 release/green gate
+
+### Slice 3 — Runtime Analytics Handoff Audit
+- [x] Audited `AnalyticsPipeline.run()` → `LiveEngine.ctx.analytics` → `MarketSnapshot.analytics` → snapshot/replay boundary
+- [x] Confirmed production `LiveEngine` assigns the complete pipeline result to `ctx.analytics` in normal live execution
+- [x] Confirmed `MarketSnapshot.save()` preserves the runtime analytics dictionary without recomputation/filtering
+- [x] Confirmed `SnapshotRecorder` persists `ctx.analytics` and replay restores the artifact as a dictionary
+- [x] Identified missing regression coverage for parity between typed `MarketContext`, pipeline return keys, and runtime analytics assignment
+- [x] Slice 3 audit baseline committed as `0b5840e`
+- [x] Slice 3 structural regression committed as `9bf8488`
+- [ ] Targeted Slice 3 regression pass
+- [ ] Existing replay/backward-compatibility regression pass
+- [ ] Full regression pass
+- [ ] Project state updated from actual implementation/test evidence
+- [ ] Slice 3 release/green gate
