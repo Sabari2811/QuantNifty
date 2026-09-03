@@ -73,11 +73,22 @@ def test_live_engine_promotes_pipeline_context_before_analytics_projection():
     assert market_context_assignments
     assert analytics_assignments
 
-    promotion = min(market_context_assignments, key=lambda node: node.lineno)
+    # The normal production path must first promote the typed context returned
+    # directly by AnalyticsPipeline. Replay recompute may later restore the
+    # recorded projection into the typed context, so select the direct
+    # ``computed_context`` assignment rather than assuming it is the earliest
+    # assignment in the function.
+    direct_promotions = [
+        node
+        for node in market_context_assignments
+        if isinstance(node.value, ast.Name)
+        and node.value.id == "computed_context"
+    ]
+    assert direct_promotions
+
+    promotion = min(direct_promotions, key=lambda node: node.lineno)
     projection = min(analytics_assignments, key=lambda node: node.lineno)
 
-    assert isinstance(promotion.value, ast.Name)
-    assert promotion.value.id == "computed_context"
     assert promotion.lineno < projection.lineno
 
 
