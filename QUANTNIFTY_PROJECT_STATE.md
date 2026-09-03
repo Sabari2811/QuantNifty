@@ -6,12 +6,14 @@
 
 - Repository: `Sabari2811/QuantNifty`
 - Current branch: `r2-011-canonical-snapshot-provenance`
-- Current HEAD at handoff: `bf9ab36103f3379d4d3f6b2403a34569c18e43fc`
+- Current HEAD at handoff baseline: `bf9ab36103f3379d4d3f6b2403a34569c18e43fc`
+- Latest continuation-state commit after adding this document: `ccffb8b` (`docs: add QuantNifty project continuation state`)
 - Project: QuantNifty / NiftySignalEngine
 - Local Windows workspace: `D:\Projects\NiftySignalEngine`
 - Python environment: project `venv`, PowerShell
 - Provider: INDMoney / INDstocks
 - Primary objective: production-grade NIFTY options analytics, decision intelligence, live validation, replay, and dashboard with canonical backend data and no silent/wrong UI mappings.
+- **Working-tree note at handoff:** the user has local uncommitted/untracked files, including generated audit/search artifacts, backups, and a modified `data/instruments/fno.csv`. These are not part of the committed continuation state and must not be assumed to be project source-of-truth without inspection.
 
 ## 2. Non-Negotiable Engineering Rules
 
@@ -29,6 +31,8 @@
 12. **Every production change gets regression coverage where behavior changes.**
 13. **Do not mark a checklist item green without actual evidence.**
 14. **Prefer exact runtime evidence over assumptions.**
+15. **Do not treat local generated artifacts/backups as authoritative code unless the audit explicitly promotes them.**
+16. **Do not clean/revert unrelated user working-tree changes blindly.** First inventory and classify them.
 
 ## 3. Completed Major Milestones
 
@@ -294,6 +298,7 @@ Do not collapse this into one generic health flag.
 Key areas include:
 
 - `R2_MASTER_CHECKLIST.md` — master validation checklist
+- `QUANTNIFTY_PROJECT_STATE.md` — permanent continuation/handoff state
 - `providers/indmoney_websocket.py` — timestamp-bearing WebSocket feed
 - `providers/live_quote_coordinator.py` — bounded live quote collection
 - `engine/market_data_pipeline.py` — canonical market-data acquisition/provenance
@@ -334,7 +339,7 @@ Therefore the next chat must **not invent an R2-014 feature list**.
 
 Required next action:
 
-1. Audit the repository at this exact commit.
+1. Audit the repository at the current commit.
 2. Inventory analytics engines and their consumers.
 3. Map each important analytics capability through:
    - provider input
@@ -346,13 +351,15 @@ Required next action:
    - UI adapter/display
    - tests
    - live evidence where applicable
-4. Identify the highest-value incomplete canonical path.
-5. Define R2-014 scope and checklist from that audit.
-6. Implement the first justified slice.
-7. Add regression tests.
-8. Run targeted tests and full regression.
-9. Perform live validation when the capability depends on live data.
-10. Update `R2_MASTER_CHECKLIST.md` only from actual evidence.
+4. Inventory and classify uncommitted/untracked local artifacts before modifying or deleting any of them.
+5. Identify the highest-value incomplete canonical path.
+6. Define R2-014 scope and checklist from that audit.
+7. Implement the first justified slice.
+8. Add regression tests.
+9. Run targeted tests and full regression.
+10. Perform live validation when the capability depends on live data.
+11. Update `R2_MASTER_CHECKLIST.md` only from actual evidence.
+12. Update this state file whenever a major milestone, architecture decision, semantic contract, release gate, or known caveat changes materially.
 
 Do not skip the audit merely because an engine already exists in the codebase.
 
@@ -390,22 +397,26 @@ At the start of a new chat:
 ```powershell
 git checkout r2-011-canonical-snapshot-provenance
 git pull origin r2-011-canonical-snapshot-provenance
-```
-
-Then verify:
-
-```powershell
 git status
 git log -1 --oneline
 ```
 
-Expected handoff commit:
+Then read:
 
 ```text
-bf9ab36 docs: add QuantNifty project continuation state
+QUANTNIFTY_PROJECT_STATE.md
+R2_MASTER_CHECKLIST.md
 ```
 
-If the branch has advanced, use the latest commit and read this file again before proceeding.
+Classify the working tree before touching unrelated changes. Do not reset/clean the tree just to create a convenient baseline.
+
+The branch may advance after this document was written. Prefer the latest branch HEAD and re-read this file before proceeding. At the moment of the continuation-state pull observed by the user, the local branch was synchronized at:
+
+```text
+ccffb8b docs: add QuantNifty project continuation state
+```
+
+The previous R2-013 closure evidence was based on `bf9ab36` and should remain interpreted as historical evidence unless newer runtime evidence supersedes it.
 
 ## 18. New-Chat Bootstrap Prompt
 
@@ -415,12 +426,12 @@ Copy this into the first message of the new chat:
 >
 > First read `QUANTNIFTY_PROJECT_STATE.md` and `R2_MASTER_CHECKLIST.md` from the current branch. Treat the repository, Git history, tests, and fresh runtime evidence as authoritative. Do not ask me to repeat project context.
 >
-> Current handoff branch is `r2-011-canonical-snapshot-provenance`; handoff commit is `bf9ab36` unless the repository has advanced.
+> Current handoff branch is `r2-011-canonical-snapshot-provenance`; the branch may have advanced beyond the historical handoff commit, so use the latest commit and re-read the state file.
 >
-> R2-013 is closed and fully green. Preserve all established provenance, freshness, integrity, Decision ↔ Intelligence, replay, and backend → UI contracts. Do not invent R2-014 scope. Audit the current repository first, identify the highest-value incomplete canonical path, create the R2-014 audit/checklist baseline, and then implement the first justified slice with regression and runtime validation. Maintain the gap-free, audit-first workflow and do not mark anything green without evidence.
+> R2-013 is closed and fully green based on the recorded evidence. Preserve all established provenance, freshness, integrity, Decision ↔ Intelligence, replay, and backend → UI contracts. Do not invent R2-014 scope. First audit the current repository, including the local working tree classification where applicable, identify the highest-value incomplete canonical path, create the R2-014 audit/checklist baseline, and then implement the first justified slice with regression and runtime validation. Maintain the gap-free, audit-first workflow and do not mark anything green without evidence.
 
 ## 19. Handoff Integrity
 
 This file is itself a continuity aid. It must be updated whenever a major milestone, architecture decision, semantic contract, release gate, or known caveat changes materially.
 
-**Current handoff conclusion:** R2-013 is closed. The next chat should begin with a repository audit for R2-014 rather than feature invention.
+**Current handoff conclusion:** R2-013 is closed based on recorded evidence. The next chat should begin with a repository audit for R2-014 rather than feature invention, while preserving and classifying any user-local uncommitted/untracked work before making destructive changes.
