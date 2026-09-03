@@ -97,6 +97,17 @@
 - [x] Full regression — **454 passed in 17.37s**
 - [x] Slice 8 release/green gate
 
+### Slice 9 — Dashboard Decision → Streamlit Canonical Mapping
+- [x] Audit identified `market_banner.py` reading decision confidence directly from `dashboard.signal` while `decision_adapter.py` sourced it from `dashboard.probability`
+- [x] Confirm authoritative backend ownership: decision confidence originates from `Decision.signal.confidence`
+- [x] Make `adapt_decision()` source confidence from canonical `DashboardData.signal`
+- [x] Route `market_banner.py` through `adapt_decision()` so signal, probabilities and confidence share one dashboard decision mapping
+- [x] Add regression coverage proving conflicting probability confidence cannot override canonical decision confidence
+- [x] Targeted regression — **2 passed in 0.17s**
+- [x] Replay/backward-compatibility regression — **40 passed, 414 deselected in 7.51s**
+- [x] Full regression — **454 passed in 20.73s**
+- [x] Slice 9 release/green gate
+
 ### R2-014 Release Gate Status
 - [x] Slice 5 release gate complete
 - [x] Slice 6 release gate complete
@@ -117,6 +128,9 @@
 
 ### Slice 8 Audit Finding / Implementation Disposition
 `MarketSnapshot` now carries typed canonical analytics and its declared accessors are canonical-first. Initial Slice 8 validation exposed seven compatibility failures: five legacy/fake snapshot fixtures expected mapping-style `get()` compatibility, while two LiveEngine tests used a fake snapshot whose historical `save()` signature did not accept the new optional keyword. The compatibility fixes restored those historical interfaces without weakening canonical precedence. Final local validation is green: targeted 3/3, decision provenance 3/3, strategy provenance 2/2, LiveEngine intelligence 2/2, replay/backward 40/40, full suite 454/454. Slice 8 release gate is closed.
+
+### Slice 9 Audit Finding / Implementation Disposition
+The Streamlit market banner had a concrete canonical-mapping inconsistency: it read confidence directly from `DashboardData.signal`, while the shared decision adapter read confidence from `DashboardData.probability`. Backend ownership confirms confidence belongs to `Decision.signal.confidence`. The decision adapter is now canonical-first for confidence, and the market banner consumes that adapter for the decision-facing fields, eliminating a competing confidence source. Local validation is green: targeted 2/2, replay/backward 40/40, full suite 454/454. Slice 9 release gate is closed.
 
 ### Integrity / provenance reminder
 R2-013 live evidence on 2026-09-03 remains `coverage=COMPLETE`, `freshness=VERIFIED`, `reconciliation=PASS`, with `integrity=SUSPECT` due `pe_ltp_below_intrinsic`. Do not relabel this caveat as VALID.
