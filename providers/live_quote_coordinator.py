@@ -4,7 +4,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterable
 
-from providers.indmoney_websocket import IndmoneyPriceFeed, LiveQuoteTick, websocket_instrument
+from providers.indmoney_websocket import (
+    IndmoneyPriceFeed,
+    LiveQuoteFreshness,
+    LiveQuoteTick,
+    assess_quote_freshness,
+    websocket_instrument,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,6 +19,7 @@ class LiveQuoteBatch:
 
     ticks: dict[str, LiveQuoteTick]
     received_at: dict[str, datetime]
+    freshness: dict[str, LiveQuoteFreshness]
     acquired_at: datetime
     connected_at: datetime
     completed_at: datetime
@@ -21,6 +28,27 @@ class LiveQuoteBatch:
     def latest_provider_timestamp(self) -> datetime | None:
         timestamps = [tick.timestamp for tick in self.ticks.values()]
         return max(timestamps) if timestamps else None
+
+    @property
+    def freshness_verified(self) -> bool:
+        return bool(self.ticks) and all(
+            assessment.status in {"fresh", "fresh_with_clock_skew"}
+            for assessment in self.freshness.values()
+        ) and len(self.freshness) == len(self.ticks)
+
+    @property
+    def freshness_reasons(self) -> tuple[str, ...]:
+        reasons: list[str] = []
+        for assessment in self.freshness.values():
+            if assessment.status == "fresh_with_clock_skew":
+                reasons.append("provider_quote_timestamp_clock_skew")
+            elif assessment.status == "clock_skew":
+                reasons.append("provider_quote_timestamp_clock_skew_excessive")
+            elif assessment.status == "stale":
+                reasons.append("provider_quote_timestamp_stale")
+            else:
+                reasons.append("provider_quote_timestamp")
+        return tuple(dict.fromkeys(reasons))
 
 
 class LiveQuoteCoordinator:
@@ -55,6 +83,7 @@ class LiveQuoteCoordinator:
         started_at = datetime.now(timezone.utc)
         ticks: dict[str, LiveQuoteTick] = {}
         received_at: dict[str, datetime] = {}
+        freshness: dict[str, LiveQuoteFreshness] = {}
         with IndmoneyPriceFeed(self.access_token, timeout=self.timeout) as feed:
             connected_at = datetime.now(timezone.utc)
             feed.subscribe(requested, mode=mode)
@@ -71,10 +100,14 @@ class LiveQuoteCoordinator:
                 if current is None or tick.timestamp_ms >= current.timestamp_ms:
                     ticks[requested_instrument] = tick
                     received_at[requested_instrument] = observed_at
+                    freshness[requested_instrument] = assess_quote_freshness(
+                        tick, received_at=observed_at
+                    )
             completed_at = datetime.now(timezone.utc)
         return LiveQuoteBatch(
             ticks=ticks,
             received_at=received_at,
+            freshness=freshness,
             acquired_at=completed_at,
             connected_at=connected_at,
             completed_at=completed_at,
