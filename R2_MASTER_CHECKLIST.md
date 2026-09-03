@@ -162,7 +162,7 @@ Consecutive OI validation also passed on the same live evidence path: cycle 1 �
 - [x] Deterministic recorder → replay regression added for all 22 canonical analytics fields — commit `4a658c0`
 - [x] Targeted regression pass — local repository execution: 4 passed in 2.81s across the Slice 1 + Slice 2 targeted contract files
 - [ ] Full regression pass — not yet run after R2-014 changes
-- [ ] Backward-compatibility replay regression pass after Slice 2 change
+- [x] Backward-compatibility replay regression pass — local repository execution: 36 passed, 405 deselected in 11.34s (`pytest -q tests -k "replay or backward"`)
 - [ ] Project state updated from actual implementation/test evidence
 - [ ] Slice 2 release/green gate
 
@@ -175,7 +175,7 @@ Consecutive OI validation also passed on the same live evidence path: cycle 1 �
 - [x] Slice 3 audit baseline committed as `0b5840e`
 - [x] Slice 3 structural regression committed as `9bf8488`
 - [x] Targeted Slice 3 regression pass — local repository execution: 6 passed in 2.39s across the Slice 1 + Slice 2 + Slice 3 targeted contract files
-- [ ] Existing replay/backward-compatibility regression pass
+- [x] Existing replay/backward-compatibility regression pass — local repository execution: 36 passed, 405 deselected in 11.34s (`pytest -q tests -k "replay or backward"`)
 - [ ] Full regression pass
 - [ ] Project state updated from actual implementation/test evidence
 - [ ] Slice 3 release/green gate
