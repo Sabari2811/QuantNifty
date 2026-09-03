@@ -20,8 +20,8 @@ class DashboardController:
             symbol=symbol,
             levels=levels,
         )
+        canonical = ctx.market_context
         analytics = ctx.analytics or {}
-        dealer_analytics = analytics.get("dealer", {})
         option_chain_integrity = None
         if ctx.option_chain is not None:
             option_chain_integrity = ctx.option_chain.attrs.get("quote_integrity")
@@ -40,30 +40,33 @@ class DashboardController:
             spot=ctx.spot,
             expiry=ctx.expiry,
             dealer=DealerData(
-                dealer_gamma=dealer_analytics.get("dealer_gamma"),
-                market_mode=dealer_analytics.get("market_mode"),
-                support=dealer_analytics.get("support"),
-                resistance=dealer_analytics.get("resistance"),
-                gamma_flip=dealer_analytics.get("gamma_flip"),
-                gamma_wall=dealer_analytics.get("gamma_wall"),
-                expected_volatility=dealer_analytics.get("expected_volatility"),
-                mean_reversion_probability=dealer_analytics.get(
+                dealer_gamma=canonical.dealer.get("dealer_gamma"),
+                market_mode=canonical.dealer.get("market_mode"),
+                support=canonical.dealer.get("support"),
+                resistance=canonical.dealer.get("resistance"),
+                gamma_flip=canonical.dealer.get("gamma_flip"),
+                gamma_wall=canonical.dealer.get("gamma_wall"),
+                expected_volatility=canonical.dealer.get("expected_volatility"),
+                mean_reversion_probability=canonical.dealer.get(
                     "mean_reversion_probability"
                 ),
-                breakout_probability=dealer_analytics.get("breakout_probability"),
-                total_gex=dealer_analytics.get("total_gex"),
+                breakout_probability=canonical.dealer.get("breakout_probability"),
+                total_gex=canonical.dealer.get("total_gex"),
             ),
-            dealer_flow=analytics.get("dealer_flow", {}),
-            expected_move=analytics.get("expected_move", {}),
-            max_pain=analytics.get("max_pain", {}),
-            pcr=analytics.get("pcr", {}),
-            market_structure=analytics.get("market_structure", {}),
-            liquidity=analytics.get("liquidity", {}),
-            probability=analytics.get("probability", {}),
-            signal=analytics.get("signal", {}),
-            trade_plan=analytics.get("trade_plan", {}),
-            risk=analytics.get("risk", {}),
-            institutional_score=analytics.get("institutional_score", {}),
+            dealer_flow=canonical.dealer_flow,
+            expected_move=canonical.expected_move,
+            max_pain=canonical.max_pain,
+            pcr=canonical.pcr,
+            market_structure=canonical.market_structure,
+            liquidity=canonical.liquidity,
+            probability=canonical.probability,
+            signal=canonical.signal,
+            trade_plan=canonical.trade_plan,
+            risk=canonical.risk,
+            institutional_score=canonical.institutional_score,
+            # Retain the established dictionary projection for generic analytics
+            # display and snapshot compatibility. Dedicated DashboardData fields
+            # above are sourced from the typed canonical MarketContext.
             analytics=analytics,
             intelligence=adapt_intelligence(canonical_intelligence),
             canonical_intelligence=canonical_intelligence,
