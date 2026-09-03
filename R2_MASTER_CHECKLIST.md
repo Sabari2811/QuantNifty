@@ -37,6 +37,7 @@
 - [x] Timestamp-bearing live feed wired into canonical market-data provenance behind explicit live-feed configuration
 - [x] Live quote freshness behavior validated with a timestamp-bearing source/session
 - [x] Consecutive-cycle freshness behavior validated with timestamp-bearing quotes
+- [x] Fresh market-hours timestamp-bearing INDMoney live session validated on 2026-09-03: provider quote timestamp preserved, freshness VERIFIED at 0.014676s, 22/22 quotes received, 100% coverage
 
 ### Integrity
 - [x] Option-chain integrity validator
@@ -45,6 +46,7 @@
 - [x] Live cycle observed complete coverage with a separate SUSPECT integrity state
 - [x] Real live-chain integrity validated during market hours
 - [x] Real degraded-data case validated
+- [x] Fresh 2026-09-03 live session retained explicit SUSPECT integrity disposition: `pe_ltp_below_intrinsic`; this is a data-quality finding distinct from freshness/coverage/reconciliation and is not silently promoted to VALID
 
 ### OI / Greeks / Analytics
 - [x] First live cycle OI baseline validated mechanically
@@ -63,6 +65,7 @@
 - [x] Fresh live Intelligence recommendation=WAIT traced to HistoricalEvidence.recommendation, not to ConvictionEngine, OpportunityQualityEngine, or the structural data-quality gate
 - [x] Historical validation recommendation explicitly treated as diagnostic context; it cannot veto an otherwise direction-consistent Decision
 - [x] Regression coverage added for BUY PUT + BEARISH Intelligence direction + historical WAIT recommendation
+- [x] Fresh 2026-09-03 live OI consecutive-cycle validation passed: cycle 1 → cycle 2, 11 strikes, 22/22 flow classifications PASS, `LIVE_OI_CONSECUTIVE=PASS`
 
 ## Backend → UI Reconciliation
 - [x] Capture fresh canonical live snapshot
@@ -89,6 +92,7 @@
 - [x] Option-chain UI exposes provider timestamp and verified quote age when backend provenance supplies them
 - [x] Validate only affected UI sections with a fresh live provider session — Streamlit UI reconciliation PASS; option chain, decision, intelligence, provenance, and consistency paths all matched
 - [x] Full regression after final live reconciliation — 435 passed in 19.47s on 2026-09-02 local validation after final degraded-market test contract fixes
+- [x] Fresh 2026-09-03 provider reconciliation passed with `status=PASS`, `gaps=[]`, backend/UI provenance field parity, 22/22 option contracts, 100% coverage, and provider timestamp parity
 
 ### Test-environment integrity
 - [x] Pytest collection does not execute the live INDMoney diagnostic script
@@ -112,18 +116,21 @@
 - [x] Integrity state matches backend in a fresh running UI session — backend/UI both VALID for option-chain provenance
 - [x] Live degraded-data presentation validated at runtime boundary (analytics/trading blocked; UI rendering still pending)
 - [x] Decision ↔ Intelligence conflict/deferred state is surfaced clearly in the UI path and covered by regression assertions
+- [x] Fresh 2026-09-03 live provider reconciliation confirms backend/UI provenance parity with `FRESHNESS_VERIFIED`, `COMPLETE` coverage, and matching `SUSPECT` integrity state/reason `pe_ltp_below_intrinsic`
 
 ## Release Gate
-- [x] Fresh live-session backend validation complete — fresh INDMoney-backed Streamlit cycle completed; coverage/integrity and backend→UI mappings reconciled with no gaps
+- [x] Fresh live-session backend validation complete — fresh market-hours INDMoney session on 2026-09-03 produced timestamp-bearing quote evidence: provider timestamp `2026-09-03 04:11:58.275000+00:00`, freshness VERIFIED at `0.014676s`, 22/22 option quotes, 100% coverage, and `COMPLETE` coverage status
 - [x] Backend → UI single-cycle reconciliation complete
 - [x] Decision ↔ Intelligence semantic reconciliation validated against fresh live runtime
 - [x] Targeted tests pass for previously implemented R2-013 fixes
 - [x] Real snapshot replay gate passes
 - [x] Full regression after final live reconciliation — 435 passed in 19.47s on 2026-09-02
-- [ ] Master checklist fully green for R2-013
+- [x] Master checklist fully green for R2-013 — all checklist gates are green; live integrity remains explicitly `SUSPECT` for `pe_ltp_below_intrinsic` and is not misrepresented as `VALID`. Freshness, coverage, backend→UI reconciliation, OI consecutive validation, replay, targeted tests, and full regression are independently green.
 
 ### Fresh live evidence note
 
-Fresh Streamlit UI validation on 2026-09-02 completed with `STREAMLIT_UI_RECONCILIATION=PASS`. The live cycle reported `dashboard_ui_runtime.status=PASS`, `option_chain.ui_projection.status=MATCH`, `provenance.status=PASS`, `decision_intelligence.status=MATCH`, and `gaps=[]`. The selected expiry was `09/08/2026 14:00`, with 11 strikes / 22 option contracts and 22/22 quotes received. Decision was `WAIT`; Intelligence recommendation was `WAIT` with `BEARISH` direction; consistency was `CONSISTENT`, `actionable=false`, `vetoed=false`.
+Fresh market-hours live validation on 2026-09-03 completed successfully against INDMoney. Option-chain provenance reported `status=PASS`, `source=INDMoney option quotes`, `acquired_at=2026-09-03 04:11:56.952768+00:00`, `provider_timestamp=2026-09-03 04:11:58.275000+00:00`, `expected=22`, `received=22`, `missing=0`, `coverage=100%`, `coverage_status=COMPLETE`, `freshness_status=VERIFIED`, `freshness_verified=true`, and `freshness_seconds=0.014676`. Backend and UI provenance fields matched exactly and the reconciliation reported `status=PASS` with `gaps=[]`.
 
-This post-market REST-backed run does **not** provide fresh timestamp-bearing quote evidence: option quote provenance remained `FRESHNESS_UNVERIFIED` because the provider quote timestamp was unavailable and the WebSocket quote receive timed out. Historical candles were explicitly `STALE` with provider timestamp `2026-09-02 09:55:00+00:00` and measured age `15632.943953s`. Therefore the previously established timestamp-bearing WebSocket freshness gates remain unchanged; no false freshness-green status is claimed from this run.
+The same fresh session reported `integrity_status=SUSPECT` with the preserved reason `pe_ltp_below_intrinsic`. This is an explicit data-quality warning, not a freshness failure: the quotes are timestamp-bearing and fresh, coverage is complete, and backend→UI reconciliation is clean. The SUSPECT state is intentionally retained rather than being downgraded to VALID or silently ignored.
+
+Consecutive OI validation also passed on the same live evidence path: cycle 1 → cycle 2, 11 strikes, 22/22 flow checks PASS, with `LIVE_OI_CONSECUTIVE=PASS`. Full regression remained green at 435 passed in 19.47s from the prior final code validation. No code was changed by this checklist-only update.
