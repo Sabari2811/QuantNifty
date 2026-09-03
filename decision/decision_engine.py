@@ -40,7 +40,11 @@ class DecisionEngine:
         self.execution = ExecutionEngine()
 
     def _extract_direction(self, snapshot):
-        signal_payload = snapshot.signal
+        # MarketSnapshot.get() resolves declared fields from the typed
+        # canonical MarketContext first. Using the mapping-style interface
+        # here also preserves compatibility with legacy/fake snapshots that
+        # implement get() without exposing every shortcut as an attribute.
+        signal_payload = snapshot.get("signal", None)
         if isinstance(signal_payload, dict):
             direction = signal_payload.get("signal")
         elif isinstance(signal_payload, str):
@@ -52,7 +56,7 @@ class DecisionEngine:
         return None
 
     def _calculate_advanced_score(self, snapshot, direction):
-        signal_payload = snapshot.signal
+        signal_payload = snapshot.get("signal", {"signal": direction})
         if not isinstance(signal_payload, dict):
             signal_payload = {"signal": direction}
         score_result = self.scoring.calculate(
