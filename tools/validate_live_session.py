@@ -14,6 +14,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from dashboard.dashboard_controller import DashboardController
+from dashboard.live_raw_analytics_reconciliation import reconcile_raw_quote_analytics
 from dashboard.live_reconciliation import build_live_reconciliation
 from validation.live_session_freshness import evaluate_consecutive_freshness
 
@@ -31,7 +32,6 @@ def _provenance_summary(dashboard):
 
 
 def _oi_summary(dashboard):
-    """Return the canonical OI-flow summary, not the wrapper/table payload."""
     analytics = dashboard.analytics or {}
     oi = analytics.get("oi_flow") or analytics.get("oi")
     if oi is None:
@@ -47,18 +47,19 @@ def _oi_summary(dashboard):
 
 
 def _decision_intelligence_gate_ok(cycle: dict) -> bool:
-    """Require semantic Decision ↔ Intelligence consistency for each cycle.
-
-    UI reconciliation and semantic consistency are separate contracts. A
-    DashboardData cycle can map identical values to the UI while still being
-    semantically conflicted or deferred. Such a cycle must not pass the live
-    decision/intelligence release gate.
-    """
     consistency = cycle.get("decision_intelligence") or {}
+    value = consistency.get("value") or {}
     return (
         consistency.get("status") == "MATCH"
-        and consistency.get("value", {}).get("consistent") is True
-        and consistency.get("value", {}).get("semantic_status") == "CONSISTENT"
+        and value.get("consistent") is True
+        and value.get("semantic_status") == "CONSISTENT"
+    )
+
+
+def _raw_analytics_gate_ok(cycles: list[dict]) -> bool:
+    return bool(cycles) and all(
+        (cycle.get("raw_analytics") or {}).get("status") == "PASS"
+        for cycle in cycles
     )
 
 
@@ -108,7 +109,8 @@ def _write_summary(path: str, payload: dict) -> None:
     for cycle in cycles:
         lines.append(
             f"cycle={cycle['cycle']} cycle_no={cycle['cycle_no']} spot={cycle['spot']} "
-            f"field_status={cycle['field_status']} gaps={len(cycle['gaps'])}"
+            f"field_status={cycle['field_status']} gaps={len(cycle['gaps'])} "
+            f"raw_analytics={cycle['raw_analytics'].get('status')}"
         )
         for source, item in cycle["provenance"].items():
             if item is None:
@@ -146,10 +148,31 @@ def main() -> int:
     failures = []
 
     for cycle_index in range(args.cycles):
-        dashboard = controller.load(args.symbol, args.levels)
+        provider = controller.runtime.get_provider()
+        captured = {}
+        original_get_quotes = provider.get_quotes
+
+        def capture_quotes(security_ids, _original=original_get_quotes):
+            quotes = _original(security_ids)
+            captured["quotes"] = dict(quotes or {})
+            return quotes
+
+        provider.get_quotes = capture_quotes
+        try:
+            dashboard = controller.load(args.symbol, args.levels)
+        finally:
+            provider.get_quotes = original_get_quotes
+
         report = build_live_reconciliation(dashboard)
         provenance = _provenance_summary(dashboard)
         oi = _oi_summary(dashboard)
+        ctx = controller.runtime.get_context()
+        raw_analytics = reconcile_raw_quote_analytics(
+            captured.get("quotes", {}),
+            ctx.option_chain,
+            ctx.spot,
+            ctx.analytics or {},
+        )
 
         cycle = {
             "cycle": cycle_index + 1,
@@ -164,11 +187,14 @@ def main() -> int:
             "decision_intelligence": report["decision_intelligence"],
             "provenance": provenance,
             "oi": oi,
+            "raw_analytics": raw_analytics,
         }
         reports.append(cycle)
 
         if report["gaps"]:
             failures.append({"cycle": cycle_index + 1, "type": "reconciliation", "gaps": report["gaps"]})
+        if raw_analytics.get("status") != "PASS":
+            failures.append({"cycle": cycle_index + 1, "type": "raw_analytics_reconciliation", "gaps": raw_analytics.get("gaps", [])})
 
         for source, item in provenance.items():
             if item is None:
@@ -183,33 +209,27 @@ def main() -> int:
             time.sleep(args.interval)
 
     freshness = evaluate_consecutive_freshness(
-        [
-            {"spot": cycle["provenance"].get("spot"), "option_chain": cycle["provenance"].get("option_chain")}
-            for cycle in reports
-        ]
+        [{"spot": c["provenance"].get("spot"), "option_chain": c["provenance"].get("option_chain")} for c in reports]
     )
-
-    oi_states = [cycle["oi"] for cycle in reports if cycle["oi"] is not None]
+    oi_states = [c["oi"] for c in reports if c["oi"] is not None]
     oi_ready = len(oi_states) >= 2 and all(
         isinstance(state, dict) and state.get("status") in {"READY", "NO_CHANGE"}
         for state in oi_states[1:]
     )
     decision_ok = all(
-        _decision_intelligence_gate_ok(c)
-        and not any(gap.startswith("decision.") for gap in c["gaps"])
+        _decision_intelligence_gate_ok(c) and not any(gap.startswith("decision.") for gap in c["gaps"])
         for c in reports
     )
     reconciliation_ok = not any(c["gaps"] for c in reports)
     coverage_ok = not any(f["type"] == "incomplete_coverage" for f in failures)
-    integrity_invalid = any(
-        f["type"] == "invalid_provenance" for f in failures
-    )
+    integrity_invalid = any(f["type"] == "invalid_provenance" for f in failures)
     integrity_suspect = any(
         item.get("integrity_status") == "SUSPECT"
-        for cycle in reports
-        for item in (cycle["provenance"].get("spot"), cycle["provenance"].get("option_chain"))
+        for c in reports
+        for item in (c["provenance"].get("spot"), c["provenance"].get("option_chain"))
         if item is not None
     )
+    raw_analytics_ok = _raw_analytics_gate_ok(reports)
 
     gates = {
         "backend_ui_reconciliation": _gate("PASS" if reconciliation_ok else "FAIL", "all DashboardData → UI reconciliation fields matched" if reconciliation_ok else "field-level gaps recorded"),
@@ -218,18 +238,13 @@ def main() -> int:
         "integrity": _gate("PASS" if not integrity_invalid and not integrity_suspect else "DEGRADED", "all live quote sources passed integrity" if not integrity_invalid and not integrity_suspect else "suspect or invalid quote integrity remains explicit"),
         "oi_consecutive_state": _gate("PASS" if oi_ready else "NOT_VERIFIED", "consecutive cycles reached READY/NO_CHANGE" if oi_ready else "insufficient consecutive OI evidence"),
         "decision_intelligence": _gate("PASS" if decision_ok else "FAIL", "canonical Decision ↔ Intelligence semantics are consistent in every cycle" if decision_ok else "Decision ↔ Intelligence semantic conflict or deferral recorded"),
-        "analytics_raw_reconciliation": _gate("NOT_VERIFIED", "requires a fresh market-session raw-provider numerical reconciliation; successful analytics generation alone is not proof"),
+        "analytics_raw_reconciliation": _gate("PASS" if raw_analytics_ok and freshness["status"] == "PASS" else "NOT_VERIFIED", "fresh consecutive provider quotes independently reconcile all validated quote-derived analytics" if raw_analytics_ok and freshness["status"] == "PASS" else "fresh market-session raw-provider numerical reconciliation is not fully verified"),
         "degraded_data_ui": _gate("OBSERVED" if integrity_suspect else "NOT_VERIFIED", "live suspect integrity state observed; controlled UI degradation test still required" if integrity_suspect else "requires a controlled missing/invalid-data UI session"),
     }
 
     for name, gate in gates.items():
         if gate["status"] != "PASS":
-            failures.append({
-                "type": "gate_not_pass",
-                "gate": name,
-                "status": gate["status"],
-                "detail": gate["detail"],
-            })
+            failures.append({"type": "gate_not_pass", "gate": name, "status": gate["status"], "detail": gate["detail"]})
 
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -242,7 +257,6 @@ def main() -> int:
         "freshness": freshness,
         "cycles": reports,
     }
-
     _write_report(args.output, payload)
     _write_summary(args.summary_output, payload)
 
@@ -255,6 +269,7 @@ def main() -> int:
     print(f"Integrity:       {gates['integrity']['status']}")
     print(f"OI:              {gates['oi_consecutive_state']['status']}")
     print(f"Decision/Intel:  {gates['decision_intelligence']['status']}")
+    print(f"Raw Analytics:   {gates['analytics_raw_reconciliation']['status']}")
     print(f"Result:          {'PASS' if not failures else 'FAIL'}")
     print(f"Report:          {os.path.relpath(args.output, PROJECT_ROOT)}")
     print(f"Summary:         {os.path.relpath(args.summary_output, PROJECT_ROOT)}")
@@ -262,7 +277,6 @@ def main() -> int:
     if failures:
         print("LIVE_SESSION_VALIDATION=FAIL")
         return 2
-
     print("LIVE_SESSION_VALIDATION=PASS")
     return 0
 
