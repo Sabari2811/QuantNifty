@@ -1,5 +1,7 @@
 import streamlit as st
 
+from dashboard.decision_adapter import adapt_decision
+
 
 def _value(mapping, key, default="UNAVAILABLE"):
     if not mapping:
@@ -11,15 +13,16 @@ def _value(mapping, key, default="UNAVAILABLE"):
 def render(dashboard):
 
     dealer = dashboard.dealer
-    signal = dashboard.signal or {}
+    decision = adapt_decision(dashboard)
     trade = dashboard.trade_plan or {}
-    probability = dashboard.probability or {}
 
     st.markdown("## 📊 Live Market Summary")
 
     c1, c2, c3, c4 = st.columns(4)
 
-    signal_value = _value(signal, "signal")
+    signal_value = decision.get("signal")
+    if signal_value is None:
+        signal_value = "UNAVAILABLE"
     if signal_value == "BUY CALL":
         c1.success(signal_value)
     elif signal_value == "BUY PUT":
@@ -37,10 +40,10 @@ def render(dashboard):
     c5.metric("Gamma Flip", dealer.gamma_flip if dealer.gamma_flip else "-")
     c6.metric("Gamma Wall", dealer.gamma_wall if dealer.gamma_wall else "-")
 
-    bullish = _value(probability, "bullish_probability")
-    c7.metric("Bullish %", f"{bullish}%" if bullish != "UNAVAILABLE" else "UNAVAILABLE")
+    bullish = decision.get("bullish_probability")
+    c7.metric("Bullish %", f"{bullish}%" if bullish is not None else "UNAVAILABLE")
 
-    confidence = signal.get("confidence")
+    confidence = decision.get("confidence")
     c8.metric("Confidence", f"{confidence}%" if confidence is not None else "UNAVAILABLE")
 
     st.divider()
