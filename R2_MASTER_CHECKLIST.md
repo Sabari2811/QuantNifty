@@ -78,26 +78,42 @@
 - [x] Local targeted regression — **2 passed in 1.15s** after pull to `734993c`
 - [x] Replay/backward-compatibility regression — **40 passed, 411 deselected in 8.04s** after pull to `734993c`
 - [x] Full regression — **451 passed in 17.79s** after pull to `734993c`
-- [ ] Slice 7 release/green gate
+- [x] Slice 7 release/green gate
+
+### Slice 8 — MarketSnapshot → DecisionEngine Canonical Boundary
+- [x] Audit identified `MarketSnapshot.analytics` as the current DecisionEngine input surface, with shortcut properties and generic `get()` reading the serialized projection
+- [x] Promote typed `models.MarketContext` into `MarketSnapshot` at the LiveEngine handoff
+- [x] Make MarketSnapshot shortcut properties prefer typed canonical fields while preserving legacy analytics-only callers
+- [x] Add explicit canonical `signal`, `iv_skew` and `iv_smile` snapshot accessors
+- [x] Make MarketSnapshot generic `get()` prefer declared typed canonical fields
+- [x] Route DecisionEngine direction and advanced-score IV/signal reads through canonical snapshot accessors
+- [x] Preserve `oi` and `prediction` as backward-compatible aliases without changing their semantic mapping
+- [x] Add regression coverage for canonical-vs-conflicting-analytics precedence and legacy snapshot compatibility
+- [ ] Local targeted regression
+- [ ] Replay/backward-compatibility regression
+- [ ] Full regression
+- [ ] Slice 8 release/green gate
 
 ### R2-014 Release Gate Status
 - [x] Slice 5 release gate complete
 - [x] Slice 6 release gate complete
-- [ ] Slice 7 release gate complete
+- [x] Slice 7 release gate complete
+- [ ] Slice 8 release gate complete
 - [ ] Current R2-014 release gate complete
 
 ### Downstream Canonical Consumer Audit — Active
-- [ ] `RuntimeContext.market_context` → `MarketSnapshot` semantic identity
-- [ ] `MarketSnapshot` → `DecisionEngine` source-of-truth and legacy aliases
+- [x] `RuntimeContext.market_context` → `MarketSnapshot` semantic identity
+- [x] `MarketSnapshot` → `DecisionEngine` source-of-truth and legacy aliases — implementation complete; validation pending
 - [x] `RuntimeContext.market_context` → `FeatureExtractor/MarketExtractor`
 - [ ] `DashboardData.analytics` generic projection versus dedicated fields
 - [ ] Streamlit generic analytics display and duplicate/default mappings
 - [ ] Field-by-field disposition for all canonical analytics fields
 
 ### Slice 7 Audit Finding / Implementation Disposition
-`MarketExtractor` now consumes the typed canonical `MarketContext` first for expected move, market structure, technical, institutional score, probability, PCR and ATR. The legacy `ctx.analytics` projection remains an explicit fallback when the typed field is empty, preserving compatibility for legacy/unit callers. Local validation is green: targeted 2/2, replay/backward 40/40, full suite 451/451. The Slice 7 release gate is intentionally still open pending formal checklist sign-off after audit review.
+`MarketExtractor` now consumes the typed canonical `MarketContext` first for expected move, market structure, technical, institutional score, probability, PCR and ATR. The legacy `ctx.analytics` projection remains an explicit fallback when the typed field is empty, preserving compatibility for legacy/unit callers. Local validation is green: targeted 2/2, replay/backward 40/40, full suite 451/451. Slice 7 release gate is closed.
 
-`DecisionEngine` still consumes `MarketSnapshot.analytics` through shortcut properties and generic `get()`. This remains the next concrete source-of-truth audit target.
+### Slice 8 Audit Finding / Implementation Disposition
+`MarketSnapshot` previously stored only the serialized analytics dictionary, so `DecisionEngine` and `MarketAnalyzer` could not distinguish canonical typed analytics from a conflicting compatibility projection. Slice 8 now passes `RuntimeContext.market_context` into `MarketSnapshot`, makes declared snapshot access canonical-first, and retains analytics-only behavior for legacy callers. `DecisionEngine` direction and IV/signal inputs now use explicit canonical snapshot accessors. Validation is pending local execution; no Slice 8 green status is claimed yet.
 
 ### Integrity / provenance reminder
 R2-013 live evidence on 2026-09-03 remains `coverage=COMPLETE`, `freshness=VERIFIED`, `reconciliation=PASS`, with `integrity=SUSPECT` due `pe_ltp_below_intrinsic`. Do not relabel this caveat as VALID.
