@@ -129,9 +129,9 @@
 - [x] Slice 8 release gate complete
 - [x] Slice 9 release gate complete
 - [x] Slice 10 release gate complete
-- [ ] Current R2-014 release gate complete
+- [x] Current R2-014 release gate complete
 
-### Downstream Canonical Consumer Audit — Active
+### Downstream Canonical Consumer Audit — Complete
 - [x] `RuntimeContext.market_context` → `MarketSnapshot` semantic identity
 - [x] `MarketSnapshot` → `DecisionEngine` source-of-truth and legacy aliases
 - [x] `RuntimeContext.market_context` → `FeatureExtractor/MarketExtractor`
@@ -139,17 +139,8 @@
 - [x] Streamlit generic analytics display and duplicate/default mappings
 - [x] Field-by-field disposition for all canonical analytics fields
 
-### Slice 7 Audit Finding / Implementation Disposition
-`MarketExtractor` consumes the typed canonical `MarketContext` first for expected move, market structure, technical, institutional score, probability, PCR and ATR. The legacy `ctx.analytics` projection remains an explicit fallback when the typed field is empty, preserving compatibility for legacy/unit callers. Local validation is green: targeted 2/2, replay/backward 40/40, full suite 451/451. Slice 7 release gate is closed.
-
-### Slice 8 Audit Finding / Implementation Disposition
-`MarketSnapshot` now carries typed canonical analytics and its declared accessors are canonical-first. Initial Slice 8 validation exposed seven compatibility failures: five legacy/fake snapshot fixtures expected mapping-style `get()` compatibility, while two LiveEngine tests used a fake snapshot whose historical `save()` signature did not accept the new optional keyword. The compatibility fixes restored those historical interfaces without weakening canonical precedence. Final local validation is green: targeted 3/3, decision provenance 3/3, strategy provenance 2/2, LiveEngine intelligence 2/2, replay/backward 40/40, full suite 454/454. Slice 8 release gate is closed.
-
-### Slice 9 Audit Finding / Implementation Disposition
-The Streamlit market banner had a concrete canonical-mapping inconsistency: it read confidence directly from `DashboardData.signal`, while the shared decision adapter read confidence from `DashboardData.probability`. Backend ownership confirms confidence belongs to `Decision.signal.confidence`. The decision adapter is now canonical-first for confidence, and the market banner consumes that adapter for the decision-facing fields, eliminating a competing confidence source. Local validation is green: targeted 2/2, replay/backward 40/40, full suite 454/454. Slice 9 release gate is closed.
-
-### Slice 10 Audit Finding / Implementation Disposition
-The downstream Dashboard/Streamlit audit now has an explicit field-by-field disposition for the complete typed `MarketContext` analytics surface. Dedicated `DashboardData` fields remain canonical for dashboard-facing dealer, dealer-flow, liquidity, expected-move, max-pain, PCR, market-structure, probability, signal, trade-plan, risk and institutional-score values. Gamma flip, gamma wall and smart strike remain represented through existing canonical dealer/UI mappings. OI flow, IV skew/smile, ATR, volatility, technical, OI shift and market map remain generic analytics-only compatibility/audit fields; they are not silently re-derived by Streamlit. The generic `DashboardData.analytics` projection remains available for established serialized compatibility and the explicit Analytics Output expander, but it does not override dedicated typed fields. Runtime reconciliation now consumes the same shared `adapt_decision()` mapping as the UI, eliminating the duplicate confidence source that caused the post-audit fixture drift. Local validation is green: targeted field disposition 2/2, targeted reconciliation 10/10, replay/backward 40/40, full suite 456/456. Slice 10 release gate is closed.
+### R2-014 Final Release Disposition
+R2-014 canonical analytics-context audit is closed. The complete typed `MarketContext` downstream chain has been audited through runtime, replay, intelligence, feature extraction, snapshot/decision, DashboardData, Streamlit adapters, and runtime reconciliation. The latest authoritative local validation is green: targeted dashboard/reconciliation 10/10, canonical field disposition 2/2, replay/backward 40/40, full suite 456/456. No release-blocking regression remains in the audited scope. The generic `analytics` projection remains intentionally as a serialized/backward-compatible and explicit audit/display surface; it is not an alternative source for dedicated canonical dashboard fields.
 
 ### Integrity / provenance reminder
 R2-013 live evidence on 2026-09-03 remains `coverage=COMPLETE`, `freshness=VERIFIED`, `reconciliation=PASS`, with `integrity=SUSPECT` due `pe_ltp_below_intrinsic`. Do not relabel this caveat as VALID.
