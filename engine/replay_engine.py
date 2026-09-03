@@ -54,7 +54,11 @@ class ReplayEngine:
         # runtime artifact. The snapshot format remains dictionary-based for
         # backward compatibility, but replay runtime consumers must not see an
         # empty/default MarketContext when recorded analytics are available.
-        self.ctx.market_context = self._restore_market_context(snapshot.analytics)
+        self.ctx.market_context = self._restore_market_context(
+            snapshot.analytics,
+            spot=snapshot.spot,
+            greeks=self.ctx.greeks_df,
+        )
         self.ctx.analytics = snapshot.analytics
 
         self.ctx.decision = snapshot.decision
@@ -66,10 +70,13 @@ class ReplayEngine:
         return self.ctx
 
     @staticmethod
-    def _restore_market_context(analytics):
+    def _restore_market_context(analytics, *, spot=0.0, greeks=None):
         """Restore the typed MarketContext from a recorded analytics payload."""
         if not isinstance(analytics, dict):
-            return MarketContext()
+            context = MarketContext()
+            context.spot = spot
+            context.greeks = greeks
+            return context
 
         context = MarketContext()
         for field_name in (
@@ -99,8 +106,8 @@ class ReplayEngine:
             if field_name in analytics:
                 setattr(context, field_name, analytics[field_name])
 
-        context.spot = analytics.get("spot", 0.0)
-        context.greeks = analytics.get("greeks")
+        context.spot = spot
+        context.greeks = greeks
         return context
 
     # ==========================================================
