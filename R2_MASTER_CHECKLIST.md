@@ -56,6 +56,18 @@
 - [x] Full regression — **448 passed in 15.90s** on `e69a5e5`
 - [x] Slice 5 release/green gate
 
+### Slice 6 — Intelligence → Canonical MarketContext Boundary
+- [x] Audit identified `IntelligenceService` passing the generic `RuntimeContext.analytics` projection into `EvidenceAdapter`
+- [x] Audit confirmed `EvidenceAdapter` was therefore coupled to the serialized compatibility surface rather than the typed canonical `MarketContext`
+- [x] Make `EvidenceAdapter` accept typed `MarketContext` while retaining dict compatibility for legacy/unit callers
+- [x] Route `IntelligenceService` evidence extraction through `runtime_context.market_context` when available
+- [x] Preserve existing evidence semantics, including gamma-flip non-directionality and IV-skew project heuristic
+- [x] Add regression coverage proving typed `MarketContext` is sufficient for evidence extraction
+- [ ] Local targeted regression — pending user execution
+- [ ] Replay/backward-compatibility regression — pending user execution
+- [ ] Full regression — pending user execution
+- [ ] Slice 6 release/green gate
+
 ### R2-014 Release Gate Status
 - [x] Slice 4 release gate previously green — targeted **7 passed**, replay/backward **36 passed / 408 deselected**, full **444 passed**
 - [x] Slice 5 post-fix targeted reconstruction/promotion suite — **3 passed in 1.11s** on `e69a5e5`
@@ -68,6 +80,11 @@
 The first implementation folded analytics/context parity mismatches into `replay_equivalence`. The user's authoritative local run exposed **1 failure / 39 passed / 408 deselected** in the replay/backward suite and **1 failure / 447 passed** in the full suite. The failing real-snapshot gate reported drift across derived analytics including OI-flow, technical, probability, market-map, wall/void, and other values. The captured OI log also showed recomputation entering `AWAITING_PREVIOUS_SNAPSHOT`, demonstrating that replay recomputation does not necessarily possess every historical dependency required to reproduce the recorded analytics artifact exactly.
 
 Disposition: analytics/context parity is now an explicit **diagnostic parity result** (`replay_analytics_equivalence`) rather than a decision/intelligence veto. During `REPLAY_RECOMPUTE`, the recomputed context remains available for audit, while the recorded analytics projection is restored into the canonical typed `market_context` so replay does not silently create two competing canonical surfaces. The existing decision/intelligence equivalence contract remains independent and continues to be the replay output gate. This correction was validated by the post-fix local targeted → replay/backward → full sequence recorded above.
+
+### Slice 6 Audit Finding / Implementation Disposition
+The downstream consumer audit found a concrete canonical-boundary mismatch in the intelligence path. `IntelligenceService.analyze()` previously passed `runtime_context.analytics` to `EvidenceAdapter.extract()`, even though R2-014 established `runtime_context.market_context` as the typed canonical analytics runtime field. `EvidenceAdapter` then read dealer, OI flow, IV skew, probability, signal, and market-structure evidence from that generic dictionary. This left a live source-of-truth dependency on the compatibility projection and made it possible for future divergence between typed context and serialized analytics to alter intelligence evidence without changing the canonical typed context.
+
+Disposition: `EvidenceAdapter` now accepts `MarketContext` directly and resolves declared analytics fields from typed attributes. Dict input remains supported for legacy/unit callers. `IntelligenceService` prefers `runtime_context.market_context` and falls back to the generic projection only when a runtime context has no canonical typed context. No evidence semantics were intentionally changed. Slice 6 is **implemented but not green** until the user executes the required local regression sequence.
 
 ### Evidence note
 Pre-Slice-4 full local validation was run from `D:\Projects\NiftySignalEngine` after fast-forwarding the local branch from `138c5bc` to `150225c`: `pytest -q` → **441 passed in 21.31s**. After Slice 4 and its regression fixes, the user pulled branch tip `243cf1c` and reran all required suites locally: targeted canonical-context suite → **7 passed in 6.43s**; replay/backward-compatibility suite → **36 passed, 408 deselected in 21.23s**; full regression → **444 passed in 19.73s**. Slice 5 initial targeted suite then passed **4 in 1.27s**, but the first parity implementation caused the real recorded-snapshot replay gate to fail as documented above. The corrected Slice 5 implementation was then pulled at `e69a5e5` and the required validation sequence passed: targeted → **3 passed in 1.11s**; replay/backward → **40 passed, 408 deselected in 7.14s**; full → **448 passed in 15.90s**. These are the authoritative post-fix Slice 5 validation results.
