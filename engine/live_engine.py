@@ -170,8 +170,11 @@ class LiveEngine:
             greeks_df=greeks_for_snapshot,
             spot=self.ctx.spot,
             analytics=self.ctx.analytics,
-            market_context=self.ctx.market_context,
         )
+        # Attach the canonical typed context after the established save()
+        # boundary so legacy/fake snapshot implementations that only support
+        # the historical three-argument save contract continue to work.
+        self.ctx.snapshot.market_context = self.ctx.market_context
         regime = self.market_regime.analyze(self.ctx.snapshot)
         self.ctx.snapshot.regime = regime
         self.ctx.regime = regime
