@@ -86,27 +86,27 @@
 - [x] Make MarketSnapshot shortcut properties prefer typed canonical fields while preserving legacy analytics-only callers
 - [x] Add explicit canonical `signal`, `iv_skew` and `iv_smile` snapshot accessors
 - [x] Make MarketSnapshot generic `get()` prefer declared typed canonical fields
-- [x] Route DecisionEngine direction and advanced-score IV/signal reads through canonical snapshot accessors
+- [x] Route DecisionEngine direction and advanced-score IV/signal reads through canonical snapshot accessors while retaining mapping-style `get()` compatibility
 - [x] Preserve `oi` and `prediction` as backward-compatible aliases without changing their semantic mapping
 - [x] Add regression coverage for canonical-vs-conflicting-analytics precedence and legacy snapshot compatibility
-- [ ] Local targeted regression — **3 passed in 1.83s**, but full suite exposed compatibility failures
-- [x] Replay/backward-compatibility regression — **40 passed, 414 deselected in 7.87s**
-- [ ] Full regression — **7 failed, 447 passed in 18.67s** on `7e9d62a`
-- [x] Fix DecisionEngine to use `snapshot.get()` for legacy/fake snapshot compatibility
-- [x] Fix LiveEngine to attach canonical `market_context` after the established `save()` call rather than expanding the required save contract for legacy/fake snapshots
-- [ ] Re-run full regression after compatibility fixes
-- [ ] Slice 8 release/green gate
+- [x] Local targeted regression — **3 passed in 1.18s** after compatibility fixes
+- [x] Decision snapshot provenance regression — **3 passed in 0.18s**
+- [x] Decision strategy provenance regression — **2 passed in 0.20s**
+- [x] LiveEngine intelligence regression — **2 passed in 4.66s**
+- [x] Replay/backward-compatibility regression — **40 passed, 414 deselected in 6.56s**
+- [x] Full regression — **454 passed in 17.37s**
+- [x] Slice 8 release/green gate
 
 ### R2-014 Release Gate Status
 - [x] Slice 5 release gate complete
 - [x] Slice 6 release gate complete
 - [x] Slice 7 release gate complete
-- [ ] Slice 8 release gate complete
+- [x] Slice 8 release gate complete
 - [ ] Current R2-014 release gate complete
 
 ### Downstream Canonical Consumer Audit — Active
 - [x] `RuntimeContext.market_context` → `MarketSnapshot` semantic identity
-- [x] `MarketSnapshot` → `DecisionEngine` source-of-truth and legacy aliases — implementation complete; compatibility fix pending validation
+- [x] `MarketSnapshot` → `DecisionEngine` source-of-truth and legacy aliases
 - [x] `RuntimeContext.market_context` → `FeatureExtractor/MarketExtractor`
 - [ ] `DashboardData.analytics` generic projection versus dedicated fields
 - [ ] Streamlit generic analytics display and duplicate/default mappings
@@ -116,7 +116,7 @@
 `MarketExtractor` consumes the typed canonical `MarketContext` first for expected move, market structure, technical, institutional score, probability, PCR and ATR. The legacy `ctx.analytics` projection remains an explicit fallback when the typed field is empty, preserving compatibility for legacy/unit callers. Local validation is green: targeted 2/2, replay/backward 40/40, full suite 451/451. Slice 7 release gate is closed.
 
 ### Slice 8 Audit Finding / Implementation Disposition
-`MarketSnapshot` now carries typed canonical analytics and its declared accessors are canonical-first. Initial Slice 8 validation exposed seven compatibility failures: five legacy/fake snapshot fixtures expected mapping-style `get()` compatibility, while two LiveEngine tests used a fake snapshot whose historical `save()` signature did not accept the new optional keyword. These were compatibility regressions introduced by the boundary implementation, not failures of the canonical precedence tests. The fixes preserve the canonical behavior while restoring the historical fake/legacy interfaces. Validation after those fixes is still pending; no Slice 8 green status is claimed.
+`MarketSnapshot` now carries typed canonical analytics and its declared accessors are canonical-first. Initial Slice 8 validation exposed seven compatibility failures: five legacy/fake snapshot fixtures expected mapping-style `get()` compatibility, while two LiveEngine tests used a fake snapshot whose historical `save()` signature did not accept the new optional keyword. The compatibility fixes restored those historical interfaces without weakening canonical precedence. Final local validation is green: targeted 3/3, decision provenance 3/3, strategy provenance 2/2, LiveEngine intelligence 2/2, replay/backward 40/40, full suite 454/454. Slice 8 release gate is closed.
 
 ### Integrity / provenance reminder
 R2-013 live evidence on 2026-09-03 remains `coverage=COMPLETE`, `freshness=VERIFIED`, `reconciliation=PASS`, with `integrity=SUSPECT` due `pe_ltp_below_intrinsic`. Do not relabel this caveat as VALID.
