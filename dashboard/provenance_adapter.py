@@ -3,6 +3,18 @@ from __future__ import annotations
 from core.data_provenance import AcquisitionProvenance, RuntimeDataProvenance
 
 
+def option_chain_quality_state(option_chain: dict | None) -> str:
+    """Return presentation quality without collapsing canonical provenance states."""
+    if option_chain is None:
+        return "UNAVAILABLE"
+    if (
+        option_chain["coverage_status"] != "COMPLETE"
+        or option_chain["integrity_status"] in ("SUSPECT", "INVALID")
+    ):
+        return "DEGRADED"
+    return "READY"
+
+
 def adapt_provenance(provenance: RuntimeDataProvenance | None) -> dict:
     """Expose canonical backend provenance without collapsing independent states.
 
@@ -34,18 +46,7 @@ def adapt_provenance(provenance: RuntimeDataProvenance | None) -> dict:
         }
 
     option_chain = adapt(getattr(provenance, "option_chain", None))
-
-    # This is presentation state only. It does not replace or merge the
-    # independent canonical coverage/integrity fields above.
-    if option_chain is None:
-        option_chain_quality = "UNAVAILABLE"
-    elif (
-        option_chain["coverage_status"] != "COMPLETE"
-        or option_chain["integrity_status"] in ("SUSPECT", "INVALID")
-    ):
-        option_chain_quality = "DEGRADED"
-    else:
-        option_chain_quality = "READY"
+    option_chain_quality = option_chain_quality_state(option_chain)
 
     return {
         "spot": adapt(getattr(provenance, "spot", None)),
