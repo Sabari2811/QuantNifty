@@ -81,14 +81,20 @@ def test_live_engine_preserves_pipeline_result_as_runtime_analytics():
             continue
         target = node.targets[0]
         value = node.value
-        if (
+        if not (
             isinstance(target, ast.Attribute)
-            and isinstance(target.value, ast.Attribute)
-            and isinstance(target.value.value, ast.Name)
-            and target.value.value.id == "self"
-            and target.value.attr == "analytics"
+            and target.attr == "analytics"
             and isinstance(value, ast.Name)
             and value.id == "computed_analytics"
+        ):
+            continue
+
+        owner = target.value
+        if (
+            isinstance(owner, ast.Attribute)
+            and owner.attr == "ctx"
+            and isinstance(owner.value, ast.Name)
+            and owner.value.id == "self"
         ):
             matches.append(node)
 
