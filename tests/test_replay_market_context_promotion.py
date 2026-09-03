@@ -32,8 +32,6 @@ EXPECTED_FIELDS = {
 
 
 def build_snapshot():
-    analytics = dict(EXPECTED_FIELDS)
-    analytics["greeks"] = "recorded-greeks"
     return SimpleNamespace(
         timestamp="03-Sep-2026 09:15:00",
         cycle_no=7,
@@ -41,7 +39,7 @@ def build_snapshot():
         spot=25010.0,
         option_chain=SimpleNamespace(copy=lambda: "recorded-chain"),
         greeks=SimpleNamespace(copy=lambda: "recorded-greeks"),
-        analytics=analytics,
+        analytics=dict(EXPECTED_FIELDS),
         decision={"signal": "WAIT"},
         explanation={"text": "recorded"},
     )
@@ -63,7 +61,6 @@ def test_replay_restores_typed_market_context_from_recorded_analytics():
 
     assert isinstance(ctx, RuntimeContext)
     assert isinstance(ctx.market_context, MarketContext)
-    assert ctx.market_context is not None
 
     for field_name, expected in EXPECTED_FIELDS.items():
         assert getattr(ctx.market_context, field_name) == expected
@@ -83,5 +80,5 @@ def test_replay_missing_analytics_preserves_typed_context_without_fabrication():
     assert isinstance(ctx.market_context, MarketContext)
     assert ctx.market_context.dealer == {}
     assert ctx.market_context.signal == {}
-    assert ctx.market_context.spot == 0.0
-    assert ctx.market_context.greeks is None
+    assert ctx.market_context.spot == snapshot.spot
+    assert ctx.market_context.greeks == "recorded-greeks"
