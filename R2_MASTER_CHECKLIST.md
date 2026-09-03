@@ -37,21 +37,21 @@
 - [x] Preserve `RuntimeContext.analytics` as the established serialized/backward-compatible projection
 - [x] Route dedicated `DashboardData` analytics fields from typed `RuntimeContext.market_context`
 - [x] Add regression coverage for typed runtime field and LiveEngine promotion
-- [ ] Targeted Slice 4 regression — run locally after pulling implementation
-- [ ] Full regression — run locally after pulling implementation
-- [ ] Replay/backward-compatibility regression — run locally after pulling implementation
-- [ ] Slice 4 release/green gate
+- [x] Targeted Slice 4 regression — **7 passed in 6.43s**
+- [x] Full regression — **444 passed in 19.73s**
+- [x] Replay/backward-compatibility regression — **36 passed, 408 deselected in 21.23s**
+- [x] Slice 4 release/green gate
 
 ### R2-014 Release Gate Status
 - [x] Full local pytest regression green for pre-Slice-4 R2-014 Slice 1–3 code — **441 passed in 21.31s**
-- [ ] Slice 4 targeted regression green
-- [ ] Slice 4 replay/backward-compatibility regression green
-- [ ] Slice 4 full regression green
-- [ ] Project state updated from Slice 4 local evidence
+- [x] Slice 4 targeted regression green — **7 passed in 6.43s**
+- [x] Slice 4 replay/backward-compatibility regression green — **36 passed, 408 deselected in 21.23s**
+- [x] Slice 4 full regression green — **444 passed in 19.73s**
+- [x] Project state update pending — record the new Slice 4 evidence and audit disposition before declaring the overall R2-014 release gate complete
 - [ ] Current R2-014 release gate complete
 
 ### Evidence note
-Full local validation for the pre-Slice-4 implementation was run by the user from `D:\Projects\NiftySignalEngine` after `git fetch origin` and `git pull --ff-only origin r2-011-canonical-snapshot-provenance`, which fast-forwarded the local branch from `138c5bc` to `150225c`. The exact command/result was `pytest -q` → **441 passed in 21.31s**. Slice 4 changes are committed after that validation and therefore require a fresh local targeted and full regression pass.
+Pre-Slice-4 full local validation was run from `D:\Projects\NiftySignalEngine` after fast-forwarding the local branch from `138c5bc` to `150225c`: `pytest -q` → **441 passed in 21.31s**. After Slice 4 and its regression fixes, the user pulled branch tip `243cf1c` and reran all required suites locally: targeted canonical-context suite → **7 passed in 6.43s**; replay/backward-compatibility suite → **36 passed, 408 deselected in 21.23s**; full regression → **444 passed in 19.73s**. These are the authoritative post-change local validation results for Slice 4.
 
 ### Integrity / scope reminder
-R2-013 remains historically green with fresh 2026-09-03 live evidence and explicit `integrity_status=SUSPECT` / `pe_ltp_below_intrinsic`. That data-quality caveat is unchanged and must not be relabeled as VALID. R2-014 remains audit-first; no new provider/UI runtime gate is inferred from the pre-Slice-4 full pytest result.
+R2-013 remains historically green with fresh 2026-09-03 live evidence and explicit `integrity_status=SUSPECT` / `pe_ltp_below_intrinsic`. That data-quality caveat is unchanged and must not be relabeled as VALID. R2-014 remains audit-first; the Slice 4 pytest evidence validates code/regression behavior but does not establish a new live-provider or Streamlit runtime gate.
