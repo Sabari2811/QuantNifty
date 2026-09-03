@@ -147,10 +147,10 @@ Consecutive OI validation also passed on the same live evidence path: cycle 1 �
 - [ ] Local uncommitted/untracked working tree independently verified in this session — GitHub repository tooling cannot inspect the user's separate local workspace; no local artifacts were modified or deleted
 
 ### Slice 1 — Typed canonical `MarketContext`
-- [ ] Declare every analytics result currently attached by `AnalyticsPipeline.run()` in `MarketContext`
-- [ ] Preserve existing pipeline computations and populate the declared fields without changing analytics semantics
-- [ ] Add regression coverage for canonical context surface and pipeline population
-- [ ] Targeted regression pass
-- [ ] Full regression pass
-- [ ] Runtime evidence for Slice 1, if required by any affected boundary
+- [x] Declare every analytics result currently attached by `AnalyticsPipeline.run()` in `MarketContext` — source audit and implementation commit `d2150c2` confirm the fields are explicitly declared
+- [x] Preserve existing pipeline computations and populate the declared fields without changing analytics semantics — implementation only canonicalizes existing assignments; no engine calculations changed
+- [x] Add regression coverage for canonical context surface and pipeline population — `tests/test_market_context_canonical_surface.py` added
+- [ ] Targeted regression pass — not yet executable in this session
+- [ ] Full regression pass — not yet executable in this session
+- [x] Runtime evidence for Slice 1 not required as a new provider/UI gate; slice is an internal typed-boundary change. A local structural smoke check passed for the 22 canonical analytics fields, but this is not substituted for the repository pytest suite
 - [ ] Update project state from actual implementation/test evidence
