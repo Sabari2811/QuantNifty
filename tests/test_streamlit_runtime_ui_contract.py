@@ -76,7 +76,7 @@ def _dashboard():
             "confidence": 60.0,
             "reasons": ("r",),
         },
-        signal={"signal": "BUY CALL"},
+        signal={"signal": "BUY CALL", "confidence": 60.0},
         trade_plan={"signal": "BUY CALL"},
         risk={},
         institutional_score={},
