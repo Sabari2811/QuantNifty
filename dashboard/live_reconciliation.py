@@ -18,17 +18,10 @@ def _dataframe_values_equal(left, right) -> bool:
 
 
 def _decision_backend_values(dashboard) -> dict:
-    signal = dashboard.signal or {}
-    probability = dashboard.probability or {}
-    trade_plan = dashboard.trade_plan or {}
-    return {
-        "signal": signal.get("signal"),
-        "bullish_probability": probability.get("bullish_probability"),
-        "bearish_probability": probability.get("bearish_probability"),
-        "confidence": probability.get("confidence"),
-        "reasons": probability.get("reasons", ()),
-        "trade_plan_signal": trade_plan.get("signal"),
-    }
+    # Use the same canonical adapter contract as the UI. The reconciliation
+    # layer must validate the actual UI-facing mapping, not maintain a parallel
+    # ownership rule that can drift from adapt_decision().
+    return adapt_decision(dashboard)
 
 
 def build_live_reconciliation(dashboard) -> dict:
