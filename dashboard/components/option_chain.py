@@ -102,11 +102,18 @@ def _render_provenance(
     provenance: RuntimeDataProvenance | None,
     integrity: dict | None = None,
 ) -> None:
-    """Display independent backend quality states without deriving one from another."""
-    state = _option_chain_provenance(provenance)
+    """Display canonical quality states without replacing independent fields."""
+    payload = adapt_provenance(provenance)
+    state = payload.get("option_chain")
+    quality = payload.get("option_chain_quality")
     if state is None:
-        st.warning("Option-chain provenance unavailable")
+        st.warning("Option-chain data unavailable: canonical provenance is unavailable")
         return
+
+    if quality == "DEGRADED":
+        st.warning(
+            "Option-chain data degraded: review coverage and integrity before using it."
+        )
 
     coverage = f"{state['received_count']}/{state['expected_count']} ({state['coverage_ratio']:.1f}%)"
     integrity_status = state["integrity_status"]
