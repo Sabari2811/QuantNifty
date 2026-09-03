@@ -39,6 +39,14 @@ class RuntimeContext:
     # Backward-compatible serialized analytics projection. Snapshot/replay
     # continues to persist this established dictionary contract.
     analytics: dict = field(default_factory=dict)
+
+    # Replay recomputation diagnostics. The recomputed context is retained for
+    # audit visibility, while the recorded analytics remain canonical for the
+    # replay snapshot/UI surface when a recorded projection is available.
+    replay_computed_market_context: Any = None
+    replay_analytics_equivalence: Any = None
+    replay_computed_analytics: Any = None
+
     features: dict = field(default_factory=dict)
     regime: Any = None
 
