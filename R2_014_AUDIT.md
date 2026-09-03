@@ -48,6 +48,53 @@ This is the highest-value first slice because it sits directly on the canonical 
 4. Regression coverage proves the newly canonicalized fields are declared and populated at the pipeline context boundary.
 5. No checklist item is marked green until the implementation is validated by tests/runtime evidence.
 
+## R2-014 Slice 2 — Canonical Context → Snapshot / Replay Boundary Audit
+
+### Audit status
+
+**Baseline:** audit-complete / implementation-ready for a narrow persistence-contract slice.
+
+The Slice 1 implementation establishes a typed canonical analytics surface, but the snapshot boundary does **not** persist `MarketContext` itself. `SnapshotRecorder` persists a separate `analytics` payload plus runtime/decision/explanation/intelligence and the option-chain/greeks frames; `ReplayLoader` restores those same artifacts into `ReplaySnapshot`. This means typed `MarketContext` completeness alone does not prove that every canonical analytics field survives recording/replay. fileciteturn95file0 fileciteturn93file0
+
+### Evidence-led findings
+
+1. **Snapshot model boundary:** `ReplaySnapshot` has an `analytics: dict` payload rather than a `MarketContext` field. fileciteturn93file0
+2. **Recorder boundary:** `SnapshotRecorder.save()` writes `ctx.analytics` to `analytics.json`; it does not serialize `ctx` or `ctx.market_context` wholesale. Dataclass values are converted with `asdict()` only when the object passed to `_save_json()` is itself a dataclass. fileciteturn95file0
+3. **Replay boundary:** `ReplayLoader.load()` restores `analytics.json` verbatim as a dictionary and separately restores decision, explanation, typed intelligence, option chain, greeks, and provenance. No `MarketContext` reconstruction occurs. fileciteturn94file0
+4. **Manifest contract:** `SnapshotManifest` defines `analytics.json` as the canonical analytics artifact and has no separate market-context artifact. fileciteturn96file0
+5. **Risk:** the newly typed fields are only replay-safe if the runtime `ctx.analytics` payload contains them. The current recorder/loader contract does not itself assert parity between `MarketContext` analytics fields and the persisted analytics artifact.
+
+### Slice 2 scope decision
+
+**Approved first implementation slice:** add a deterministic contract test at the recorder boundary that proves the canonical analytics surface is persisted from `ctx.analytics` and survives `ReplayLoader` restoration without key loss. The test must use representative values for all fields newly canonicalized in Slice 1 and must not require a live provider session.
+
+This does **not** redesign the snapshot format or add a redundant `MarketContext` file. The existing `analytics.json` artifact remains authoritative unless future evidence demonstrates a need for a separate typed-context artifact.
+
+### Explicit non-goals
+
+- No provider/network changes.
+- No analytics calculation changes.
+- No changes to decision/intelligence semantics or `authoritative_signal` compatibility.
+- No UI changes.
+- No migration of existing snapshot manifest version unless the persistence contract itself changes.
+- No claim that replay reconstructs a `MarketContext`; the current replay contract restores canonical analytics as a dictionary.
+
+### Slice 2 validation plan
+
+- Targeted regression: recorder → analytics.json → ReplayLoader analytics-key preservation using a deterministic fake runtime context.
+- Backward compatibility: existing replay loader behavior for partial/legacy artifacts must remain unchanged.
+- Full regression: required after implementation.
+- Runtime/live provider: not required for this pure persistence-contract test; existing live evidence remains historical R2-013 evidence.
+
+### Slice 2 exit criteria
+
+- [ ] Contract test committed.
+- [ ] Targeted regression passes in the repository runtime.
+- [ ] Full regression passes in the repository runtime.
+- [ ] No existing replay/provenance/Decision ↔ Intelligence contract regresses.
+- [ ] Master checklist updated from actual evidence only.
+- [ ] Project state updated from actual implementation/test evidence.
+
 ## Validation plan
 
 ### Targeted
