@@ -96,7 +96,7 @@ def _dashboard():
         },
         pcr={"oi_pcr": 0.97},
         max_pain={"max_pain": 24200},
-        signal={"signal": "WAIT"},
+        signal={"signal": "WAIT", "confidence": 52},
         probability={
             "bullish_probability": 40,
             "bearish_probability": 35,
