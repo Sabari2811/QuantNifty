@@ -6,12 +6,15 @@ import pandas as pd
 @dataclass
 class MarketContext:
     """
-    Internal Context Object
+    Internal canonical analytics context.
 
-    Passed between all analytics engines.
+    Passed between analytics/runtime components. This object should NEVER
+    be used directly by the UI; dashboard consumers must use DashboardData
+    and its canonical adapters.
 
-    This object should NEVER be used directly
-    by the UI.
+    The declared fields intentionally mirror the analytics result surface
+    produced by AnalyticsPipeline.run(). Keeping the surface typed prevents
+    silent drift through dynamically attached attributes.
     """
 
     # =====================================================
@@ -19,9 +22,7 @@ class MarketContext:
     # =====================================================
 
     symbol: str = ""
-
     spot: float = 0.0
-
     expiry: str = ""
 
     # =====================================================
@@ -29,7 +30,6 @@ class MarketContext:
     # =====================================================
 
     option_chain: pd.DataFrame | None = None
-
     greeks: pd.DataFrame | None = None
 
     # =====================================================
@@ -37,14 +37,15 @@ class MarketContext:
     # =====================================================
 
     gamma_flip: dict = field(default_factory=dict)
-
     gamma_wall: dict = field(default_factory=dict)
 
     # =====================================================
-    # Dealer Analytics
+    # Dealer / Exposure Analytics
     # =====================================================
 
     dealer: dict = field(default_factory=dict)
+    dealer_flow: dict = field(default_factory=dict)
+    liquidity: dict = field(default_factory=dict)
 
     # =====================================================
     # Open Interest
@@ -53,41 +54,44 @@ class MarketContext:
     oi_flow: dict = field(default_factory=dict)
 
     # =====================================================
-    # IV Analytics
+    # IV / Expected Move
     # =====================================================
 
     iv_skew: dict = field(default_factory=dict)
-
     iv_smile: dict = field(default_factory=dict)
+    expected_move: dict = field(default_factory=dict)
 
     # =====================================================
-    # Volatility
+    # Volatility / Structure / Technical Analytics
     # =====================================================
 
     atr: dict = field(default_factory=dict)
+    volatility: dict = field(default_factory=dict)
+    market_structure: dict = field(default_factory=dict)
+    technical: dict = field(default_factory=dict)
+
+    # =====================================================
+    # Derived Market Statistics
+    # =====================================================
+
+    max_pain: dict = field(default_factory=dict)
+    pcr: dict = field(default_factory=dict)
+
+    oi_shift: dict = field(default_factory=dict)
 
     # =====================================================
     # Decision Engines
     # =====================================================
 
     probability: dict = field(default_factory=dict)
-
     signal: dict = field(default_factory=dict)
-
+    institutional_score: dict = field(default_factory=dict)
+    smart_strike: dict = field(default_factory=dict)
     trade_plan: dict = field(default_factory=dict)
-
     risk: dict = field(default_factory=dict)
 
     # =====================================================
-    # Future Engines
+    # Canonical Market Map
     # =====================================================
 
-    max_pain: dict = field(default_factory=dict)
-
-    pcr: dict = field(default_factory=dict)
-
-    oi_shift: dict = field(default_factory=dict)
-
-    market_structure: dict = field(default_factory=dict)
-
-    smart_strike: dict = field(default_factory=dict)
+    market_map: dict = field(default_factory=dict)
