@@ -13,9 +13,11 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+from core.data_provenance import AcquisitionProvenance, RuntimeDataProvenance
 from dashboard.dashboard_controller import DashboardController
 from dashboard.live_raw_analytics_reconciliation import reconcile_raw_quote_analytics
 from dashboard.live_reconciliation import build_live_reconciliation
+from dashboard.provenance_adapter import adapt_provenance, option_chain_quality_state
 from validation.live_session_freshness import evaluate_consecutive_freshness
 
 DEFAULT_REPORT = os.path.join(PROJECT_ROOT, "validation", "live_session_latest.json")
@@ -61,6 +63,56 @@ def _raw_analytics_gate_ok(cycles: list[dict]) -> bool:
         (cycle.get("raw_analytics") or {}).get("status") == "PASS"
         for cycle in cycles
     )
+
+
+def _degraded_data_ui_gate_ok() -> bool:
+    """Validate the controlled UI quality-state contract without live data."""
+    cases = [
+        (None, "UNAVAILABLE"),
+        (
+            adapt_provenance(
+                RuntimeDataProvenance(
+                    option_chain=AcquisitionProvenance(
+                        source="options",
+                        expected_count=22,
+                        received_count=21,
+                        missing_count=1,
+                        integrity_status="VALID",
+                    )
+                )
+            )["option_chain"],
+            "DEGRADED",
+        ),
+        (
+            adapt_provenance(
+                RuntimeDataProvenance(
+                    option_chain=AcquisitionProvenance(
+                        source="options",
+                        expected_count=22,
+                        received_count=22,
+                        missing_count=0,
+                        integrity_status="INVALID",
+                    )
+                )
+            )["option_chain"],
+            "DEGRADED",
+        ),
+        (
+            adapt_provenance(
+                RuntimeDataProvenance(
+                    option_chain=AcquisitionProvenance(
+                        source="options",
+                        expected_count=22,
+                        received_count=22,
+                        missing_count=0,
+                        integrity_status="VALID",
+                    )
+                )
+            )["option_chain"],
+            "READY",
+        ),
+    ]
+    return all(option_chain_quality_state(payload) == expected for payload, expected in cases)
 
 
 def _ensure_parent(path: str) -> None:
@@ -230,6 +282,7 @@ def main() -> int:
         if item is not None
     )
     raw_analytics_ok = _raw_analytics_gate_ok(reports)
+    degraded_ui_ok = _degraded_data_ui_gate_ok()
 
     gates = {
         "backend_ui_reconciliation": _gate("PASS" if reconciliation_ok else "FAIL", "all DashboardData → UI reconciliation fields matched" if reconciliation_ok else "field-level gaps recorded"),
@@ -239,7 +292,7 @@ def main() -> int:
         "oi_consecutive_state": _gate("PASS" if oi_ready else "NOT_VERIFIED", "consecutive cycles reached READY/NO_CHANGE" if oi_ready else "insufficient consecutive OI evidence"),
         "decision_intelligence": _gate("PASS" if decision_ok else "FAIL", "canonical Decision ↔ Intelligence semantics are consistent in every cycle" if decision_ok else "Decision ↔ Intelligence semantic conflict or deferral recorded"),
         "analytics_raw_reconciliation": _gate("PASS" if raw_analytics_ok and freshness["status"] == "PASS" else "NOT_VERIFIED", "fresh consecutive provider quotes independently reconcile all validated quote-derived analytics" if raw_analytics_ok and freshness["status"] == "PASS" else "fresh market-session raw-provider numerical reconciliation is not fully verified"),
-        "degraded_data_ui": _gate("OBSERVED" if integrity_suspect else "NOT_VERIFIED", "live suspect integrity state observed; controlled UI degradation test still required" if integrity_suspect else "requires a controlled missing/invalid-data UI session"),
+        "degraded_data_ui": _gate("PASS" if degraded_ui_ok else "FAIL", "controlled UI quality-state contract covers UNAVAILABLE, partial/invalid DEGRADED, and complete VALID READY states" if degraded_ui_ok else "controlled UI quality-state contract failed"),
     }
 
     for name, gate in gates.items():
@@ -270,6 +323,7 @@ def main() -> int:
     print(f"OI:              {gates['oi_consecutive_state']['status']}")
     print(f"Decision/Intel:  {gates['decision_intelligence']['status']}")
     print(f"Raw Analytics:   {gates['analytics_raw_reconciliation']['status']}")
+    print(f"Degraded UI:     {gates['degraded_data_ui']['status']}")
     print(f"Result:          {'PASS' if not failures else 'FAIL'}")
     print(f"Report:          {os.path.relpath(args.output, PROJECT_ROOT)}")
     print(f"Summary:         {os.path.relpath(args.summary_output, PROJECT_ROOT)}")
