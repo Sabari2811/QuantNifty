@@ -63,31 +63,28 @@
 - [x] Route `IntelligenceService` evidence extraction through `runtime_context.market_context` when available
 - [x] Preserve existing evidence semantics, including gamma-flip non-directionality and IV-skew project heuristic
 - [x] Add regression coverage proving typed `MarketContext` is sufficient for evidence extraction
-- [ ] Local targeted regression — pending user execution
-- [ ] Replay/backward-compatibility regression — pending user execution
-- [ ] Full regression — pending user execution
-- [ ] Slice 6 release/green gate
+- [x] Local targeted regression — **8 passed in 1.15s** on `c66d971`
+- [x] Replay/backward-compatibility regression — **40 passed, 409 deselected in 7.91s** on `c66d971`
+- [x] Full regression — **449 passed in 17.40s** on `c66d971`
+- [x] Slice 6 release/green gate
 
 ### R2-014 Release Gate Status
-- [x] Slice 4 release gate previously green — targeted **7 passed**, replay/backward **36 passed / 408 deselected**, full **444 passed**
-- [x] Slice 5 post-fix targeted reconstruction/promotion suite — **3 passed in 1.11s** on `e69a5e5`
-- [x] Slice 5 replay/backward-compatibility suite — **40 passed / 408 deselected in 7.14s** on `e69a5e5`
-- [x] Slice 5 full regression — **448 passed in 15.90s** on `e69a5e5`
-- [x] Current R2-014 Slice 5 release gate complete
+- [x] Slice 5 release gate complete
+- [x] Slice 6 release gate complete
 - [ ] Current R2-014 release gate complete
 
-### Slice 5 Failure Evidence / Audit Disposition
-The first implementation folded analytics/context parity mismatches into `replay_equivalence`. The user's authoritative local run exposed **1 failure / 39 passed / 408 deselected** in the replay/backward suite and **1 failure / 447 passed** in the full suite. The failing real-snapshot gate reported drift across derived analytics including OI-flow, technical, probability, market-map, wall/void, and other values. The captured OI log also showed recomputation entering `AWAITING_PREVIOUS_SNAPSHOT`, demonstrating that replay recomputation does not necessarily possess every historical dependency required to reproduce the recorded analytics artifact exactly.
-
-Disposition: analytics/context parity is now an explicit **diagnostic parity result** (`replay_analytics_equivalence`) rather than a decision/intelligence veto. During `REPLAY_RECOMPUTE`, the recomputed context remains available for audit, while the recorded analytics projection is restored into the canonical typed `market_context` so replay does not silently create two competing canonical surfaces. The existing decision/intelligence equivalence contract remains independent and continues to be the replay output gate. This correction was validated by the post-fix local targeted → replay/backward → full sequence recorded above.
+### Downstream Canonical Consumer Audit — Active
+- [ ] `RuntimeContext.market_context` → `MarketSnapshot` semantic identity
+- [ ] `MarketSnapshot` → `DecisionEngine` source-of-truth and legacy aliases
+- [ ] `RuntimeContext.market_context` → `FeatureExtractor/MarketExtractor`
+- [ ] `DashboardData.analytics` generic projection versus dedicated fields
+- [ ] Streamlit generic analytics display and duplicate/default mappings
+- [ ] Field-by-field disposition for all canonical analytics fields
 
 ### Slice 6 Audit Finding / Implementation Disposition
-The downstream consumer audit found a concrete canonical-boundary mismatch in the intelligence path. `IntelligenceService.analyze()` previously passed `runtime_context.analytics` to `EvidenceAdapter.extract()`, even though R2-014 established `runtime_context.market_context` as the typed canonical analytics runtime field. `EvidenceAdapter` then read dealer, OI flow, IV skew, probability, signal, and market-structure evidence from that generic dictionary. This left a live source-of-truth dependency on the compatibility projection and made it possible for future divergence between typed context and serialized analytics to alter intelligence evidence without changing the canonical typed context.
+`EvidenceAdapter` now consumes the typed canonical `MarketContext` at the IntelligenceService boundary. `MarketExtractor` remains a downstream compatibility consumer that reads `ctx.analytics` for expected move, market structure, technicals, institutional score, probability, PCR and ATR. This is the next concrete audit target and must not be migrated until semantic identity and an actual behavior gap are proven.
 
-Disposition: `EvidenceAdapter` now accepts `MarketContext` directly and resolves declared analytics fields from typed attributes. Dict input remains supported for legacy/unit callers. `IntelligenceService` prefers `runtime_context.market_context` and falls back to the generic projection only when a runtime context has no canonical typed context. No evidence semantics were intentionally changed. Slice 6 is **implemented but not green** until the user executes the required local regression sequence.
+`DecisionEngine` still consumes `MarketSnapshot.analytics` through shortcut properties and generic `get()`. This remains an explicit source-of-truth audit target.
 
-### Evidence note
-Pre-Slice-4 full local validation was run from `D:\Projects\NiftySignalEngine` after fast-forwarding the local branch from `138c5bc` to `150225c`: `pytest -q` → **441 passed in 21.31s**. After Slice 4 and its regression fixes, the user pulled branch tip `243cf1c` and reran all required suites locally: targeted canonical-context suite → **7 passed in 6.43s**; replay/backward-compatibility suite → **36 passed, 408 deselected in 21.23s**; full regression → **444 passed in 19.73s**. Slice 5 initial targeted suite then passed **4 in 1.27s**, but the first parity implementation caused the real recorded-snapshot replay gate to fail as documented above. The corrected Slice 5 implementation was then pulled at `e69a5e5` and the required validation sequence passed: targeted → **3 passed in 1.11s**; replay/backward → **40 passed, 408 deselected in 7.14s**; full → **448 passed in 15.90s**. These are the authoritative post-fix Slice 5 validation results.
-
-### Integrity / scope reminder
-R2-013 remains historically green with fresh 2026-09-03 live evidence and explicit `integrity_status=SUSPECT` / `pe_ltp_below_intrinsic`. That data-quality caveat is unchanged and must not be relabeled as VALID. R2-014 remains audit-first; no live-provider or Streamlit runtime gate is inferred from pytest evidence alone.
+### Integrity / provenance reminder
+R2-013 live evidence on 2026-09-03 remains `coverage=COMPLETE`, `freshness=VERIFIED`, `reconciliation=PASS`, with `integrity=SUSPECT` due `pe_ltp_below_intrinsic`. Do not relabel this caveat as VALID.
