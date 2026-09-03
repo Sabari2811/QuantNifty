@@ -34,7 +34,11 @@ from recording.recording_manager import RecordingManager
 from ui.console_dashboard import ConsoleDashboard
 
 from runtime.runtime_mode import RuntimeMode
-from simulation.replay_equivalence import compare_replay_outputs
+from models.market_context import MarketContext
+from simulation.replay_equivalence import (
+    compare_replay_analytics,
+    compare_replay_outputs,
+)
 
 
 class LiveEngine:
@@ -120,7 +124,6 @@ class LiveEngine:
         computed_context = computed_analytics.get("context")
         if computed_context is None:
             raise RuntimeError("AnalyticsPipeline returned no canonical MarketContext")
-        self.ctx.market_context = computed_context
 
         # AnalyticsPipeline returns the authoritative enriched Greeks dataframe
         # inside its canonical MarketContext. Preserve that projection on the
@@ -130,11 +133,34 @@ class LiveEngine:
         if hasattr(computed_greeks_df, "copy"):
             self.ctx.greeks_df = computed_greeks_df.copy(deep=True)
 
-        expected_analytics = getattr(self.ctx, "replay_expected_analytics", None) if replay_recompute else None
-        if replay_recompute and expected_analytics:
-            self.ctx.replay_computed_analytics = computed_analytics
-            self.ctx.analytics = expected_analytics
+        if replay_recompute:
+            expected_analytics = getattr(self.ctx, "replay_expected_analytics", None)
+            if expected_analytics:
+                # Keep recomputation available for audit, but make the recorded
+                # snapshot projection the canonical replay/UI analytics source.
+                # This prevents a non-deterministic recompute from silently
+                # becoming a second source of truth.
+                self.ctx.replay_computed_analytics = computed_analytics
+                self.ctx.replay_computed_market_context = computed_context
+                self.ctx.replay_analytics_equivalence = compare_replay_analytics(
+                    expected_analytics,
+                    computed_context,
+                )
+                self.ctx.market_context = MarketContext.from_analytics(
+                    expected_analytics,
+                    spot=self.ctx.spot,
+                    greeks=self.ctx.greeks_df,
+                )
+                self.ctx.analytics = expected_analytics
+            else:
+                self.ctx.replay_computed_market_context = computed_context
+                self.ctx.replay_analytics_equivalence = None
+                self.ctx.market_context = computed_context
+                self.ctx.analytics = computed_analytics
         else:
+            self.ctx.market_context = computed_context
+            self.ctx.replay_computed_market_context = None
+            self.ctx.replay_analytics_equivalence = None
             self.ctx.analytics = computed_analytics
 
         greeks_for_snapshot = self.ctx.greeks_df
@@ -183,8 +209,6 @@ class LiveEngine:
                     self.ctx.decision,
                     expected_intelligence,
                     actual_intelligence,
-                    expected_analytics=expected_analytics,
-                    actual_market_context=computed_context,
                 )
             else:
                 self.ctx.replay_equivalence = None
