@@ -95,3 +95,44 @@ class MarketContext:
     # =====================================================
 
     market_map: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_analytics(cls, analytics, *, spot=0.0, greeks=None):
+        """Reconstruct the typed canonical context from a serialized surface.
+
+        Only declared analytics fields are restored. Snapshot identity values
+        remain explicit inputs so replay cannot fabricate them from a legacy
+        or incomplete analytics artifact.
+        """
+        context = cls(spot=spot, greeks=greeks)
+        if not isinstance(analytics, dict):
+            return context
+
+        for field_name in (
+            "dealer",
+            "dealer_flow",
+            "liquidity",
+            "gamma_flip",
+            "gamma_wall",
+            "oi_flow",
+            "iv_skew",
+            "iv_smile",
+            "expected_move",
+            "max_pain",
+            "pcr",
+            "market_structure",
+            "atr",
+            "volatility",
+            "technical",
+            "oi_shift",
+            "probability",
+            "signal",
+            "smart_strike",
+            "trade_plan",
+            "risk",
+            "institutional_score",
+            "market_map",
+        ):
+            if field_name in analytics:
+                setattr(context, field_name, analytics[field_name])
+        return context
