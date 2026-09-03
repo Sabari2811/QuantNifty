@@ -113,11 +113,19 @@ class LiveEngine:
             previous_greeks_df=getattr(self, "_previous_greeks_df", None),
         )
 
+        # Promote the typed MarketContext returned by the analytics pipeline
+        # into the canonical runtime state. The dictionary analytics surface is
+        # retained as the established serialization/backward-compatibility
+        # projection for snapshots, replay, and legacy consumers.
+        computed_context = computed_analytics.get("context")
+        if computed_context is None:
+            raise RuntimeError("AnalyticsPipeline returned no canonical MarketContext")
+        self.ctx.market_context = computed_context
+
         # AnalyticsPipeline returns the authoritative enriched Greeks dataframe
         # inside its canonical MarketContext. Preserve that projection on the
         # runtime context so DashboardData and downstream UI consumers receive
         # the same GEX/DEX-enriched data used by analytics.
-        computed_context = computed_analytics.get("context")
         computed_greeks_df = getattr(computed_context, "greeks", None)
         if hasattr(computed_greeks_df, "copy"):
             self.ctx.greeks_df = computed_greeks_df.copy(deep=True)
