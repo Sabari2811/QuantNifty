@@ -10,6 +10,33 @@ from typing import Any
 import pandas as pd
 
 
+CANONICAL_ANALYTICS_FIELDS = (
+    "dealer",
+    "dealer_flow",
+    "liquidity",
+    "gamma_flip",
+    "gamma_wall",
+    "oi_flow",
+    "iv_skew",
+    "iv_smile",
+    "expected_move",
+    "max_pain",
+    "pcr",
+    "market_structure",
+    "atr",
+    "volatility",
+    "technical",
+    "oi_shift",
+    "probability",
+    "signal",
+    "institutional_score",
+    "smart_strike",
+    "trade_plan",
+    "risk",
+    "market_map",
+)
+
+
 class ReplayEquivalence:
     """Result of comparing recorded and recomputed replay outputs."""
 
@@ -42,12 +69,7 @@ def _normalize(value):
 
 
 def _recorded_json_projection(value):
-    """Mirror SnapshotRecorder JSON conversion for replay parity checks.
-
-    Recorded analytics are JSON artifacts. DataFrames and other unsupported
-    objects therefore follow the recorder's ``str(value)`` fallback rather
-    than being compared as in-memory objects.
-    """
+    """Mirror SnapshotRecorder JSON conversion for parity diagnostics."""
     if is_dataclass(value):
         return _recorded_json_projection(asdict(value))
     if isinstance(value, (datetime, date)):
@@ -115,23 +137,46 @@ def _compare(expected, actual, path: str, mismatches: list[str], tolerance: floa
         mismatches.append(path or "root")
 
 
+def compare_replay_analytics(
+    expected_analytics,
+    actual_market_context,
+    *,
+    tolerance: float = 1e-9,
+) -> ReplayEquivalence:
+    """Compare recorded analytics with a recomputed typed MarketContext.
+
+    This is a diagnostic parity gate, not a decision/intelligence veto. Replay
+    recomputation can legitimately differ when a recorded snapshot lacks an
+    input dependency needed to reproduce every derived analytics value. The
+    gate exists to expose that drift explicitly while the recorded analytics
+    remain the canonical replay/UI surface.
+    """
+    mismatches: list[str] = []
+    if not isinstance(expected_analytics, dict) or actual_market_context is None:
+        return ReplayEquivalence(True, ())
+
+    expected_surface = {
+        field_name: _recorded_json_projection(expected_analytics[field_name])
+        for field_name in CANONICAL_ANALYTICS_FIELDS
+        if field_name in expected_analytics
+    }
+    actual_surface = {
+        field_name: _recorded_json_projection(getattr(actual_market_context, field_name))
+        for field_name in expected_surface
+    }
+    _compare(expected_surface, actual_surface, "analytics", mismatches, tolerance)
+    return ReplayEquivalence(not mismatches, tuple(mismatches))
+
+
 def compare_replay_outputs(
     expected_decision,
     actual_decision,
     expected_intelligence,
     actual_intelligence,
     *,
-    expected_analytics=None,
-    actual_market_context=None,
     tolerance: float = 1e-9,
 ) -> ReplayEquivalence:
-    """Compare recorded and recomputed replay outputs.
-
-    The optional analytics/context comparison validates the typed canonical
-    MarketContext against the recorded analytics projection. Only canonical
-    analytics fields actually present in the recorded artifact are compared,
-    preserving compatibility with older snapshots that predate a field.
-    """
+    """Compare canonical recorded decision/intelligence with replay outputs."""
     mismatches: list[str] = []
 
     expected_decision_normalized = _normalize(expected_decision)
@@ -148,42 +193,4 @@ def compare_replay_outputs(
 
     _compare(expected_decision_normalized, actual_decision_normalized, "decision", mismatches, tolerance)
     _compare(expected_intelligence, actual_intelligence, "intelligence", mismatches, tolerance)
-
-    if isinstance(expected_analytics, dict) and actual_market_context is not None:
-        canonical_fields = (
-            "dealer",
-            "dealer_flow",
-            "liquidity",
-            "gamma_flip",
-            "gamma_wall",
-            "oi_flow",
-            "iv_skew",
-            "iv_smile",
-            "expected_move",
-            "max_pain",
-            "pcr",
-            "market_structure",
-            "atr",
-            "volatility",
-            "technical",
-            "oi_shift",
-            "probability",
-            "signal",
-            "institutional_score",
-            "smart_strike",
-            "trade_plan",
-            "risk",
-            "market_map",
-        )
-        expected_surface = {
-            field_name: _recorded_json_projection(expected_analytics[field_name])
-            for field_name in canonical_fields
-            if field_name in expected_analytics
-        }
-        actual_surface = {
-            field_name: _recorded_json_projection(getattr(actual_market_context, field_name))
-            for field_name in expected_surface
-        }
-        _compare(expected_surface, actual_surface, "analytics", mismatches, tolerance)
-
     return ReplayEquivalence(not mismatches, tuple(mismatches))
