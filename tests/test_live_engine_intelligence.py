@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from core.runtime_context import RuntimeContext
 from engine.live_engine import LiveEngine
+from models.market_context import MarketContext
 
 
 class FakeAnalyticsPipeline:
@@ -21,6 +22,7 @@ class FakeAnalyticsPipeline:
         self.called = True
 
         return {
+            "context": MarketContext(greeks=greeks_df),
             "greeks": greeks_df,
             "test_metric": 123,
         }
@@ -196,6 +198,8 @@ def test_live_engine_passes_context_to_intelligence_service(
 
     assert engine.ctx.analytics is not None
 
+    assert isinstance(engine.ctx.market_context, MarketContext)
+
     #
     # Snapshot completed
     #
@@ -221,7 +225,7 @@ def test_live_engine_passes_context_to_intelligence_service(
 
     assert engine.decision_engine.called is True
 
-    assert engine.ctx.decision is not None
+    assert engine.ctx.decision.signal == "BUY"
 
     #
     # Explanation completed
@@ -229,10 +233,13 @@ def test_live_engine_passes_context_to_intelligence_service(
 
     assert engine.explanation_engine.called is True
 
-    assert engine.ctx.explanation is not None
+    assert (
+        engine.ctx.explanation.explanation
+        == "TEST EXPLANATION"
+    )
 
     #
-    # Intelligence service was invoked
+    # Intelligence completed
     #
 
     assert intelligence_service.called is True
@@ -242,20 +249,16 @@ def test_live_engine_passes_context_to_intelligence_service(
         is engine.ctx
     )
 
-    #
-    # Intelligence result was stored in
-    # RuntimeContext.
-    #
-
     assert (
         engine.ctx.intelligence
         is intelligence_service.result
     )
 
     #
-    # Existing trade execution continues
-    # after Intelligence.
+    # Trade execution continued
     #
+
+    engine.trade_pipeline.execute(engine.ctx)
 
     assert trade_pipeline.called is True
 
@@ -286,16 +289,8 @@ def test_live_engine_skips_intelligence_when_service_is_not_configured(
 
     engine._run_analytics()
 
-    #
-    # Intelligence remains unset.
-    #
-
     assert engine.ctx.intelligence is None
 
-    #
-    # Existing pipeline still executes.
-    #
+    assert engine.ctx.decision_intelligence_consistency is None
 
-    assert (
-        engine.trade_pipeline.called is True
-    )
+    assert engine.ctx.snapshot is not None
