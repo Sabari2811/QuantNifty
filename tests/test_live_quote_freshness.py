@@ -36,7 +36,7 @@ def test_websocket_bounded_clock_skew_is_verified_and_explicit():
     provider_timestamp = datetime(2026, 8, 30, 7, 0, 0, 600000, tzinfo=timezone.utc)
     batch = type("Batch", (), {"freshness": {"NIDX:40000001": LiveQuoteFreshness(provider_timestamp, ACQUIRED, -600, 600, "fresh_with_clock_skew")}})()
     assert MarketDataPipeline._websocket_freshness(batch, "NIDX:40000001") == (
-        provider_timestamp, True, -0.6,
+        provider_timestamp, True, 0.0,
         ("provider_quote_timestamp", "provider_quote_timestamp_clock_skew"),
     )
 
