@@ -134,3 +134,23 @@ Fresh market-hours live validation on 2026-09-03 completed successfully against 
 The same fresh session reported `integrity_status=SUSPECT` with the preserved reason `pe_ltp_below_intrinsic`. This is an explicit data-quality warning, not a freshness failure: the quotes are timestamp-bearing and fresh, coverage is complete, and backend→UI reconciliation is clean. The SUSPECT state is intentionally retained rather than being downgraded to VALID or silently ignored.
 
 Consecutive OI validation also passed on the same live evidence path: cycle 1 → cycle 2, 11 strikes, 22/22 flow checks PASS, with `LIVE_OI_CONSECUTIVE=PASS`. Full regression remained green at 435 passed in 19.47s from the prior final code validation. No code was changed by this checklist-only update.
+
+## R2-014 — Audit Baseline / Canonical Analytics Context
+
+### Audit gate
+- [x] Current branch state audited at commit `1fd69d3c2d2c3f4aba2ded67364efd3efbcec744`
+- [x] `QUANTNIFTY_PROJECT_STATE.md` and `R2_MASTER_CHECKLIST.md` re-read from the current branch
+- [x] R2-013 closure preserved; no prior provenance/freshness/integrity/Decision ↔ Intelligence/replay/backend → UI contract changed
+- [x] Repository analytics surface inventoried at the orchestration boundary
+- [x] Candidate paths ranked by canonical architectural risk and user-visible correctness
+- [x] Highest-value first slice identified: typed `MarketContext` completeness
+- [ ] Local uncommitted/untracked working tree independently verified in this session — GitHub repository tooling cannot inspect the user's separate local workspace; no local artifacts were modified or deleted
+
+### Slice 1 — Typed canonical `MarketContext`
+- [ ] Declare every analytics result currently attached by `AnalyticsPipeline.run()` in `MarketContext`
+- [ ] Preserve existing pipeline computations and populate the declared fields without changing analytics semantics
+- [ ] Add regression coverage for canonical context surface and pipeline population
+- [ ] Targeted regression pass
+- [ ] Full regression pass
+- [ ] Runtime evidence for Slice 1, if required by any affected boundary
+- [ ] Update project state from actual implementation/test evidence
