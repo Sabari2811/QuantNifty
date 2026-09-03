@@ -93,7 +93,23 @@ class INDMoneyProvider(BaseProvider):
             if data.get("status") != "success":
                 logger.warning("OPTION QUOTE API FAILURE | response=%s", data)
                 continue
-            quotes.update({key: self._normalise_quote(value) for key, value in data["data"].items()})
+            batch_data = data.get("data") or {}
+            expected_keys = {f"NFO_{sid}" for sid in batch}
+            returned_keys = set(batch_data)
+            missing_keys = sorted(expected_keys - returned_keys)
+            unexpected_keys = sorted(returned_keys - expected_keys)
+            logger.info(
+                "OPTION QUOTE BATCH RESULT | requested=%s | received=%s | missing=%s",
+                len(expected_keys),
+                len(expected_keys & returned_keys),
+                missing_keys,
+            )
+            if unexpected_keys:
+                logger.warning(
+                    "OPTION QUOTE BATCH UNEXPECTED_KEYS | keys=%s",
+                    unexpected_keys,
+                )
+            quotes.update({key: self._normalise_quote(value) for key, value in batch_data.items()})
         logger.info("OPTION QUOTE COMPLETE | quotes_received=%s", len(quotes))
         return quotes
 
