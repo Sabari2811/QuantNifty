@@ -65,3 +65,11 @@ def test_unavailable_snapshot_is_unknown_not_empty_match():
     assert report.status is ReconciliationStatus.UNKNOWN
     assert report.safe_to_continue is False
     assert report.issues[0].reason == "Position snapshot unavailable"
+
+
+def test_generator_inputs_are_materialized_once():
+    report = reconcile_positions((p for p in [position()]), (p for p in [position()]))
+
+    assert report.status is ReconciliationStatus.MATCH
+    assert report.local_count == 1
+    assert report.broker_count == 1
