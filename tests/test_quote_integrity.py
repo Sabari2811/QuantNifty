@@ -57,6 +57,22 @@ def test_integrity_finding_preserves_contract_identity():
     )
 
 
+def test_integrity_finding_normalizes_pandas_float_contract_ids():
+    report = assess_option_chain(
+        _chain(
+            Strike=24900,
+            CE_ID=111.0,
+            CE_LTP=120,
+            PE_ID=222.0,
+        ),
+        spot_price=25050,
+    )
+
+    assert report.contract_reasons[0][0] == (
+        "strike:24900|CE:111|PE:222|row:0"
+    )
+
+
 def test_negative_ltp_is_invalid():
     report = assess_option_chain(
         _chain(CE_LTP=-1),
