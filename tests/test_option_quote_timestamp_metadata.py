@@ -41,6 +41,6 @@ def test_attach_option_quote_timestamps_omits_missing_values():
         {42647: None, 42648: datetime(2026, 9, 4, 5, 4, 58, tzinfo=timezone.utc)},
     )
 
-    assert result := chain.attrs["option_quote_timestamps"]
+    result = chain.attrs["option_quote_timestamps"]
     assert "42647" not in result
     assert result["42648"].year == 2026
