@@ -90,5 +90,5 @@ def test_pipeline_passes_reconciliation_context_when_present():
 
     assert len(adapter.calls) == 1
     assert adapter.calls[0][0] is ctx.execution_intent
-    assert adapter.calls[0][1] is None
+    assert adapter.calls[0][1] is ctx.decision
     assert ctx.execution_result.status is ExecutionStatus.EXECUTED
