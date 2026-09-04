@@ -184,5 +184,48 @@ class INDMoneyProvider(BaseProvider):
     def get_option_chain(self, *args, **kwargs):
         raise NotImplementedError("Use OptionChainManager.get_live_option_chain()")
 
+    def get_positions(self, segment="derivative", product="margin"):
+        """Return the broker's authenticated portfolio positions without reshaping identity.
+
+        INDstocks documents this endpoint as the source of current open positions.
+        Provider position_id is preserved as supplied; it is not treated as the
+        canonical client_order_id because the provider does not document that
+        equivalence.
+        """
+        segment = str(segment).strip().lower()
+        product = str(product).strip().lower()
+        if segment not in {"derivative", "equity"}:
+            raise ValueError(f"Unsupported positions segment: {segment}")
+        if product not in {"margin", "intraday", "cnc"}:
+            raise ValueError(f"Unsupported positions product: {product}")
+        if segment == "derivative" and product not in {"margin", "intraday"}:
+            raise ValueError("Derivative positions require margin or intraday product")
+        if segment == "equity" and product not in {"cnc", "intraday"}:
+            raise ValueError("Equity positions require cnc or intraday product")
+
+        url = f"{self.base_url}/portfolio/positions"
+        params = {"segment": segment, "product": product}
+        logger.info("POSITIONS REQUEST | segment=%s | product=%s", segment, product)
+        try:
+            response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            logger.error("POSITIONS REQUEST FAILED | segment=%s | product=%s | error=%s", segment, product, exc)
+            return None
+        try:
+            data = response.json()
+        except ValueError:
+            logger.error("POSITIONS INVALID JSON | segment=%s | product=%s", segment, product)
+            return None
+        if data.get("status") != "success":
+            logger.error("POSITIONS API FAILURE | segment=%s | product=%s | status=%s", segment, product, data.get("status"))
+            return None
+        positions = data.get("data")
+        if not isinstance(positions, list):
+            logger.error("POSITIONS INVALID DATA | segment=%s | product=%s", segment, product)
+            return None
+        logger.info("POSITIONS COMPLETE | segment=%s | product=%s | positions=%s", segment, product, len(positions))
+        return positions
+
     def place_order(self, *args, **kwargs):
         raise NotImplementedError("Order placement will be implemented in Sprint 38.")
