@@ -27,7 +27,9 @@ from analytics.analytics_pipeline import AnalyticsPipeline
 from analytics.market_snapshot.market_snapshot import MarketSnapshot
 from analytics.intelligence.decision_consistency import reconcile_decision_intelligence
 
+from execution.order_intent_factory import build_order_intent
 from execution.trade_execution_pipeline import TradeExecutionPipeline
+from execution.execution_lifecycle import classify_execution_result
 
 from recording.recording_manager import RecordingManager
 
@@ -117,18 +119,10 @@ class LiveEngine:
             previous_greeks_df=getattr(self, "_previous_greeks_df", None),
         )
 
-        # Promote the typed MarketContext returned by the analytics pipeline
-        # into the canonical runtime state. The dictionary analytics surface is
-        # retained as the established serialization/backward-compatibility
-        # projection for snapshots, replay, and legacy consumers.
         computed_context = computed_analytics.get("context")
         if computed_context is None:
             raise RuntimeError("AnalyticsPipeline returned no canonical MarketContext")
 
-        # AnalyticsPipeline returns the authoritative enriched Greeks dataframe
-        # inside its canonical MarketContext. Preserve that projection on the
-        # runtime context so DashboardData and downstream UI consumers receive
-        # the same GEX/DEX-enriched data used by analytics.
         computed_greeks_df = getattr(computed_context, "greeks", None)
         if hasattr(computed_greeks_df, "copy"):
             self.ctx.greeks_df = computed_greeks_df.copy(deep=True)
@@ -136,10 +130,6 @@ class LiveEngine:
         if replay_recompute:
             expected_analytics = getattr(self.ctx, "replay_expected_analytics", None)
             if expected_analytics:
-                # Keep recomputation available for audit, but make the recorded
-                # snapshot projection the canonical replay/UI analytics source.
-                # This prevents a non-deterministic recompute from silently
-                # becoming a second source of truth.
                 self.ctx.replay_computed_analytics = computed_analytics
                 self.ctx.replay_computed_market_context = computed_context
                 self.ctx.replay_analytics_equivalence = compare_replay_analytics(
@@ -171,9 +161,6 @@ class LiveEngine:
             spot=self.ctx.spot,
             analytics=self.ctx.analytics,
         )
-        # Attach the canonical typed context after the established save()
-        # boundary so legacy/fake snapshot implementations that only support
-        # the historical three-argument save contract continue to work.
         self.ctx.snapshot.market_context = self.ctx.market_context
         regime = self.market_regime.analyze(self.ctx.snapshot)
         self.ctx.snapshot.regime = regime
@@ -217,7 +204,13 @@ class LiveEngine:
             else:
                 self.ctx.replay_equivalence = None
 
+        # Build the canonical broker-neutral execution intent at the live
+        # decision boundary. WAIT/invalid decisions intentionally produce None.
+        self.ctx.execution_intent = build_order_intent(self.ctx.decision)
+
         self.trade_pipeline.execute(self.ctx)
+        if self.ctx.execution_result is not None:
+            self.ctx.execution_lifecycle = classify_execution_result(self.ctx.execution_result).value
 
     def run_cycle(self):
         self.ctx.runtime_status = "RUNNING"
