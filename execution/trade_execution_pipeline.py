@@ -54,6 +54,24 @@ class TradeExecutionPipeline:
             ctx.execution_lifecycle = classify_execution_result(ctx.execution_result).value
             self._persist_result(ctx.execution_result)
 
+    def _execute_adapter(self, intent, decision, reconciliation_result, reconciliation_report):
+        if reconciliation_result is not None:
+            try:
+                return self.execution_adapter.execute(
+                    intent=intent,
+                    reconciliation_result=reconciliation_result,
+                    reconciliation_report=reconciliation_report,
+                )
+            except TypeError as exc:
+                if "reconciliation_result" not in str(exc) and "reconciliation_report" not in str(exc):
+                    raise
+                return self.execution_adapter.execute(intent, decision)
+
+        try:
+            return self.execution_adapter.execute(intent, decision)
+        except TypeError:
+            return self.execution_adapter.execute(intent=intent)
+
     def execute(self, ctx):
         self.sync_context(ctx)
         ctx.trade_status = ""
@@ -101,22 +119,12 @@ class TradeExecutionPipeline:
         if intent is not None:
             reconciliation_result = getattr(ctx, "reconciliation_result", None)
             reconciliation_report = getattr(ctx, "reconciliation_report", None)
-            if reconciliation_result is not None:
-                try:
-                    result = self.execution_adapter.execute(
-                        intent=intent,
-                        reconciliation_result=reconciliation_result,
-                        reconciliation_report=reconciliation_report,
-                    )
-                except TypeError as exc:
-                    if "reconciliation_result" not in str(exc) and "reconciliation_report" not in str(exc):
-                        raise
-                    result = self.execution_adapter.execute(intent, ctx.decision)
-            else:
-                try:
-                    result = self.execution_adapter.execute(intent, ctx.decision)
-                except TypeError:
-                    result = self.execution_adapter.execute(intent=intent)
+            result = self._execute_adapter(
+                intent,
+                ctx.decision,
+                reconciliation_result,
+                reconciliation_report,
+            )
             ctx.execution_result = result
             ctx.execution_lifecycle = classify_execution_result(result).value
             self._persist_result(result)
