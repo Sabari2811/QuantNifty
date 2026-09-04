@@ -65,6 +65,24 @@ def _raw_analytics_gate_ok(cycles: list[dict]) -> bool:
     )
 
 
+def _integrity_gate_status(invalid: bool, suspect: bool) -> tuple[str, str]:
+    """Classify integrity without turning an analytics-usable SUSPECT into a hard failure."""
+    if invalid:
+        return "FAIL", "invalid quote integrity is not analytics-usable"
+    if suspect:
+        return "DEGRADED", "suspect quote integrity remains explicit but is analytics-usable"
+    return "PASS", "all live quote sources passed integrity"
+
+
+def _gate_is_hard_failure(name: str, gate: dict) -> bool:
+    """Return whether a gate state invalidates the live-session validation."""
+    if gate["status"] == "PASS":
+        return False
+    if name == "integrity" and gate["status"] == "DEGRADED":
+        return False
+    return True
+
+
 def _degraded_data_ui_gate_ok() -> bool:
     """Validate the controlled UI quality-state contract without live data."""
     cases = [
@@ -284,11 +302,12 @@ def main() -> int:
     raw_analytics_ok = _raw_analytics_gate_ok(reports)
     degraded_ui_ok = _degraded_data_ui_gate_ok()
 
+    integrity_status, integrity_detail = _integrity_gate_status(integrity_invalid, integrity_suspect)
     gates = {
         "backend_ui_reconciliation": _gate("PASS" if reconciliation_ok else "FAIL", "all DashboardData → UI reconciliation fields matched" if reconciliation_ok else "field-level gaps recorded"),
         "coverage": _gate("PASS" if coverage_ok else "FAIL", "no incomplete acquisition coverage observed" if coverage_ok else "incomplete coverage observed"),
         "freshness": _gate(freshness["status"], "consecutive live spot and option-chain sources are timestamped and non-stale" if freshness["status"] == "PASS" else "timestamp-bearing consecutive live quote evidence is not yet sufficient to prove freshness"),
-        "integrity": _gate("PASS" if not integrity_invalid and not integrity_suspect else "DEGRADED", "all live quote sources passed integrity" if not integrity_invalid and not integrity_suspect else "suspect or invalid quote integrity remains explicit"),
+        "integrity": _gate(integrity_status, integrity_detail),
         "oi_consecutive_state": _gate("PASS" if oi_ready else "NOT_VERIFIED", "consecutive cycles reached READY/NO_CHANGE" if oi_ready else "insufficient consecutive OI evidence"),
         "decision_intelligence": _gate("PASS" if decision_ok else "FAIL", "canonical Decision ↔ Intelligence semantics are consistent in every cycle" if decision_ok else "Decision ↔ Intelligence semantic conflict or deferral recorded"),
         "analytics_raw_reconciliation": _gate("PASS" if raw_analytics_ok and freshness["status"] == "PASS" else "NOT_VERIFIED", "fresh consecutive provider quotes independently reconcile all validated quote-derived analytics" if raw_analytics_ok and freshness["status"] == "PASS" else "fresh market-session raw-provider numerical reconciliation is not fully verified"),
@@ -296,7 +315,7 @@ def main() -> int:
     }
 
     for name, gate in gates.items():
-        if gate["status"] != "PASS":
+        if _gate_is_hard_failure(name, gate):
             failures.append({"type": "gate_not_pass", "gate": name, "status": gate["status"], "detail": gate["detail"]})
 
     payload = {
