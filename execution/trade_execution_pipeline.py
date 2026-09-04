@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from analytics.intelligence.gate import IntelligenceGate
+from execution.idempotency import IdempotencyStatus, OrderIdempotencyGuard
 
 
 class TradeExecutionPipeline:
@@ -13,6 +14,7 @@ class TradeExecutionPipeline:
     - Intelligence eligibility gate
     - Decision/Intelligence consistency and actionability gate
     - Risk Validation
+    - Canonical client-order idempotency gate
     - Execute Paper Trades
     - Update RuntimeContext
 
@@ -23,10 +25,11 @@ class TradeExecutionPipeline:
     executed trade.
     """
 
-    def __init__(self, paper_broker, risk_manager, intelligence_gate=None):
+    def __init__(self, paper_broker, risk_manager, intelligence_gate=None, idempotency_guard=None):
         self.paper_broker = paper_broker
         self.risk_manager = risk_manager
         self.intelligence_gate = intelligence_gate if intelligence_gate is not None else IntelligenceGate()
+        self.idempotency_guard = idempotency_guard if idempotency_guard is not None else OrderIdempotencyGuard()
 
     def sync_context(self, ctx):
         broker = self.paper_broker
@@ -36,6 +39,10 @@ class TradeExecutionPipeline:
         ctx.journal = getattr(broker, "journal", None)
         ctx.statistics = ctx.journal.summary() if ctx.journal is not None else {}
         ctx.risk_state = self.risk_manager.state
+
+    def _client_order_id(self, ctx):
+        intent = getattr(ctx, "execution_intent", None)
+        return str(getattr(intent, "client_order_id", "")).strip()
 
     def execute(self, ctx):
         self.sync_context(ctx)
@@ -82,8 +89,6 @@ class TradeExecutionPipeline:
                 context=ctx,
             )
         except TypeError:
-            # Preserve compatibility with injected test/dummy risk managers
-            # that still expose the established two-argument contract.
             ok, reason = self.risk_manager.validate(self.paper_broker, ctx.decision)
 
         if not ok:
@@ -93,6 +98,17 @@ class TradeExecutionPipeline:
             print("RISK MANAGER")
             print("=" * 70)
             print(reason)
+            return
+
+        client_order_id = self._client_order_id(ctx)
+        idempotency = self.idempotency_guard.check_and_reserve(client_order_id)
+        if idempotency.status is IdempotencyStatus.INVALID:
+            ctx.trade_status = "BLOCKED"
+            ctx.trade_block_reason = idempotency.reason
+            return
+        if idempotency.status is IdempotencyStatus.DUPLICATE:
+            ctx.trade_status = "BLOCKED"
+            ctx.trade_block_reason = "Client order already submitted."
             return
 
         position = self.paper_broker.execute(ctx.decision)
