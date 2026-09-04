@@ -75,11 +75,11 @@ def test_market_data_gate_blocks_unverified_spot_freshness():
     assert reason == "spot Market Data Not Fresh"
 
 
-def test_legacy_risk_manager_call_without_context_remains_compatible():
+def test_risk_manager_call_without_context_returns_decision_unavailable():
     manager = RiskManager()
     broker = FakeBroker()
 
     ok, reason = manager.validate(broker, None)
 
     assert ok is False
-    assert reason == "Outside Market Hours"
+    assert reason == "Decision Unavailable"
