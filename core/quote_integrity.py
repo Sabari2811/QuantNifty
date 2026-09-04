@@ -16,7 +16,9 @@ class QuoteIntegrityReport:
 
     The validator never changes the raw quotes. A below-intrinsic LTP is
     classified as SUSPECT rather than INVALID because an LTP can be a stale
-    last trade while the underlying has already moved.
+    last trade while the underlying has moved. A provider timestamp does not
+    by itself clear that finding because the INDstocks documentation does not
+    define the full-quote timestamp as the observation timestamp of the LTP.
     """
 
     status: IntegrityStatus
@@ -46,12 +48,20 @@ def _finite_float(value):
     return value if math.isfinite(value) else None
 
 
+def _contract_id_text(value) -> str:
+    """Render numeric contract IDs canonically, avoiding pandas float suffixes."""
+    numeric = _finite_float(value)
+    if numeric is not None and numeric.is_integer():
+        return str(int(numeric))
+    return str(value)
+
+
 def _contract_key(row, row_number: int) -> str:
     """Return a stable human/reconciliation key for an option contract row."""
     strike = _finite_float(row.get("Strike"))
     strike_text = str(int(strike)) if strike is not None and strike.is_integer() else str(strike)
-    ce_id = row.get("CE_ID")
-    pe_id = row.get("PE_ID")
+    ce_id = _contract_id_text(row.get("CE_ID"))
+    pe_id = _contract_id_text(row.get("PE_ID"))
     return f"strike:{strike_text}|CE:{ce_id}|PE:{pe_id}|row:{row_number}"
 
 
@@ -70,8 +80,10 @@ def assess_option_chain(
     - LTP below spot-based intrinsic value
 
     A below-intrinsic LTP is only a SUSPECT condition. This deliberately
-    avoids treating a stale LTP as fabricated data when the provider does not
-    expose a usable quote timestamp.
+    avoids treating a potentially stale last trade as fabricated data. The
+    finding remains SUSPECT even when a provider timestamp is available,
+    unless a provider contract explicitly establishes that the timestamp
+    describes the LTP observation itself.
     """
 
     if not isinstance(option_chain, pd.DataFrame) or option_chain.empty:
