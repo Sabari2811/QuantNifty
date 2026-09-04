@@ -28,7 +28,7 @@ class CanonicalPaperBroker(PaperBroker):
         return super().execute(decision)
 
 
-def test_existing_paper_broker_can_receive_canonical_client_order_id():
+def test_existing_paper_broker_uses_canonical_client_order_id():
     broker = CanonicalPaperBroker()
     intent = Intent()
 
@@ -38,5 +38,16 @@ def test_existing_paper_broker_can_receive_canonical_client_order_id():
     position = broker.execute(decision)
 
     assert position is not None
+    assert position.order.order_id == intent.client_order_id
+
+
+def test_existing_paper_broker_generates_legacy_id_without_canonical_intent():
+    broker = CanonicalPaperBroker()
+
+    decision = Decision()
+    decision.execution_intent = None
+
+    position = broker.execute(decision)
+
+    assert position is not None
     assert position.order.order_id
-    assert position.order.order_id != intent.client_order_id
