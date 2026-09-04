@@ -56,6 +56,13 @@ class RuntimeContext:
     intelligence: Any = None
     decision_intelligence_consistency: Any = None
 
+    # Canonical execution state. These fields carry the broker-neutral
+    # execution intent/result and the derived lifecycle disposition without
+    # making the dashboard or other consumers infer broker state locally.
+    execution_intent: Any = None
+    execution_result: Any = None
+    execution_lifecycle: str = ""
+
     portfolio: Any = None
     position: Any = None
     last_trade: Any = None
