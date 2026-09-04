@@ -38,6 +38,9 @@ def build_order_intent(decision, *, source: str = "decision") -> OrderIntent | N
     else:
         return None
 
+    contract = getattr(trade, "contract", None)
+    expiry = str(getattr(contract, "expiry", "") or "")
+
     identity = "|".join(
         (
             source,
@@ -48,6 +51,7 @@ def build_order_intent(decision, *, source: str = "decision") -> OrderIntent | N
             str(quantity),
             f"{limit_price:.8f}",
             str(getattr(decision, "strategy_name", "")),
+            expiry,
         )
     )
     client_order_id = "qn-" + sha256(identity.encode("utf-8")).hexdigest()[:24]
@@ -62,5 +66,5 @@ def build_order_intent(decision, *, source: str = "decision") -> OrderIntent | N
         strategy_name=str(getattr(decision, "strategy_name", "")),
         source=source,
         client_order_id=client_order_id,
-        metadata={"signal": signal},
+        metadata={"signal": signal, "expiry": expiry},
     )
