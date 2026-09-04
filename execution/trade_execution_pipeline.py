@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import inspect
-
 from analytics.intelligence.gate import IntelligenceGate
 from execution.execution_audit_store import ExecutionAuditRecord, InMemoryExecutionAuditStore, SQLiteExecutionAuditStore
 from execution.execution_contract import ExecutionStatus, ExecutionResult
@@ -21,7 +19,11 @@ class TradeExecutionPipeline:
         self.execution_adapter = execution_adapter if execution_adapter is not None else PaperExecutionAdapter(paper_broker)
         if audit_store is not None and audit_db_path is not None:
             raise ValueError("Provide either audit_store or audit_db_path, not both")
-        self.audit_store = audit_store if audit_store is not None else (SQLiteExecutionAuditStore(audit_db_path) if audit_db_path is not None else InMemoryExecutionAuditStore())
+        self.audit_store = audit_store if audit_store is not None else (
+            SQLiteExecutionAuditStore(audit_db_path)
+            if audit_db_path is not None
+            else InMemoryExecutionAuditStore()
+        )
 
     def sync_context(self, ctx):
         broker = self.paper_broker
@@ -44,23 +46,13 @@ class TradeExecutionPipeline:
         ctx.trade_status = "BLOCKED"
         ctx.trade_block_reason = reason
         if intent is not None:
-            ctx.execution_result = ExecutionResult(status=ExecutionStatus.REJECTED, intent=intent, reason=reason)
+            ctx.execution_result = ExecutionResult(
+                status=ExecutionStatus.REJECTED,
+                intent=intent,
+                reason=reason,
+            )
             ctx.execution_lifecycle = classify_execution_result(ctx.execution_result).value
             self._persist_result(ctx.execution_result)
-
-    def _execute_adapter(self, intent, decision, ctx):
-        execute = self.execution_adapter.execute
-        parameters = inspect.signature(execute).parameters
-        if "reconciliation_result" in parameters or "reconciliation_report" in parameters:
-            kwargs = {
-                "intent": intent,
-                "reconciliation_result": getattr(ctx, "reconciliation_result", None),
-                "reconciliation_report": getattr(ctx, "reconciliation_report", None),
-            }
-            if "decision" in parameters:
-                kwargs["decision"] = decision
-            return execute(**kwargs)
-        return execute(intent, decision)
 
     def execute(self, ctx):
         self.sync_context(ctx)
@@ -80,6 +72,7 @@ class TradeExecutionPipeline:
             if not intelligence_result.allowed:
                 self._reject(ctx, getattr(ctx, "execution_intent", None), intelligence_result.reason)
                 return
+
             consistency = getattr(ctx, "decision_intelligence_consistency", None)
             if consistency is not None and not consistency.actionable:
                 self._reject(ctx, getattr(ctx, "execution_intent", None), consistency.reason)
@@ -89,6 +82,7 @@ class TradeExecutionPipeline:
             ok, reason = self.risk_manager.validate(self.paper_broker, ctx.decision, context=ctx)
         except TypeError:
             ok, reason = self.risk_manager.validate(self.paper_broker, ctx.decision)
+
         if not ok:
             self._reject(ctx, getattr(ctx, "execution_intent", None), reason)
             return
@@ -105,7 +99,19 @@ class TradeExecutionPipeline:
                 return
 
         if intent is not None:
-            result = self._execute_adapter(intent, ctx.decision, ctx)
+            reconciliation_result = getattr(ctx, "reconciliation_result", None)
+            reconciliation_report = getattr(ctx, "reconciliation_report", None)
+            if reconciliation_result is not None:
+                result = self.execution_adapter.execute(
+                    intent=intent,
+                    reconciliation_result=reconciliation_result,
+                    reconciliation_report=reconciliation_report,
+                )
+            else:
+                try:
+                    result = self.execution_adapter.execute(intent, ctx.decision)
+                except TypeError:
+                    result = self.execution_adapter.execute(intent=intent)
             ctx.execution_result = result
             ctx.execution_lifecycle = classify_execution_result(result).value
             self._persist_result(result)
@@ -123,4 +129,5 @@ class TradeExecutionPipeline:
             else:
                 ctx.trade_status = "REJECTED"
                 ctx.trade_block_reason = "Broker rejected trade execution."
+
         self.sync_context(ctx)
