@@ -18,6 +18,7 @@ class FakeOrder:
     strike: float = 24000
     quantity: int = 75
     status: str = "OPEN"
+    broker_order_id: str = "broker-1"
 
 
 @dataclass
@@ -35,7 +36,7 @@ def test_local_position_adapter_uses_order_identity_and_shape():
     assert snapshot.strike == 24000
     assert snapshot.quantity == 75
     assert snapshot.status == "OPEN"
-    assert snapshot.broker_order_id == "client-1"
+    assert snapshot.broker_order_id == "broker-1"
 
 
 def test_closed_local_position_is_reconciled_as_closed():
