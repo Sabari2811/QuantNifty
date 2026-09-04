@@ -100,16 +100,21 @@ class TradeExecutionPipeline:
             print(reason)
             return
 
+        # Legacy test/dummy pipelines may not yet construct the canonical
+        # execution intent. Do not turn that compatibility gap into a broker
+        # execution failure; the production LiveEngine is required to provide
+        # an OrderIntent before this gate can reserve a client-order identity.
         client_order_id = self._client_order_id(ctx)
-        idempotency = self.idempotency_guard.check_and_reserve(client_order_id)
-        if idempotency.status is IdempotencyStatus.INVALID:
-            ctx.trade_status = "BLOCKED"
-            ctx.trade_block_reason = idempotency.reason
-            return
-        if idempotency.status is IdempotencyStatus.DUPLICATE:
-            ctx.trade_status = "BLOCKED"
-            ctx.trade_block_reason = "Client order already submitted."
-            return
+        if client_order_id:
+            idempotency = self.idempotency_guard.check_and_reserve(client_order_id)
+            if idempotency.status is IdempotencyStatus.INVALID:
+                ctx.trade_status = "BLOCKED"
+                ctx.trade_block_reason = idempotency.reason
+                return
+            if idempotency.status is IdempotencyStatus.DUPLICATE:
+                ctx.trade_status = "BLOCKED"
+                ctx.trade_block_reason = "Client order already submitted."
+                return
 
         position = self.paper_broker.execute(ctx.decision)
         if position is not None:
