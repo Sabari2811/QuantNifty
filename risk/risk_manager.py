@@ -39,6 +39,15 @@ class RiskManager:
         if not ok:
             return False, msg
 
+        if decision is None:
+            # Preserve the legacy validation order for callers that do not
+            # supply a decision: market-hours remains the first substantive
+            # risk rejection rather than dereferencing a missing trade.
+            ok, msg = self._market_hours()
+            if not ok:
+                return False, msg
+            return False, "Decision Unavailable"
+
         ok, msg = self._market_hours()
         if not ok:
             return False, msg
