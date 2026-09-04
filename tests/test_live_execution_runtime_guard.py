@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 from execution.execution_contract import ExecutionAction, ExecutionResult, ExecutionStatus, OrderIntent
-from execution.execution_recovery import RecoveryDecision
 from execution.kill_switch import KillSwitch
 from execution.live_execution_runtime_guard import LiveExecutionRuntimeGuard
 
@@ -40,7 +39,7 @@ def test_active_kill_switch_blocks_live_adapter():
     result = guard.execute(intent=intent())
 
     assert result.status is ExecutionStatus.REJECTED
-    assert result.reason == "manual stop"
+    assert result.reason == "Kill switch active: manual stop"
     assert adapter.calls == 0
 
 
