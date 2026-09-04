@@ -227,5 +227,55 @@ class INDMoneyProvider(BaseProvider):
         logger.info("POSITIONS COMPLETE | segment=%s | product=%s | positions=%s", segment, product, len(positions))
         return positions
 
-    def place_order(self, *args, **kwargs):
-        raise NotImplementedError("Order placement will be implemented in Sprint 38.")
+    def place_order(self, order_request):
+        """Submit one already-validated provider order request.
+
+        This method owns only the provider HTTP boundary. Canonical intent and
+        execution-result semantics remain outside the provider implementation.
+        """
+        if order_request is None:
+            raise ValueError("Order request is required")
+
+        payload = (
+            order_request.as_dict()
+            if hasattr(order_request, "as_dict")
+            else dict(order_request)
+        )
+        required = (
+            "txn_type", "exchange", "segment", "product", "order_type",
+            "validity", "security_id", "qty", "algo_id",
+        )
+        missing = [key for key in required if payload.get(key) in (None, "")]
+        if missing:
+            raise ValueError(f"Missing provider order fields: {', '.join(missing)}")
+
+        url = f"{self.base_url}/order"
+        logger.info(
+            "ORDER REQUEST | client_order_id=%s | security_id=%s | qty=%s | txn_type=%s",
+            payload.get("remarks", ""),
+            payload.get("security_id"),
+            payload.get("qty"),
+            payload.get("txn_type"),
+        )
+        response = requests.post(
+            url,
+            headers=self.headers,
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise ValueError("INDMoney order API returned invalid JSON") from exc
+
+        if not isinstance(data, dict):
+            raise ValueError("INDMoney order API returned an invalid response")
+
+        logger.info(
+            "ORDER RESPONSE | status=%s | order_id=%s | order_status=%s",
+            response.status_code,
+            (data.get("data") or {}).get("order_id"),
+            (data.get("data") or {}).get("order_status"),
+        )
+        return data
