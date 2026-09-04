@@ -1,13 +1,15 @@
 from datetime import datetime
 
-from execution.execution_audit_store import ExecutionAuditRecord, InMemoryExecutionAuditStore
+import pytest
+
+from execution.execution_audit_store import ExecutionAuditRecord, InMemoryExecutionAuditStore, SQLiteExecutionAuditStore
 from execution.execution_recovery import evaluate_recovery, recover_pending
 
 
-def record(status: str) -> ExecutionAuditRecord:
+def record(status: str, client_order_id: str = "client-1") -> ExecutionAuditRecord:
     now = datetime.now()
     return ExecutionAuditRecord(
-        client_order_id="client-1",
+        client_order_id=client_order_id,
         symbol="NIFTY",
         option_type="CE",
         strike=24000,
@@ -63,9 +65,20 @@ def test_unknown_status_is_fail_closed():
     assert decision.requires_manual_resolution is True
 
 
-def test_recover_pending_returns_only_ambiguous_records():
+def test_recover_pending_returns_only_ambiguous_records_in_memory():
     store = InMemoryExecutionAuditStore()
     store.append(record("UNKNOWN"))
     pending = recover_pending(store)
     assert len(pending) == 1
+    assert pending[0].status == "UNKNOWN"
+
+
+def test_recover_pending_reads_durable_sqlite_records(tmp_path):
+    db_path = tmp_path / "execution_audit.db"
+    with SQLiteExecutionAuditStore(db_path) as store:
+        store.append(record("UNKNOWN", "client-1"))
+        store.append(record("EXECUTED", "client-2"))
+        pending = recover_pending(store)
+
+    assert [item.client_order_id for item in pending] == ["client-1"]
     assert pending[0].status == "UNKNOWN"
