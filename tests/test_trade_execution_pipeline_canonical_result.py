@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from core.runtime_context import RuntimeContext
+from execution.execution_audit_store import InMemoryExecutionAuditStore
 from execution.execution_contract import ExecutionAction, ExecutionResult, ExecutionStatus, OrderIntent
 from execution.trade_execution_pipeline import TradeExecutionPipeline
 
@@ -83,10 +84,12 @@ def test_pipeline_persists_canonical_execution_result_and_lifecycle():
         average_fill_price=100,
     )
     adapter = FakeAdapter(result)
+    audit_store = InMemoryExecutionAuditStore()
     pipeline = TradeExecutionPipeline(
         paper_broker=broker,
         risk_manager=FakeRiskManager(),
         execution_adapter=adapter,
+        audit_store=audit_store,
     )
 
     ctx = build_context()
@@ -97,6 +100,11 @@ def test_pipeline_persists_canonical_execution_result_and_lifecycle():
     assert ctx.execution_result is result
     assert ctx.execution_lifecycle == "EXECUTE"
     assert ctx.trade_status == "EXECUTED"
+    persisted = audit_store.get("client-1")
+    assert persisted is not None
+    assert persisted.status == "EXECUTED"
+    assert persisted.broker_order_id == "paper-1"
+    assert persisted.filled_quantity == 75
 
 
 def test_pipeline_persists_rejected_canonical_execution_result():
@@ -107,10 +115,12 @@ def test_pipeline_persists_rejected_canonical_execution_result():
         reason="Paper broker rejected execution",
     )
     adapter = FakeAdapter(result)
+    audit_store = InMemoryExecutionAuditStore()
     pipeline = TradeExecutionPipeline(
         paper_broker=broker,
         risk_manager=FakeRiskManager(),
         execution_adapter=adapter,
+        audit_store=audit_store,
     )
 
     ctx = build_context()
@@ -121,3 +131,7 @@ def test_pipeline_persists_rejected_canonical_execution_result():
     assert ctx.execution_lifecycle == "DO_NOT_RETRY"
     assert ctx.trade_status == "REJECTED"
     assert ctx.trade_block_reason == "Paper broker rejected execution"
+    persisted = audit_store.get("client-1")
+    assert persisted is not None
+    assert persisted.status == "REJECTED"
+    assert persisted.reason == "Paper broker rejected execution"
