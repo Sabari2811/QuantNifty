@@ -23,7 +23,7 @@ def local_position_snapshot(position: Any) -> PositionSnapshot:
         strike=float(getattr(order, "strike")),
         quantity=int(getattr(order, "quantity")),
         status="CLOSED" if bool(getattr(position, "closed", False)) else str(getattr(order, "status", "OPEN")),
-        broker_order_id=str(getattr(order, "order_id", "")),
+        broker_order_id=str(getattr(order, "broker_order_id", "")),
     )
 
 
