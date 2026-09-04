@@ -30,6 +30,7 @@ from analytics.intelligence.decision_consistency import reconcile_decision_intel
 from execution.order_intent_factory import build_order_intent
 from execution.trade_execution_pipeline import TradeExecutionPipeline
 from execution.execution_lifecycle import classify_execution_result
+from execution.runtime_audit_config import build_runtime_audit_store
 
 from recording.recording_manager import RecordingManager
 
@@ -45,13 +46,15 @@ from simulation.replay_equivalence import (
 
 class LiveEngine:
 
-    def __init__(self, provider=None, intelligence_service=None, paper_broker=None, trade_pipeline=None):
+    def __init__(self, provider=None, intelligence_service=None, paper_broker=None, trade_pipeline=None, audit_store_path=None):
         self.ctx = RuntimeContext()
         self._previous_greeks_df = None
         self.provider = provider
         self.intelligence_service = intelligence_service
         self.paper_broker = paper_broker
         self.trade_pipeline = trade_pipeline
+        self.audit_store_path = audit_store_path
+        self._runtime_audit_store = None
         self._initialize()
 
     def _initialize(self):
@@ -74,7 +77,13 @@ class LiveEngine:
             self.paper_broker = PaperBroker()
         if self.trade_pipeline is None:
             self.risk_manager = RiskManager()
-            self.trade_pipeline = TradeExecutionPipeline(paper_broker=self.paper_broker, risk_manager=self.risk_manager)
+            if self.audit_store_path is not None:
+                self._runtime_audit_store = build_runtime_audit_store(self.audit_store_path)
+            self.trade_pipeline = TradeExecutionPipeline(
+                paper_broker=self.paper_broker,
+                risk_manager=self.risk_manager,
+                audit_store=self._runtime_audit_store,
+            )
         else:
             self.risk_manager = self.trade_pipeline.risk_manager
         self.recording_manager = RecordingManager()
@@ -204,8 +213,6 @@ class LiveEngine:
             else:
                 self.ctx.replay_equivalence = None
 
-        # Build the canonical broker-neutral execution intent at the live
-        # decision boundary. WAIT/invalid decisions intentionally produce None.
         self.ctx.execution_intent = build_order_intent(self.ctx.decision)
 
         self.trade_pipeline.execute(self.ctx)
