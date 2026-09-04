@@ -6,7 +6,6 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
 from typing import Any
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,6 +21,17 @@ def _finite(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return value if value == value else None
+
+
+def _security_id_key(value: Any) -> str:
+    """Normalize numeric/string security IDs to one stable metadata key."""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if numeric.is_integer():
+        return str(int(numeric))
+    return str(value)
 
 
 def _timestamp_age(timestamp, acquired_at):
@@ -63,7 +73,7 @@ def _contract_diagnostics(chain, spot: float, contract_reasons):
             if strike is not None and spot is not None:
                 intrinsic = max(spot - strike, 0.0) if option_type == "CE" else max(strike - spot, 0.0)
             security_id = row.get(f"{option_type}_ID")
-            timestamp = timestamps.get(str(security_id))
+            timestamp = timestamps.get(_security_id_key(security_id))
             item[option_type.lower()] = {
                 "id": security_id,
                 "ltp": ltp,
