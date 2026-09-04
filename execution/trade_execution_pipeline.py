@@ -102,11 +102,16 @@ class TradeExecutionPipeline:
             reconciliation_result = getattr(ctx, "reconciliation_result", None)
             reconciliation_report = getattr(ctx, "reconciliation_report", None)
             if reconciliation_result is not None:
-                result = self.execution_adapter.execute(
-                    intent=intent,
-                    reconciliation_result=reconciliation_result,
-                    reconciliation_report=reconciliation_report,
-                )
+                try:
+                    result = self.execution_adapter.execute(
+                        intent=intent,
+                        reconciliation_result=reconciliation_result,
+                        reconciliation_report=reconciliation_report,
+                    )
+                except TypeError as exc:
+                    if "reconciliation_result" not in str(exc) and "reconciliation_report" not in str(exc):
+                        raise
+                    result = self.execution_adapter.execute(intent, ctx.decision)
             else:
                 try:
                     result = self.execution_adapter.execute(intent, ctx.decision)
