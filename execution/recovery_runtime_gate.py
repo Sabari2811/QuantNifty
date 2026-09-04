@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from execution.execution_audit_store import ExecutionAuditRecord
-from execution.execution_recovery import evaluate_recovery
+from execution.execution_recovery import RecoveryDecision
 from execution.reconciliation import ReconciliationStatus
 
 
@@ -16,13 +16,19 @@ class RecoveryRuntimeDecision:
 
 
 def evaluate_recovery_runtime(
-    record: ExecutionAuditRecord | None,
+    recovery: RecoveryDecision | None,
     reconciliation_report=None,
 ) -> RecoveryRuntimeDecision:
-    """Translate persisted recovery state into an explicit runtime disposition."""
-    decision = evaluate_recovery(record)
+    """Translate an evaluated recovery state into an explicit runtime disposition."""
+    if recovery is None:
+        return RecoveryRuntimeDecision(
+            safe_to_continue=False,
+            requires_reconciliation=False,
+            requires_manual_resolution=False,
+            reason="Recovery decision is unavailable.",
+        )
 
-    if decision.requires_reconciliation:
+    if recovery.requires_reconciliation:
         if reconciliation_report is None:
             return RecoveryRuntimeDecision(
                 safe_to_continue=False,
@@ -52,8 +58,8 @@ def evaluate_recovery_runtime(
         )
 
     return RecoveryRuntimeDecision(
-        safe_to_continue=decision.safe_to_continue,
-        requires_reconciliation=decision.requires_reconciliation,
-        requires_manual_resolution=decision.requires_manual_resolution,
-        reason=decision.reason,
+        safe_to_continue=recovery.safe_to_continue,
+        requires_reconciliation=recovery.requires_reconciliation,
+        requires_manual_resolution=recovery.requires_manual_resolution,
+        reason=recovery.reason,
     )
