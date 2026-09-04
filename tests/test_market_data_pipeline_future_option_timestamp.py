@@ -5,7 +5,7 @@ import pandas as pd
 
 from core.data_provenance import AcquisitionProvenance, RuntimeDataProvenance
 from engine.market_data_pipeline import MarketDataPipeline
-from providers.indmoney_websocket import LiveQuoteTick
+from providers.indmoney_websocket import LiveQuoteFreshness, LiveQuoteTick
 from providers.live_quote_coordinator import LiveQuoteBatch
 
 
@@ -45,6 +45,15 @@ def test_future_live_option_timestamp_does_not_create_negative_freshness(monkeyp
                 {"ltp": 151},
             )},
             received_at={"NFO:111": fixed_now},
+            freshness={
+                "NFO:111": LiveQuoteFreshness(
+                    provider_timestamp=future_timestamp,
+                    received_at=fixed_now,
+                    transport_age_ms=-60000,
+                    clock_skew_ms=60000,
+                    status="clock_skew",
+                )
+            },
             acquired_at=fixed_now,
             connected_at=fixed_now,
             completed_at=fixed_now,
