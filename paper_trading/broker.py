@@ -19,6 +19,10 @@ class PaperBroker:
     - Monitor live positions
     - Close positions
     - Record completed trades
+
+    The canonical execution identity, when supplied by the decision boundary,
+    is preserved as the paper order identity. A UUID remains the legacy
+    fallback for callers that have not yet supplied a canonical intent.
     """
 
     def __init__(self):
@@ -66,8 +70,12 @@ class PaperBroker:
                 print("PaperBroker: Position already exists.")
                 return None
 
+        intent = getattr(decision, "execution_intent", None)
+        client_order_id = str(getattr(intent, "client_order_id", "")).strip()
+        order_id = client_order_id or str(uuid4())
+
         order = PaperOrder(
-            order_id=str(uuid4()),
+            order_id=order_id,
             signal=decision.signal.name,
             option_type=trade.option_type,
             strike=trade.strike,
@@ -162,7 +170,6 @@ class PaperBroker:
 
         self.journal.record(position, reason)
 
-        # Refresh performance statistics
         self.performance_statistics = self.performance_engine.analyze(
             self.journal.records
         )
