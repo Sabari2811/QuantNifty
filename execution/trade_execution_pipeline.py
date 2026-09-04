@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from analytics.intelligence.gate import IntelligenceGate
-from execution.execution_audit_store import ExecutionAuditRecord, InMemoryExecutionAuditStore
+from execution.execution_audit_store import ExecutionAuditRecord, InMemoryExecutionAuditStore, SQLiteExecutionAuditStore
 from execution.execution_contract import ExecutionStatus, ExecutionResult
 from execution.execution_lifecycle import classify_execution_result
 from execution.idempotency import IdempotencyStatus, OrderIdempotencyGuard
@@ -11,13 +11,19 @@ from execution.paper_execution_adapter import PaperExecutionAdapter
 class TradeExecutionPipeline:
     """Canonical trade execution workflow and audit boundary."""
 
-    def __init__(self, paper_broker, risk_manager, intelligence_gate=None, idempotency_guard=None, execution_adapter=None, audit_store=None):
+    def __init__(self, paper_broker, risk_manager, intelligence_gate=None, idempotency_guard=None, execution_adapter=None, audit_store=None, audit_db_path=None):
         self.paper_broker = paper_broker
         self.risk_manager = risk_manager
         self.intelligence_gate = intelligence_gate if intelligence_gate is not None else IntelligenceGate()
         self.idempotency_guard = idempotency_guard if idempotency_guard is not None else OrderIdempotencyGuard()
         self.execution_adapter = execution_adapter if execution_adapter is not None else PaperExecutionAdapter(paper_broker)
-        self.audit_store = audit_store if audit_store is not None else InMemoryExecutionAuditStore()
+        if audit_store is not None and audit_db_path is not None:
+            raise ValueError("Provide either audit_store or audit_db_path, not both")
+        self.audit_store = audit_store if audit_store is not None else (
+            SQLiteExecutionAuditStore(audit_db_path)
+            if audit_db_path is not None
+            else InMemoryExecutionAuditStore()
+        )
 
     def sync_context(self, ctx):
         broker = self.paper_broker
