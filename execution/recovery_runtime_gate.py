@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from execution.execution_audit_store import ExecutionAuditRecord
 from execution.execution_recovery import RecoveryDecision
 from execution.reconciliation import ReconciliationStatus
 
