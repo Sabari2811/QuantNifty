@@ -117,6 +117,18 @@ def test_invalid_spot_is_invalid_without_mutating_chain():
     pd.testing.assert_frame_equal(chain, before)
 
 
+def test_invalid_intrinsic_tolerance_is_invalid():
+    report = assess_option_chain(
+        _chain(),
+        spot_price=25050,
+        intrinsic_tolerance=-0.01,
+    )
+
+    assert report.status == "INVALID"
+    assert report.invalid_contracts == 1
+    assert "invalid_intrinsic_tolerance" in report.reasons
+
+
 def test_report_serializes_without_losing_contract_reasons():
     report = assess_option_chain(
         _chain(Strike=24900, CE_LTP=120),
