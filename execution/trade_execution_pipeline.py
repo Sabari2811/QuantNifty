@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from analytics.intelligence.gate import IntelligenceGate
+from execution.execution_contract import ExecutionStatus, ExecutionResult
+from execution.execution_lifecycle import classify_execution_result
 from execution.idempotency import IdempotencyStatus, OrderIdempotencyGuard
+from execution.paper_execution_adapter import PaperExecutionAdapter
 
 
 class TradeExecutionPipeline:
@@ -15,21 +18,16 @@ class TradeExecutionPipeline:
     - Decision/Intelligence consistency and actionability gate
     - Risk Validation
     - Canonical client-order idempotency gate
-    - Execute Paper Trades
+    - Canonical paper execution result propagation
     - Update RuntimeContext
-
-    A broker returning ``None`` after all pre-trade gates pass is an execution
-    rejection, not a successful execution and not an implicit no-op. The
-    runtime context records that outcome explicitly so downstream UI,
-    recording, and operational reconciliation cannot mistake it for an
-    executed trade.
     """
 
-    def __init__(self, paper_broker, risk_manager, intelligence_gate=None, idempotency_guard=None):
+    def __init__(self, paper_broker, risk_manager, intelligence_gate=None, idempotency_guard=None, execution_adapter=None):
         self.paper_broker = paper_broker
         self.risk_manager = risk_manager
         self.intelligence_gate = intelligence_gate if intelligence_gate is not None else IntelligenceGate()
         self.idempotency_guard = idempotency_guard if idempotency_guard is not None else OrderIdempotencyGuard()
+        self.execution_adapter = execution_adapter if execution_adapter is not None else PaperExecutionAdapter(paper_broker)
 
     def sync_context(self, ctx):
         broker = self.paper_broker
@@ -44,10 +42,23 @@ class TradeExecutionPipeline:
         intent = getattr(ctx, "execution_intent", None)
         return str(getattr(intent, "client_order_id", "")).strip()
 
+    def _reject(self, ctx, intent, reason):
+        ctx.trade_status = "BLOCKED"
+        ctx.trade_block_reason = reason
+        if intent is not None:
+            ctx.execution_result = ExecutionResult(
+                status=ExecutionStatus.REJECTED,
+                intent=intent,
+                reason=reason,
+            )
+            ctx.execution_lifecycle = classify_execution_result(ctx.execution_result).value
+
     def execute(self, ctx):
         self.sync_context(ctx)
         ctx.trade_status = ""
         ctx.trade_block_reason = ""
+        ctx.execution_result = None
+        ctx.execution_lifecycle = ""
 
         if ctx.decision is None:
             return
@@ -58,8 +69,7 @@ class TradeExecutionPipeline:
         if ctx.intelligence is not None:
             intelligence_result = self.intelligence_gate.evaluate(ctx.intelligence)
             if not intelligence_result.allowed:
-                ctx.trade_status = "BLOCKED"
-                ctx.trade_block_reason = intelligence_result.reason
+                self._reject(ctx, getattr(ctx, "execution_intent", None), intelligence_result.reason)
                 print("\n" + "=" * 70)
                 print("INTELLIGENCE GATE")
                 print("=" * 70)
@@ -68,8 +78,7 @@ class TradeExecutionPipeline:
 
             consistency = getattr(ctx, "decision_intelligence_consistency", None)
             if consistency is not None and not consistency.actionable:
-                ctx.trade_status = "BLOCKED"
-                ctx.trade_block_reason = consistency.reason
+                self._reject(ctx, getattr(ctx, "execution_intent", None), consistency.reason)
                 semantic_status = getattr(consistency, "semantic_status", "CONFLICT")
                 title = (
                     "DECISION / INTELLIGENCE DEFERRAL GATE"
@@ -92,40 +101,41 @@ class TradeExecutionPipeline:
             ok, reason = self.risk_manager.validate(self.paper_broker, ctx.decision)
 
         if not ok:
-            ctx.trade_status = "BLOCKED"
-            ctx.trade_block_reason = reason
+            self._reject(ctx, getattr(ctx, "execution_intent", None), reason)
             print("\n" + "=" * 70)
             print("RISK MANAGER")
             print("=" * 70)
             print(reason)
             return
 
-        # Legacy test/dummy pipelines may not yet construct the canonical
-        # execution intent. Do not turn that compatibility gap into a broker
-        # execution failure; the production LiveEngine is required to provide
-        # an OrderIntent before this gate can reserve a client-order identity.
+        intent = getattr(ctx, "execution_intent", None)
         client_order_id = self._client_order_id(ctx)
-        if client_order_id:
+        if intent is not None and client_order_id:
             idempotency = self.idempotency_guard.check_and_reserve(client_order_id)
             if idempotency.status is IdempotencyStatus.INVALID:
-                ctx.trade_status = "BLOCKED"
-                ctx.trade_block_reason = idempotency.reason
+                self._reject(ctx, intent, idempotency.reason)
                 return
             if idempotency.status is IdempotencyStatus.DUPLICATE:
-                ctx.trade_status = "BLOCKED"
-                ctx.trade_block_reason = "Client order already submitted."
+                self._reject(ctx, intent, "Client order already submitted.")
                 return
 
-        position = self.paper_broker.execute(ctx.decision)
-        if position is not None:
-            ctx.trade_status = "EXECUTED"
-            ctx.position = position
+        if intent is not None:
+            result = self.execution_adapter.execute(intent, ctx.decision)
+            ctx.execution_result = result
+            ctx.execution_lifecycle = classify_execution_result(result).value
+            if result.status is ExecutionStatus.EXECUTED:
+                ctx.trade_status = "EXECUTED"
+                ctx.position = getattr(self.paper_broker, "position", None)
+            else:
+                ctx.trade_status = "REJECTED"
+                ctx.trade_block_reason = result.reason or "Paper broker rejected execution"
         else:
-            ctx.trade_status = "REJECTED"
-            ctx.trade_block_reason = "Broker rejected trade execution."
-            print("\n" + "=" * 70)
-            print("BROKER EXECUTION")
-            print("=" * 70)
-            print(ctx.trade_block_reason)
+            position = self.paper_broker.execute(ctx.decision)
+            if position is not None:
+                ctx.trade_status = "EXECUTED"
+                ctx.position = position
+            else:
+                ctx.trade_status = "REJECTED"
+                ctx.trade_block_reason = "Broker rejected trade execution."
 
         self.sync_context(ctx)
