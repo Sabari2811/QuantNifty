@@ -60,6 +60,13 @@ class LiveExecutionRuntimeGuard:
         reconciliation_result=None,
         reconciliation_report=None,
     ) -> ExecutionResult:
+        if intent is None:
+            return ExecutionResult(
+                status=ExecutionStatus.REJECTED,
+                intent=intent,
+                reason="Order intent is required",
+            )
+
         decision = self.evaluate(
             intent=intent,
             reconciliation_result=reconciliation_result,
