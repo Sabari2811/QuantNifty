@@ -43,6 +43,14 @@ class FakeAdapter:
         )
 
 
+class LiveGuardAdapter:
+    def __init__(self, adapter):
+        self.adapter = adapter
+
+    def execute(self, intent, decision=None):
+        return self.adapter.execute(intent, decision)
+
+
 def build_ctx():
     intent = OrderIntent(
         symbol="NIFTY",
@@ -76,7 +84,7 @@ def test_live_runtime_guard_is_explicitly_injectable_without_changing_pipeline_c
     pipeline = TradeExecutionPipeline(
         broker,
         FakeRiskManager(),
-        execution_adapter=guard,
+        execution_adapter=LiveGuardAdapter(guard),
     )
 
     ctx = build_ctx()
