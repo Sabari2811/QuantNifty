@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from typing import Any
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,8 +24,20 @@ def _finite(value: Any) -> float | None:
     return value if value == value else None
 
 
+def _timestamp_age(timestamp, acquired_at):
+    if timestamp is None or acquired_at is None:
+        return None
+    try:
+        return max(0.0, (acquired_at - timestamp).total_seconds())
+    except (TypeError, ValueError):
+        return None
+
+
 def _contract_diagnostics(chain, spot: float, contract_reasons):
     rows = []
+    timestamps = {} if chain is None else chain.attrs.get("option_quote_timestamps", {})
+    provenance = chain.attrs.get("data_provenance") if chain is not None else None
+    acquired_at = getattr(provenance, "acquired_at", None)
     for key, reasons in contract_reasons:
         row_number = None
         marker = "|row:"
@@ -49,11 +62,15 @@ def _contract_diagnostics(chain, spot: float, contract_reasons):
             intrinsic = None
             if strike is not None and spot is not None:
                 intrinsic = max(spot - strike, 0.0) if option_type == "CE" else max(strike - spot, 0.0)
+            security_id = row.get(f"{option_type}_ID")
+            timestamp = timestamps.get(str(security_id))
             item[option_type.lower()] = {
-                "id": row.get(f"{option_type}_ID"),
+                "id": security_id,
                 "ltp": ltp,
                 "intrinsic": intrinsic,
                 "shortfall_below_intrinsic": None if intrinsic is None or ltp is None else max(intrinsic - ltp, 0.0),
+                "provider_timestamp": timestamp,
+                "provider_timestamp_age_seconds": _timestamp_age(timestamp, acquired_at),
                 "oi": row.get(f"{option_type}_OI"),
                 "volume": row.get(f"{option_type}_VOLUME"),
             }
