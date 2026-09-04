@@ -51,16 +51,17 @@ def reconcile_positions(
     Missing snapshots are UNKNOWN rather than an empty broker state. Matching
     is identity-first and then compares the execution-relevant position shape.
     """
-    if local_positions is None or broker_positions is None:
+    local = None if local_positions is None else tuple(local_positions)
+    broker = None if broker_positions is None else tuple(broker_positions)
+
+    if local is None or broker is None:
         return ReconciliationReport(
             status=ReconciliationStatus.UNKNOWN,
-            local_count=0 if local_positions is None else len(tuple(local_positions)),
-            broker_count=0 if broker_positions is None else len(tuple(broker_positions)),
+            local_count=0 if local is None else len(local),
+            broker_count=0 if broker is None else len(broker),
             issues=(ReconciliationIssue("snapshot", "Position snapshot unavailable"),),
         )
 
-    local = tuple(local_positions)
-    broker = tuple(broker_positions)
     local_by_id = {p.client_order_id: p for p in local}
     broker_by_id = {p.client_order_id: p for p in broker}
     issues: list[ReconciliationIssue] = []
