@@ -94,5 +94,8 @@ def test_future_live_option_timestamp_does_not_create_negative_freshness(monkeyp
     result = ctx.data_provenance.option_chain
     assert result.freshness_verified is False
     assert result.freshness_seconds is None
-    assert result.reasons == ("provider_quote_timestamp_in_future",)
+    # WebSocket freshness classifies this one-minute future timestamp as
+    # excessive clock skew; the key contract is that it never yields a
+    # negative freshness age.
+    assert result.reasons == ("provider_quote_timestamp_clock_skew_excessive",)
     assert result.provider_timestamp == future_timestamp
