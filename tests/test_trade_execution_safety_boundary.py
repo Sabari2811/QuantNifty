@@ -38,10 +38,14 @@ class FakeBroker:
         self.journal = FakeJournal()
 
         self.execute_called = False
+        self.reject_execution = False
 
     def execute(self, decision):
 
         self.execute_called = True
+
+        if self.reject_execution:
+            return None
 
         self.position = "TEST_POSITION"
 
@@ -271,6 +275,39 @@ def test_missing_intelligence_preserves_legacy_risk_path():
     assert broker.execute_called is True
 
     assert ctx.trade_status == "EXECUTED"
+
+
+def test_broker_rejection_is_explicit_after_all_pre_trade_gates_pass():
+
+    broker = FakeBroker()
+    broker.reject_execution = True
+
+    risk_manager = FakeRiskManager()
+
+    gate = FakeIntelligenceGate(
+        IntelligenceGateResult(
+            status="ALLOW",
+            reason="Intelligence allowed.",
+        )
+    )
+
+    pipeline = TradeExecutionPipeline(
+        paper_broker=broker,
+        risk_manager=risk_manager,
+        intelligence_gate=gate,
+    )
+
+    ctx = build_context()
+    ctx.intelligence = object()
+
+    pipeline.execute(ctx)
+
+    assert gate.evaluate_called is True
+    assert risk_manager.validate_called is True
+    assert broker.execute_called is True
+    assert ctx.trade_status == "REJECTED"
+    assert ctx.trade_block_reason == "Broker rejected trade execution."
+    assert ctx.position is None
 
 
 def test_intelligence_block_cannot_leave_previous_execution_status():
