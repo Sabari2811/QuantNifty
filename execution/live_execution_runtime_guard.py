@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 from execution.execution_contract import ExecutionResult, ExecutionStatus, OrderIntent
 from execution.live_indmoney_execution_adapter import LiveINDMoneyExecutionAdapter
-from execution.runtime_safety_gate import evaluate_runtime_safety
+from execution.kill_switch_gate import evaluate_kill_switch_gate
+from execution.reconciliation_runtime_gate import evaluate_runtime_reconciliation
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,16 +39,19 @@ class LiveExecutionRuntimeGuard:
         reconciliation_result=None,
         reconciliation_report=None,
     ) -> LiveExecutionRuntimeDecision:
-        decision = evaluate_runtime_safety(
-            intent=intent,
-            kill_switch=self.kill_switch,
-            reconciliation_result=reconciliation_result,
-            reconciliation_report=reconciliation_report,
-        )
-        return LiveExecutionRuntimeDecision(
-            allowed=decision.allowed,
-            reason=decision.reason,
-        )
+        kill = evaluate_kill_switch_gate(self.kill_switch, intent)
+        if not kill.allowed:
+            return LiveExecutionRuntimeDecision(False, kill.reason)
+
+        if reconciliation_result is not None:
+            reconciliation = evaluate_runtime_reconciliation(
+                reconciliation_result,
+                reconciliation_report,
+            )
+            if not reconciliation.safe_to_continue:
+                return LiveExecutionRuntimeDecision(False, reconciliation.reason)
+
+        return LiveExecutionRuntimeDecision(True, "Live execution runtime gates passed.")
 
     def execute(
         self,
