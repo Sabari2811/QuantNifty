@@ -44,5 +44,8 @@ class BaseProvider(ABC):
     def get_profile(self):
         raise NotImplementedError
 
+    def get_positions(self, *args, **kwargs):
+        raise NotImplementedError
+
     def place_order(self, *args, **kwargs):
         raise NotImplementedError
