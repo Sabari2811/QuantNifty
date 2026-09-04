@@ -14,11 +14,12 @@ IntegrityStatus = Literal["VALID", "SUSPECT", "INVALID"]
 class QuoteIntegrityReport:
     """Deterministic structural/pricing checks for a live option chain.
 
-    The validator never changes the raw quotes. A below-intrinsic LTP is
-    classified as SUSPECT rather than INVALID because an LTP can be a stale
-    last trade while the underlying has moved. A provider timestamp does not
-    by itself clear that finding because the INDstocks documentation does not
-    define the full-quote timestamp as the observation timestamp of the LTP.
+    The validator never changes raw quotes. A below-intrinsic LTP is classified
+    as SUSPECT rather than INVALID because an LTP is a last-trade observation,
+    while the underlying can move between option trades. Provider timestamp
+    presence does not by itself clear this finding because the public provider
+    contract does not establish that its full-quote timestamp is specifically
+    the observation timestamp of live_price.
     """
 
     status: IntegrityStatus
@@ -79,11 +80,10 @@ def assess_option_chain(
     - finite, non-negative LTP/OI/volume values
     - LTP below spot-based intrinsic value
 
-    A below-intrinsic LTP is only a SUSPECT condition. This deliberately
-    avoids treating a potentially stale last trade as fabricated data. The
-    finding remains SUSPECT even when a provider timestamp is available,
-    unless a provider contract explicitly establishes that the timestamp
-    describes the LTP observation itself.
+    A below-intrinsic LTP is SUSPECT rather than INVALID. This is a
+    conservative data-integrity finding, not a trade veto: the quote remains
+    usable for analytics while being explicitly flagged for downstream
+    quality/provenance consumers.
     """
 
     if not isinstance(option_chain, pd.DataFrame) or option_chain.empty:
@@ -99,6 +99,14 @@ def assess_option_chain(
             checked_contracts=len(option_chain),
             invalid_contracts=len(option_chain),
             reasons=("invalid_spot_price",),
+        )
+
+    if intrinsic_tolerance < 0 or not math.isfinite(float(intrinsic_tolerance)):
+        return QuoteIntegrityReport(
+            status="INVALID",
+            checked_contracts=len(option_chain),
+            invalid_contracts=len(option_chain),
+            reasons=("invalid_intrinsic_tolerance",),
         )
 
     required_columns = {
