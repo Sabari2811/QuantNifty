@@ -31,9 +31,13 @@ class RiskManager:
 
     # ------------------------------------
 
-    def validate(self, broker, decision):
+    def validate(self, broker, decision, context=None):
 
         self._reset_if_new_day()
+
+        ok, msg = self._market_data_readiness(context)
+        if not ok:
+            return False, msg
 
         ok, msg = self._market_hours()
         if not ok:
@@ -66,6 +70,28 @@ class RiskManager:
         ok, msg = self._loss_limit()
         if not ok:
             return False, msg
+
+        return True, ""
+
+    # ------------------------------------
+
+    def _market_data_readiness(self, context):
+        if context is None:
+            return True, ""
+
+        provenance = getattr(context, "data_provenance", None)
+        if provenance is None:
+            return False, "Market Data Provenance Unavailable"
+
+        readiness = (
+            ("spot", getattr(provenance.spot, "freshness_verified", False), getattr(provenance.spot, "integrity_status", "VALID")),
+            ("option_chain", getattr(provenance.option_chain, "freshness_verified", False), getattr(provenance.option_chain, "integrity_status", "VALID")),
+        )
+        for name, fresh, integrity in readiness:
+            if not fresh:
+                return False, f"{name} Market Data Not Fresh"
+            if integrity == "INVALID":
+                return False, f"{name} Market Data Invalid"
 
         return True, ""
 
