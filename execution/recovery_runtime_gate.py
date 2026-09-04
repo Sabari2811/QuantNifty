@@ -35,14 +35,15 @@ def evaluate_recovery_runtime(
                 requires_manual_resolution=False,
                 reason="Persisted execution outcome is ambiguous; broker reconciliation is required before continuation.",
             )
-        if reconciliation_report.status is ReconciliationStatus.MATCH:
+        report_status = getattr(reconciliation_report, "status", None)
+        if report_status is ReconciliationStatus.MATCH or report_status == "MATCH":
             return RecoveryRuntimeDecision(
                 safe_to_continue=True,
                 requires_reconciliation=False,
                 requires_manual_resolution=False,
                 reason="Persisted ambiguous execution reconciled to broker state.",
             )
-        if reconciliation_report.status is ReconciliationStatus.MISMATCH:
+        if report_status is ReconciliationStatus.MISMATCH or report_status == "MISMATCH":
             return RecoveryRuntimeDecision(
                 safe_to_continue=False,
                 requires_reconciliation=True,
