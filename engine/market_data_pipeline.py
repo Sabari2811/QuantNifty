@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -98,6 +100,16 @@ class MarketDataPipeline:
             data["live_price"] = tick.ltp
         return data
 
+    @staticmethod
+    def attach_option_quote_timestamps(option_chain, timestamps):
+        """Attach actual per-contract provider timestamps without changing quote values."""
+        option_chain.attrs["option_quote_timestamps"] = {
+            str(security_id): timestamp
+            for security_id, timestamp in (timestamps or {}).items()
+            if timestamp is not None
+        }
+        return option_chain
+
     def _fetch_spot(self, ctx):
         acquired_at = datetime.now(timezone.utc)
         quote = self.market.get_spot_quote(ctx.symbol)
@@ -140,6 +152,7 @@ class MarketDataPipeline:
         acquired_at = datetime.now(timezone.utc)
         websocket_timeout = False
         websocket_freshness = None
+        option_quote_timestamps = dict(ctx.option_chain.attrs.get("option_quote_timestamps", {}))
         if self.live_feed is not None and not ctx.option_chain.empty:
             instruments = []
             for column in ("CE_ID", "PE_ID"):
@@ -156,6 +169,9 @@ class MarketDataPipeline:
                 if batch is not None:
                     acquired_at = batch.acquired_at
                     option_timestamp = batch.latest_provider_timestamp
+                    for instrument, tick in batch.ticks.items():
+                        security_id = instrument.rsplit(":", 1)[-1]
+                        option_quote_timestamps[str(security_id)] = tick.timestamp
                     assessments = [batch.freshness.get(instrument) for instrument in batch.ticks]
                     if assessments and all(assessment is not None for assessment in assessments):
                         verified = all(assessment.status in {"fresh", "fresh_with_clock_skew"} for assessment in assessments)
@@ -174,6 +190,7 @@ class MarketDataPipeline:
                                 ctx.option_chain.at[index, price_column] = tick.ltp
         else:
             option_timestamp = None
+        self.attach_option_quote_timestamps(ctx.option_chain, option_quote_timestamps)
         option_provenance = ctx.option_chain.attrs.get("data_provenance")
         if option_provenance is None:
             option_provenance = AcquisitionProvenance(source="INDMoney option quotes", expected_count=len(ctx.option_chain) * 2, received_count=len(ctx.option_chain) * 2, missing_count=0, freshness_verified=False, reasons=("provider_quote_timestamp_unavailable",))
