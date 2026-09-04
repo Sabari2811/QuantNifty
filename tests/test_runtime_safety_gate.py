@@ -26,7 +26,9 @@ def report(status):
 
 
 def test_active_kill_switch_blocks_runtime_execution():
-    decision = evaluate_runtime_safety(intent=intent(), kill_switch=KillSwitch(active=True))
+    switch = KillSwitch()
+    switch.activate("Emergency stop")
+    decision = evaluate_runtime_safety(intent=intent(), kill_switch=switch)
     assert decision.allowed is False
     assert "Kill switch active" in decision.reason
 
@@ -40,7 +42,7 @@ def test_missing_kill_switch_state_blocks_runtime_execution():
 def test_reconciliation_required_blocks_without_match():
     decision = evaluate_runtime_safety(
         intent=intent(),
-        kill_switch=KillSwitch(active=False),
+        kill_switch=KillSwitch(),
         reconciliation_result=result(ExecutionStatus.UNKNOWN),
         reconciliation_report=report(ReconciliationStatus.UNKNOWN),
     )
@@ -51,7 +53,7 @@ def test_reconciliation_required_blocks_without_match():
 def test_reconciliation_match_allows_execution():
     decision = evaluate_runtime_safety(
         intent=intent(),
-        kill_switch=KillSwitch(active=False),
+        kill_switch=KillSwitch(),
         reconciliation_result=result(ExecutionStatus.SUBMITTED),
         reconciliation_report=report(ReconciliationStatus.MATCH),
     )
@@ -61,17 +63,18 @@ def test_reconciliation_match_allows_execution():
 def test_reconciliation_mismatch_blocks_execution():
     decision = evaluate_runtime_safety(
         intent=intent(),
-        kill_switch=KillSwitch(active=False),
+        kill_switch=KillSwitch(),
         reconciliation_result=result(ExecutionStatus.UNKNOWN),
         reconciliation_report=report(ReconciliationStatus.MISMATCH),
     )
     assert decision.allowed is False
+    assert "manual resolution" in decision.reason.lower()
 
 
 def test_terminal_execution_does_not_require_reconciliation():
     decision = evaluate_runtime_safety(
         intent=intent(),
-        kill_switch=KillSwitch(active=False),
+        kill_switch=KillSwitch(),
         reconciliation_result=result(ExecutionStatus.EXECUTED),
         reconciliation_report=None,
     )
