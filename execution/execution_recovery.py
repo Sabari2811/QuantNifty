@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from execution.execution_audit_store import ExecutionAuditRecord, InMemoryExecutionAuditStore
+
+from execution.execution_audit_store import ExecutionAuditRecord, SQLiteExecutionAuditStore
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +35,6 @@ def evaluate_recovery(record: ExecutionAuditRecord | None) -> RecoveryDecision:
     return RecoveryDecision(False, False, True, f"Unsupported persisted execution status: {record.status}")
 
 
-def recover_pending(store: InMemoryExecutionAuditStore) -> tuple[ExecutionAuditRecord, ...]:
+def recover_pending(store: SQLiteExecutionAuditStore) -> tuple[ExecutionAuditRecord, ...]:
     """Return only ambiguous persisted executions requiring reconciliation."""
     return store.load_pending()
