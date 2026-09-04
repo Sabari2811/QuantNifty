@@ -75,7 +75,17 @@ class TradeExecutionPipeline:
                 print(consistency.reason)
                 return
 
-        ok, reason = self.risk_manager.validate(self.paper_broker, ctx.decision)
+        try:
+            ok, reason = self.risk_manager.validate(
+                self.paper_broker,
+                ctx.decision,
+                context=ctx,
+            )
+        except TypeError:
+            # Preserve compatibility with injected test/dummy risk managers
+            # that still expose the established two-argument contract.
+            ok, reason = self.risk_manager.validate(self.paper_broker, ctx.decision)
+
         if not ok:
             ctx.trade_status = "BLOCKED"
             ctx.trade_block_reason = reason
