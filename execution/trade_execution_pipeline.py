@@ -15,6 +15,12 @@ class TradeExecutionPipeline:
     - Risk Validation
     - Execute Paper Trades
     - Update RuntimeContext
+
+    A broker returning ``None`` after all pre-trade gates pass is an execution
+    rejection, not a successful execution and not an implicit no-op. The
+    runtime context records that outcome explicitly so downstream UI,
+    recording, and operational reconciliation cannot mistake it for an
+    executed trade.
     """
 
     def __init__(self, paper_broker, risk_manager, intelligence_gate=None):
@@ -83,5 +89,12 @@ class TradeExecutionPipeline:
         if position is not None:
             ctx.trade_status = "EXECUTED"
             ctx.position = position
+        else:
+            ctx.trade_status = "REJECTED"
+            ctx.trade_block_reason = "Broker rejected trade execution."
+            print("\n" + "=" * 70)
+            print("BROKER EXECUTION")
+            print("=" * 70)
+            print(ctx.trade_block_reason)
 
         self.sync_context(ctx)
