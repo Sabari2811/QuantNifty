@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from execution.execution_contract import ExecutionAction, ExecutionResult, ExecutionStatus, OrderIntent
 from execution.kill_switch import KillSwitch
 from execution.live_execution_runtime_guard import LiveExecutionRuntimeGuard
+from execution.reconciliation import ReconciliationStatus
 
 
 class FakeAdapter:
@@ -57,7 +58,7 @@ def test_inactive_kill_switch_allows_live_adapter():
 def test_ambiguous_reconciliation_blocks_live_execution():
     adapter = FakeAdapter()
     guard = LiveExecutionRuntimeGuard(adapter, KillSwitch())
-    reconciliation_result = SimpleNamespace(status=SimpleNamespace(value="UNKNOWN"))
+    reconciliation_result = SimpleNamespace(status=ReconciliationStatus.UNKNOWN)
 
     result = guard.execute(
         intent=intent(),
@@ -73,8 +74,8 @@ def test_ambiguous_reconciliation_blocks_live_execution():
 def test_matched_reconciliation_allows_live_execution():
     adapter = FakeAdapter()
     guard = LiveExecutionRuntimeGuard(adapter, KillSwitch())
-    reconciliation_result = SimpleNamespace(status=SimpleNamespace(value="SUBMITTED"))
-    reconciliation_report = SimpleNamespace(status=SimpleNamespace(value="MATCH"))
+    reconciliation_result = SimpleNamespace(status=ExecutionStatus.SUBMITTED)
+    reconciliation_report = SimpleNamespace(status=ReconciliationStatus.MATCH)
 
     result = guard.execute(
         intent=intent(),
