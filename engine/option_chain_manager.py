@@ -83,6 +83,14 @@ class OptionChainManager:
             if f"NFO_{security_id}" not in quotes
         }
 
+        quote_timestamps = {}
+        for security_id in security_ids:
+            timestamp = extract_provider_timestamp(
+                quotes.get(f"NFO_{security_id}")
+            )
+            if timestamp is not None:
+                quote_timestamps[str(security_id)] = timestamp
+
         rows = []
         for contract in contracts:
             ce = quotes.get(f"NFO_{contract['CE_ID']}", {})
@@ -161,6 +169,7 @@ class OptionChainManager:
             integrity_reasons=integrity.reasons,
         )
 
+        result.attrs["option_quote_timestamps"] = quote_timestamps
         result.attrs["data_provenance"] = provenance
         result.attrs["quote_integrity"] = integrity.as_dict()
         return result
