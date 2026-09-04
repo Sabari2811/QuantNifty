@@ -9,11 +9,12 @@ def test_live_quote_batch_latest_timestamp():
     second = LiveQuoteTick("NFO:2", datetime(2026, 8, 30, 4, 0, 1, tzinfo=timezone.utc), 2, "quote", {"ltp": 20})
     completed = datetime(2026, 8, 30, 4, 0, 2, tzinfo=timezone.utc)
     batch = LiveQuoteBatch(
-        {first.instrument: first, second.instrument: second},
-        {first.instrument: completed, second.instrument: completed},
-        completed,
-        completed,
-        completed,
+        ticks={first.instrument: first, second.instrument: second},
+        received_at={first.instrument: completed, second.instrument: completed},
+        freshness={},
+        acquired_at=completed,
+        connected_at=completed,
+        completed_at=completed,
     )
     assert batch.latest_provider_timestamp == second.timestamp
 
