@@ -2,12 +2,6 @@ from datetime import datetime
 
 from execution.position_runtime_service import PositionRuntimeService
 from execution.position_state import PositionStatus
-from execution.position_state_store import SQLitePositionStateStore
-
-
-class FakeProvider:
-    def connect(self):
-        return True
 
 
 class FakeStore:
@@ -28,8 +22,7 @@ def test_live_engine_position_service_is_initialized_from_store():
 
 
 def test_position_service_persists_canonical_open_state():
-    from dataclasses import dataclass
-
+    from dataclasses import dataclass, field
     from execution.position_state import PositionState
 
     @dataclass
@@ -45,7 +38,7 @@ def test_position_service_persists_canonical_open_state():
 
     @dataclass
     class Position:
-        order: Order = Order()
+        order: Order = field(default_factory=Order)
         current_price: float = 110.0
         stop_loss: float = 90.0
         target: float = 120.0
