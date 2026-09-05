@@ -2,6 +2,12 @@ from datetime import datetime
 
 from execution.position_runtime_service import PositionRuntimeService
 from execution.position_state import PositionStatus
+from execution.position_state_store import SQLitePositionStateStore
+
+
+class FakeProvider:
+    def connect(self):
+        return True
 
 
 class FakeStore:
@@ -50,6 +56,10 @@ def test_position_service_persists_canonical_open_state():
     service = PositionRuntimeService(store)
     state = service.persist_paper_position(Position())
 
+    assert state.client_order_id == "client-1"
+    assert state.broker_order_id == "broker-1"
+    assert state.symbol == "NIFTY"
+    assert state.option_type == "CE"
     assert isinstance(state, PositionState)
     assert state.status is PositionStatus.OPEN
     assert store.saved == [state]
