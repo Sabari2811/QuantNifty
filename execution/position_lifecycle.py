@@ -39,31 +39,9 @@ def evaluate_position_lifecycle(
     if price < 0:
         raise ValueError("current_price must be non-negative")
 
-    # A closed position must never be reopened by lifecycle evaluation.
-    # Keep the canonical position lifecycle idempotent while allowing the
-    # runtime adapter/service to classify the already-observed exit reason
-    # from the current price for persistence/replay diagnostics.
-    if position.status is PositionStatus.CLOSED:
-        if position.target is not None and price >= position.target:
-            return PositionLifecycleDecision(
-                PositionLifecycleAction.CLOSE_TARGET,
-                "Target reached on an already-closed position; no mutation required.",
-            )
-        if position.trailing_stop is not None and price <= position.trailing_stop:
-            return PositionLifecycleDecision(
-                PositionLifecycleAction.CLOSE_STOP_LOSS,
-                "Trailing stop reached on an already-closed position; no mutation required.",
-            )
-        if position.stop_loss is not None and price <= position.stop_loss:
-            return PositionLifecycleDecision(
-                PositionLifecycleAction.CLOSE_STOP_LOSS,
-                "Stop loss reached on an already-closed position; no mutation required.",
-            )
-        return PositionLifecycleDecision(
-            PositionLifecycleAction.HOLD,
-            "Position is not open.",
-        )
-
+    # A terminal position is never evaluated for a new close action.
+    # Exit classification must come from the actual runtime close event,
+    # not from re-evaluating an already-closed position.
     if position.status is not PositionStatus.OPEN:
         return PositionLifecycleDecision(
             PositionLifecycleAction.HOLD,
