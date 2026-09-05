@@ -5,6 +5,8 @@ from paper_trading.models import PaperOrder, PaperPosition
 from paper_trading.portfolio import PortfolioEngine
 from paper_trading.journal import TradeJournal
 from analytics.performance.performance_engine import PerformanceEngine
+from execution.position_lifecycle import PositionLifecycleAction
+from execution.position_lifecycle_adapter import evaluate_paper_position_lifecycle
 
 
 class PaperBroker:
@@ -118,11 +120,12 @@ class PaperBroker:
 
             self.portfolio.unrealized_pnl += position.pnl
 
-            if ltp <= position.stop_loss:
+            lifecycle = evaluate_paper_position_lifecycle(position, current_price=ltp)
+            if lifecycle.lifecycle.action is PositionLifecycleAction.CLOSE_STOP_LOSS:
                 self.close_position(position, ltp, "STOP_LOSS")
                 continue
 
-            if ltp >= position.target:
+            if lifecycle.lifecycle.action is PositionLifecycleAction.CLOSE_TARGET:
                 self.close_position(position, ltp, "TARGET")
 
     def _find_ltp(self, option_chain, strike, option_type):
