@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 
@@ -23,7 +23,7 @@ class Order:
 
 @dataclass
 class Position:
-    order: Order
+    order: Order = field(default_factory=Order)
     current_price: float = 110.0
     stop_loss: float = 90.0
     target: float = 120.0
