@@ -29,6 +29,15 @@ def evaluate_position_lifecycle(
     if position is None:
         raise ValueError("Position state is required")
 
+    # A terminal position is never evaluated for a new close action.
+    # Exit classification comes from the actual runtime close event rather
+    # than re-evaluating an already-closed position.
+    if position.status is not PositionStatus.OPEN:
+        return PositionLifecycleDecision(
+            PositionLifecycleAction.HOLD,
+            "Position is not open.",
+        )
+
     if manual_close:
         return PositionLifecycleDecision(
             PositionLifecycleAction.CLOSE_MANUAL,
@@ -38,15 +47,6 @@ def evaluate_position_lifecycle(
     price = position.current_price if current_price is None else current_price
     if price < 0:
         raise ValueError("current_price must be non-negative")
-
-    # A terminal position is never evaluated for a new close action.
-    # Exit classification must come from the actual runtime close event,
-    # not from re-evaluating an already-closed position.
-    if position.status is not PositionStatus.OPEN:
-        return PositionLifecycleDecision(
-            PositionLifecycleAction.HOLD,
-            "Position is not open.",
-        )
 
     stop = position.trailing_stop if position.trailing_stop is not None else position.stop_loss
     if stop is not None and price <= stop:
