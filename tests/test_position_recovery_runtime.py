@@ -1,9 +1,11 @@
+from datetime import datetime
+
 from execution.position_recovery_runtime import recover_open_positions
 from execution.position_state import PositionState, PositionStatus
 from execution.position_state_store import SQLitePositionStateStore
 
 
-def _position(client_order_id="client-1", status=PositionStatus.OPEN):
+def _position(client_order_id="client-1", status=PositionStatus.OPEN, closed_at=None):
     return PositionState(
         client_order_id=client_order_id,
         broker_order_id=f"broker-{client_order_id}",
@@ -16,7 +18,8 @@ def _position(client_order_id="client-1", status=PositionStatus.OPEN):
         stop_loss=90.0,
         target=120.0,
         status=status,
-        closed_at=None,
+        opened_at=datetime(2026, 9, 5, 9, 15),
+        closed_at=closed_at,
     )
 
 
@@ -37,11 +40,7 @@ def test_recovery_excludes_closed_positions(tmp_path):
             _position(
                 "client-2",
                 PositionStatus.CLOSED,
-            ).__class__(
-                **{
-                    **_position("client-2", PositionStatus.CLOSED).__dict__,
-                    "closed_at": __import__("datetime").datetime.now(),
-                }
+                datetime(2026, 9, 5, 10, 0),
             )
         )
         decision = recover_open_positions(store)
