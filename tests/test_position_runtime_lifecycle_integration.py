@@ -33,10 +33,16 @@ class Position:
 def test_target_lifecycle_is_persisted_as_closed_state(tmp_path):
     with SQLitePositionStateStore(str(tmp_path / "positions.db")) as store:
         service = PositionRuntimeService(store)
-        position = Position(current_price=121.0, closed=True, exit_time=datetime(2026, 9, 5, 10, 0))
-        lifecycle = service.evaluate_paper_position(position)
+        open_position = Position(current_price=121.0)
+        lifecycle = service.evaluate_paper_position(open_position)
         assert lifecycle.lifecycle.action is PositionLifecycleAction.CLOSE_TARGET
-        state = service.persist_after_lifecycle(position, lifecycle.lifecycle)
+
+        closed_position = Position(
+            current_price=121.0,
+            closed=True,
+            exit_time=datetime(2026, 9, 5, 10, 0),
+        )
+        state = service.persist_after_lifecycle(closed_position, lifecycle.lifecycle)
 
     restored = SQLitePositionStateStore(str(tmp_path / "positions.db"))
     try:
