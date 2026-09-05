@@ -39,21 +39,21 @@ def evaluate_position_lifecycle(
     if price < 0:
         raise ValueError("current_price must be non-negative")
 
-    stop = position.trailing_stop if position.trailing_stop is not None else position.stop_loss
-    if stop is not None and price <= stop and position.status is PositionStatus.OPEN:
-        reason = "Trailing stop reached." if position.trailing_stop is not None else "Stop loss reached."
-        return PositionLifecycleDecision(PositionLifecycleAction.CLOSE_STOP_LOSS, reason)
-
-    if position.target is not None and price >= position.target and position.status is PositionStatus.OPEN:
-        return PositionLifecycleDecision(
-            PositionLifecycleAction.CLOSE_TARGET,
-            "Target reached.",
-        )
-
     if position.status is not PositionStatus.OPEN:
         return PositionLifecycleDecision(
             PositionLifecycleAction.HOLD,
             "Position is not open.",
+        )
+
+    stop = position.trailing_stop if position.trailing_stop is not None else position.stop_loss
+    if stop is not None and price <= stop:
+        reason = "Trailing stop reached." if position.trailing_stop is not None else "Stop loss reached."
+        return PositionLifecycleDecision(PositionLifecycleAction.CLOSE_STOP_LOSS, reason)
+
+    if position.target is not None and price >= position.target:
+        return PositionLifecycleDecision(
+            PositionLifecycleAction.CLOSE_TARGET,
+            "Target reached.",
         )
 
     return PositionLifecycleDecision(PositionLifecycleAction.HOLD, "No close condition reached.")
