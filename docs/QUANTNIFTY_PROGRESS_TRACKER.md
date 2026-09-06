@@ -188,7 +188,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [x] Inventory UI adapters/presenters
 - [x] Inventory canonical DashboardData models
 - [x] Inventory backend-produced fields
-- [ ] Inventory every UI-rendered field
+- [x] Inventory every UI-rendered field
 - [ ] Map provider → canonical backend → DashboardData → adapter → UI
 - [ ] Identify UI-side calculations/recomputation
 - [ ] Identify hardcoded/default/fallback values
@@ -268,9 +268,38 @@ Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 - No backend calculation was changed in this boundary; this is inventory/reconciliation only.
 - Evidence files inspected: `analytics/analytics_pipeline.py`, `core/runtime_context.py`, `models/market_context.py`, `models/dashboard_data.py`.
 - Boundary date: 2026-09-06.
-- Boundary commit: recorded in tracker update following B5.
+- Boundary commit: `57406a594146030513e23cc6c8372df16159e534`.
 
-**Next action:** inventory every UI-rendered field from the canonical dashboard components and legacy UI components that remain reachable.
+### M0 boundary B6 — UI-rendered field inventory and legacy-field classification
+**Status: COMPLETE**
+
+Canonical `dashboard/*` rendering is evidenced across the active Streamlit entrypoint:
+- Header: symbol, spot, expiry, provider/session, latest acquisition time derived from runtime provenance.
+- Market banner/signal: decision signal, bullish probability, confidence, dealer gamma/market mode, gamma flip/wall, recommendation and risk/reward.
+- Market regime: dealer gamma/mode, expected volatility, confidence, bullish/bearish probability, mean reversion, breakout, gamma flip/wall and total GEX.
+- Intelligence: direction, conviction, opportunity, recommendation, regime, data coverage, freshness, integrity, scenarios, explanation and Decision ↔ Intelligence consistency.
+- Market summary: spot/expiry/expected-move values through `adapt_market_summary()`; no UI recomputation.
+- Analytics cards: institutional score, probability, Max Pain, PCR, market structure, dealer flow, liquidity, trade plan and risk.
+- Option chain/Greeks: same-cycle option chain and Greeks, with coverage/freshness/integrity and explicit degraded state via `provenance_adapter`/option-chain renderer.
+- Charts: same-cycle Greeks/MarketContext-backed dashboard values.
+- Generic analytics expander: `DashboardData.analytics` is displayed as an explicit compatibility/audit surface, not used as the dedicated-field source.
+
+Legacy `app/*` rendering is a separate compatibility surface and exposes fields that are not all first-class DashboardData fields, including:
+- portfolio cash/invested/realized/unrealized P&L and trade-quality summaries;
+- direct `ctx.snapshot` / `ctx.decision` presentation;
+- technical EMA/VWAP checklist state and PCR bias;
+- market-map dealer/gamma/max-pain/expected-move summaries;
+- active position entry/current/quantity/SL/target/holding/MTM;
+- execution-plan strike/option/premium stop/targets/risk-reward/quality/lots;
+- legacy live option-chain annotations derived from `ctx.analytics`.
+
+Legacy components also contain explicit display defaults such as `"-"`, `"--"`, `0`, and a dynamic holding-time calculation. These are recorded as compatibility-path audit findings and are not silently promoted to canonical DashboardData semantics.
+
+Evidence files inspected: `dashboard/components/*` canonical renderers; `app/components/hero_header.py`, `kpi_cards.py`, `ai_decision_card.py`, `market_intelligence_card.py`, `active_position_card.py`, `checklist_panel.py`, `market_map_panel.py`, `trade_plan_card.py`, `live_option_chain.py`.
+Boundary date: 2026-09-06.
+Boundary commit: recorded in tracker update following B6.
+
+**Next action:** map provider → canonical backend → DashboardData → adapter → UI for each major field family and distinguish canonical projections from legacy compatibility paths.
 
 **Exit gate:** zero unexplained UI surfaces or fields.
 
@@ -406,7 +435,7 @@ Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 - [ ] No UI/backend divergence
 
 ## M11 — Production readiness and deployment certification
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Full regression
 - [ ] Live market/UI validation
@@ -529,7 +558,8 @@ Inventory and gap analysis remains the active workstream. Backend capability doe
 - B3 — UI adapter/presenter inventory: complete. Canonical adapters are `decision_adapter.py`, `intelligence_adapter.py`, `market_summary_adapter.py`, `provenance_adapter.py`, `ui_runtime_contract.py`, plus Decision ↔ Intelligence consistency mapping; legacy presentation remains explicitly separate.
 - B4 — canonical DashboardData model and field inventory: complete. Dedicated UI fields are typed in `DashboardData`; generic `analytics` is retained only as compatibility/display projection; additional typed MarketContext fields require explicit downstream disposition.
 - B5 — backend-produced canonical analytics inventory: complete. `AnalyticsPipeline` and `RuntimeContext` expose the canonical analytics surface without calculation changes; typed fields and compatibility projection are explicitly distinguished.
-- Next boundary: inventory every UI-rendered field from canonical and reachable legacy components.
+- B6 — UI-rendered field inventory and legacy-field classification: complete. Canonical dashboard rendering is traced across identity, decision, intelligence, analytics, option-chain/Greeks, provenance and runtime fields; legacy UI fields/defaults are recorded as compatibility-path findings.
+- Next boundary: provider → canonical backend → DashboardData → adapter → UI mapping by field family.
 
 ---
 
