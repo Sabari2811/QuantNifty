@@ -2,11 +2,11 @@ from datetime import datetime
 
 import pytest
 
-from execution.execution_audit_store import ExecutionAuditRecord, InMemoryExecutionAuditStore
+from execution.execution_audit_store import ExecutionAuditRecord, InMemoryExecutionAuditStore, SQLiteExecutionAuditStore
 from execution.execution_contract import ExecutionAction, ExecutionResult, ExecutionStatus, OrderIntent
 
 
-def make_result(status=ExecutionStatus.EXECUTED, client_order_id="client-1"):
+def make_result(status=ExecutionStatus.EXECUTED, client_order_id="client-1", filled_quantity=None):
     created = datetime(2026, 9, 4, 10, 0, 0)
     intent = OrderIntent(
         symbol="NIFTY",
@@ -19,12 +19,14 @@ def make_result(status=ExecutionStatus.EXECUTED, client_order_id="client-1"):
         client_order_id=client_order_id,
         created_at=created,
     )
+    if filled_quantity is None:
+        filled_quantity = 75 if status is ExecutionStatus.EXECUTED else 0
     return ExecutionResult(
         status=status,
         intent=intent,
         broker_order_id="broker-1",
-        filled_quantity=75 if status is ExecutionStatus.EXECUTED else 0,
-        average_fill_price=100.0 if status is ExecutionStatus.EXECUTED else None,
+        filled_quantity=filled_quantity,
+        average_fill_price=100.0 if filled_quantity else None,
         timestamp=created,
     )
 
@@ -58,15 +60,29 @@ def test_store_is_append_only_for_repeated_events():
 def test_store_allows_conflicting_lifecycle_event_for_same_client_identity():
     store = InMemoryExecutionAuditStore()
     executed = ExecutionAuditRecord.from_result(make_result())
-    rejected = ExecutionAuditRecord.from_result(
-        make_result(status=ExecutionStatus.REJECTED)
-    )
+    rejected = ExecutionAuditRecord.from_result(make_result(status=ExecutionStatus.REJECTED))
 
     store.append(executed)
     store.append(rejected)
 
     assert store.get("client-1") == rejected
     assert store.records() == (executed, rejected)
+
+
+def test_sqlite_store_preserves_append_only_lifecycle_history_and_latest_lookup(tmp_path):
+    path = tmp_path / "execution_audit.sqlite"
+    executed = ExecutionAuditRecord.from_result(make_result())
+    rejected = ExecutionAuditRecord.from_result(make_result(status=ExecutionStatus.REJECTED))
+
+    with SQLiteExecutionAuditStore(path) as store:
+        store.append(executed)
+        store.append(rejected)
+        assert store.get("client-1") == rejected
+        assert store.records() == (executed, rejected)
+
+    with SQLiteExecutionAuditStore(path) as reopened:
+        assert reopened.get("client-1") == rejected
+        assert reopened.records() == (executed, rejected)
 
 
 def test_pending_records_are_explicitly_recoverable():
