@@ -44,7 +44,7 @@
 **M1 implementation status:** implementation/test boundaries B1–B4 are complete. Final M1 live UI certification remains evidence-gated.
 
 ## M2 — UI/backend divergence elimination
-**Status: IN PROGRESS — B1+B2+B3+B4 COMPLETE**
+**Status: IN PROGRESS — B1+B2+B3+B4+B5 COMPLETE**
 
 ### M2 boundary B1 — KPI missing-value semantics
 **Status: COMPLETE — targeted regression PASS**
@@ -83,6 +83,17 @@
 - Regression coverage: `tests/test_market_banner_contract.py`.
 - Implementation commit: `2ea2dbbb2a4b6ced8fb008b6559fc3f4c646fab5`.
 - Local targeted regression: `pytest -q tests/test_market_banner_contract.py` → **2 passed in 2.51s**.
+
+### M2 boundary B5 — Signal-card missing/invalid presentation semantics
+**Status: COMPLETE — targeted regression PASS**
+
+- `dashboard/components/signal_card.py` now renders missing/invalid dealer presentation values explicitly as `UNAVAILABLE` instead of leaking raw `None`/invalid values into the UI.
+- Canonical decision direction, probability and confidence remain presentation-only; no signal recomputation or actionability inference is introduced.
+- Regression coverage: `tests/test_signal_card_contract.py`.
+- Implementation commit: `75db714ceb74c0397997bc241c3e54acab2fd270`.
+- Regression test file commit: `70895444889fee09b4b3ca1845458038fa7d5838`.
+- Local targeted regression: `pytest -q tests/test_signal_card_contract.py` → **3 passed in 1.44s**.
+- No provider credentials, broker calls, or real-money orders were required.
 
 - [ ] Remove duplicate UI calculations
 - [ ] Remove stale/duplicate adapters
