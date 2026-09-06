@@ -48,7 +48,7 @@
 **M1 implementation status:** implementation/test boundaries B1–B4 are complete. Final M1 live UI certification remains evidence-gated and is not marked green without live-market evidence.
 
 ## M2 — UI/backend divergence elimination
-**Status: IN PROGRESS — B1 COMPLETE; B2 next**
+**Status: IN PROGRESS — B1 COMPLETE; B2 IN PROGRESS**
 
 ### M2 boundary B1 — KPI missing-value semantics
 **Status: COMPLETE — targeted regression PASS**
@@ -63,12 +63,18 @@
 - Local checkout was initially behind the branch; `git pull origin r2-011-canonical-snapshot-provenance` fast-forwarded the working tree to the branch head before the successful test run.
 - No provider credentials, broker calls, or real-money orders were required.
 
-### M2 boundary B2 — Audit dashboard UI for duplicate/default field calculation paths
-**Status: NEXT — implementation pending**
+### M2 boundary B2 — Expected-move / Max-Pain / PCR missing-value semantics
+**Status: IMPLEMENTED — targeted regression pending**
 
-- Audit canonical dashboard components for values recomputed from alternative `DashboardData` fields instead of consuming their authoritative field/adapters.
-- Prioritize probability/confidence, market summary, dealer/gamma, option-chain derived display fields, and any remaining hardcoded fallback/default semantics.
-- Any behavior change must receive a focused regression before the boundary is marked complete.
+- `dashboard/components/expected_move_card.py` now reads canonical keys through safe mapping access and renders `UNAVAILABLE` for missing, non-numeric, NaN or infinite values instead of crashing or displaying fabricated values.
+- `dashboard/components/max_pain_card.py` now renders missing/invalid values as `UNAVAILABLE`, while preserving real zero values and numeric formatting.
+- `dashboard/components/pcr_card.py` now renders missing/invalid PCR values and sentiment as `UNAVAILABLE` instead of raising key errors or treating absent data as valid.
+- Regression coverage added in `tests/test_expected_move_card_contract.py` and `tests/test_max_pain_card_contract.py` / PCR contract coverage.
+- Expected-move implementation commit: `7f99e94632e40c68f9e3d7f273ad937a4b4c5e9e`.
+- Expected-move regression coverage commit: `213229454e6fd488d4e2e8acadd47ab88f8de641`.
+- Max-Pain implementation commit: `4c37f78ce10be79bf284528c7baa306012119b8a`.
+- PCR implementation commit: `b4a54f6b12d60706fe8d58ae9a5c99b8ab123d29`.
+- No provider credentials, broker calls, or real-money orders are required.
 
 - [ ] Remove duplicate UI calculations
 - [ ] Remove stale/duplicate adapters
@@ -95,7 +101,7 @@
 - [ ] No silent substitution
 
 ## M4 — Analytics/intelligence UI certification
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] All analytics fields and semantics
 - [ ] Direction/actionability/decision
@@ -106,7 +112,7 @@
 - [ ] Historical/replay isolation
 
 ## M5 — Provenance/data-quality UI
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Source/provider
 - [ ] Observation/processing timestamps
