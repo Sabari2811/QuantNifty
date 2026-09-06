@@ -70,4 +70,5 @@ def test_pipeline_preserves_ambiguous_result_without_retry_or_paper_fallback():
     assert broker.calls == 0
     assert ctx.execution_result.status is ExecutionStatus.UNKNOWN
     assert ctx.execution_lifecycle == "RECONCILE"
-    assert ctx.trade_status == "REJECTED"
+    assert ctx.trade_status == "UNKNOWN"
+    assert ctx.trade_block_reason == ""
