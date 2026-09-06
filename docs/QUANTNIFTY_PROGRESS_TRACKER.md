@@ -48,10 +48,10 @@
 **M1 implementation status:** implementation/test boundaries B1–B4 are complete. Final M1 live UI certification remains evidence-gated and is not marked green without live-market evidence.
 
 ## M2 — UI/backend divergence elimination
-**Status: IN PROGRESS — B1 targeted regression pending**
+**Status: IN PROGRESS — B1 COMPLETE; B2 next**
 
 ### M2 boundary B1 — KPI missing-value semantics
-**Status: IMPLEMENTED — targeted regression pending**
+**Status: COMPLETE — targeted regression PASS**
 
 - `dashboard/components/kpi_cards.py` no longer defaults missing `bullish_probability` or `confidence` to `0`; missing/NaN values render as an explicit `—` marker.
 - A real zero remains `0%`; known numeric percentages remain unchanged.
@@ -59,8 +59,16 @@
 - Implementation commit: `4353fab943d100bf08f28ebbc01f6145e97a2b45`.
 - Regression coverage: `tests/test_dashboard_kpi_contract.py`.
 - Test coverage commit: `1e55baa2b66445677298786b6eb7fb32cc91ada7`.
-- Required local targeted regression: `pytest -q tests/test_dashboard_kpi_contract.py`.
-- No provider credentials, broker calls, or real-money orders are required.
+- Local targeted regression executed after synchronizing branch `r2-011-canonical-snapshot-provenance`: `pytest -q tests/test_dashboard_kpi_contract.py` → **3 passed in 2.30s**.
+- Local checkout was initially behind the branch; `git pull origin r2-011-canonical-snapshot-provenance` fast-forwarded the working tree to the branch head before the successful test run.
+- No provider credentials, broker calls, or real-money orders were required.
+
+### M2 boundary B2 — Audit dashboard UI for duplicate/default field calculation paths
+**Status: NEXT — implementation pending**
+
+- Audit canonical dashboard components for values recomputed from alternative `DashboardData` fields instead of consuming their authoritative field/adapters.
+- Prioritize probability/confidence, market summary, dealer/gamma, option-chain derived display fields, and any remaining hardcoded fallback/default semantics.
+- Any behavior change must receive a focused regression before the boundary is marked complete.
 
 - [ ] Remove duplicate UI calculations
 - [ ] Remove stale/duplicate adapters
@@ -87,7 +95,7 @@
 - [ ] No silent substitution
 
 ## M4 — Analytics/intelligence UI certification
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] All analytics fields and semantics
 - [ ] Direction/actionability/decision
@@ -98,7 +106,7 @@
 - [ ] Historical/replay isolation
 
 ## M5 — Provenance/data-quality UI
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Source/provider
 - [ ] Observation/processing timestamps
