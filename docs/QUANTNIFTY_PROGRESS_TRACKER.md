@@ -395,18 +395,29 @@ Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 - Boundary commit: `7dab61399804f8a1b8ad5f03b133b0f48c792452`.
 
 ### M1 boundary B2 — Canonical execution/recovery projection
-**Status: IMPLEMENTED — TEST PENDING**
+**Status: COMPLETE — targeted regression PASS**
 
-- `models/dashboard_data.py` now explicitly projects `execution_intent`, `execution_result`, `execution_lifecycle`, `position_recovery`, and `position_reconciliation` as canonical pass-through fields.
-- `dashboard/dashboard_controller.py` now maps those five fields directly from the same `RuntimeContext` cycle; no broker state is inferred and no execution semantics are recomputed.
-- `dashboard/ui_runtime_contract.py` now exposes those exact five objects to the real Streamlit runtime contract by direct pass-through.
-- `tests/test_streamlit_runtime_ui_contract.py` now creates deterministic `OrderIntent` / `ExecutionResult` and recovery/reconciliation fixtures and asserts identity preservation through the real Streamlit entrypoint contract.
+- `models/dashboard_data.py` explicitly projects `execution_intent`, `execution_result`, `execution_lifecycle`, `position_recovery`, and `position_reconciliation` as canonical pass-through fields.
+- `dashboard/dashboard_controller.py` maps those five fields directly from the same `RuntimeContext` cycle; no broker state is inferred and no execution semantics are recomputed.
+- `dashboard/ui_runtime_contract.py` exposes those exact five objects to the real Streamlit runtime contract by direct pass-through.
+- `tests/test_streamlit_runtime_ui_contract.py` creates deterministic `OrderIntent` / `ExecutionResult` and recovery/reconciliation fixtures and asserts identity preservation through the real Streamlit entrypoint contract.
 - Static repository verification completed for all four modified files at commit `105464b6e0ea9b79b0d0e1e2a3325bd1043b8565`.
 - GitHub Actions workflow runs for commit `105464b6e0ea9b79b0d0e1e2a3325bd1043b8565`: none available.
-- Therefore **no test-pass claim is made yet**. The deterministic test must be run in a Python environment before this boundary is marked validated.
-- No provider credentials, broker calls, or real-money orders are required for this targeted test.
+- Local targeted regression executed after synchronizing branch `r2-011-canonical-snapshot-provenance`: `pytest -q tests/test_streamlit_runtime_ui_contract.py` → **2 passed in 7.77s**.
+- No provider credentials, broker calls, or real-money orders were required for this targeted test.
 
-**Next action:** run the targeted deterministic regression `pytest -q tests/test_streamlit_runtime_ui_contract.py` from the repository environment. If green, record the result and continue to the next M1 boundary.
+### M1 boundary B3 — Canonical option-chain quote projection (bid/ask)
+**Status: COMPLETE — targeted regression PASS**
+
+- `providers/indmoney_provider.py` already normalizes provider quote aliases into canonical `bid_price` / `ask_price`; this boundary closes the missing projection at `engine/option_chain_manager.py`.
+- `engine/option_chain_manager.py` now carries `CE_BID`, `CE_ASK`, `PE_BID`, and `PE_ASK` directly from provider quote payloads without deriving them from LTP or other fields.
+- Missing provider bid/ask values remain `None` / unknown; no synthetic spread or fallback value is introduced.
+- `tests/test_option_chain_quote_fields.py` verifies both complete bid/ask preservation and missing bid/ask behavior using deterministic provider fixtures; no broker/provider network calls are performed.
+- Implementation commit: `4660d61f35ff851afec6d61f6554a7d8d12473de`.
+- Targeted regression commit: `31a9d899ae0fe941b42309a8ab4b62596c32de90`.
+- Local targeted regression executed after synchronizing branch `r2-011-canonical-snapshot-provenance`: `pytest -q tests/test_option_chain_quote_fields.py` → **2 passed in 2.33s**.
+
+**Next action:** continue M1 field completeness by auditing OI / OI-change / volume / IV projection and the corresponding DashboardData/UI contract. Keep compatibility pages unchanged.
 
 ## M2 — UI/backend divergence elimination
 **Status: NOT STARTED**
@@ -417,7 +428,7 @@ Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 - [ ] Fix missing-value/fallback semantics
 - [ ] Prevent fabricated values
 - [ ] Preserve UNKNOWN / SUSPECT / INVALID
-- [ ] Preserve freshness separately from integrity
+- [ ] Preserve freshness separately
 - [ ] Preserve direction/actionability separation
 - [ ] Prevent history/replay vetoes
 - [ ] Regression coverage for every correction
@@ -557,8 +568,9 @@ Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 | Direction / actionability | DecisionEngine / DecisionBuilder | decision_adapter | signal/banner/intelligence; actionability absent by contract | INTENTIONALLY UNAVAILABLE as distinct actionability contract pending specification | M1-B1 |
 | Decision / intelligence | DecisionEngine / Intelligence | decision/intelligence adapters | signal/intelligence cards | VALIDATED except distinct actionability gap | B9/M1-B1 |
 | Provenance / freshness / integrity | RuntimeDataProvenance / option-chain integrity | provenance_adapter | header/option-chain/intelligence/runtime | VALIDATED | B7/B9 |
-| Execution | RuntimeContext execution state | DashboardData + ui_runtime_contract pass-through | canonical runtime contract; dedicated visual card pending | IMPLEMENTED — TEST PENDING | M1-B2 |
-| Position / recovery / reconciliation | RuntimeContext position state | DashboardData + ui_runtime_contract pass-through | position fields partly present; recovery/reconciliation projection implemented | IMPLEMENTED — TEST PENDING | M1-B2 |
+| Execution | RuntimeContext execution state | DashboardData + ui_runtime_contract pass-through | canonical runtime contract; dedicated visual card pending | VALIDATED at projection level; visual presentation deferred | M1-B2 |
+| Position / recovery / reconciliation | RuntimeContext position state | DashboardData + ui_runtime_contract pass-through | position fields partly present; recovery/reconciliation projection implemented | VALIDATED at projection level; visual presentation deferred | M1-B2 |
+| Option-chain bid/ask | Provider normalized quotes → OptionChainManager | DashboardController / option-chain renderer | canonical option-chain fields | VALIDATED at projection level | M1-B3 |
 
 No unresolved `TBD`/`PENDING` entry may remain after the relevant milestone exit gate.
 
@@ -588,7 +600,8 @@ No unresolved `TBD`/`PENDING` entry may remain after the relevant milestone exit
 | Production live-order certification | Real-money runtime evidence | NOT CERTIFIED |
 | Browser/UI certification | M0–M10 evidence incomplete | NOT CERTIFIED |
 | Deployment certification | Post-deployment evidence incomplete | NOT CERTIFIED |
-| Canonical DashboardData execution/recovery projection | `models/dashboard_data.py` + `dashboard/dashboard_controller.py` + `dashboard/ui_runtime_contract.py` + deterministic AppTest | IMPLEMENTED — TEST PENDING |
+| Canonical DashboardData execution/recovery projection | `models/dashboard_data.py` + `dashboard/dashboard_controller.py` + `dashboard/ui_runtime_contract.py` + deterministic AppTest | VALIDATED — 2 passed in 7.77s |
+| Canonical option-chain bid/ask projection | `engine/option_chain_manager.py` + `tests/test_option_chain_quote_fields.py` | VALIDATED — 2 passed in 2.33s |
 
 ---
 
@@ -603,6 +616,7 @@ No unresolved `TBD`/`PENDING` entry may remain after the relevant milestone exit
 - The legacy `app/*` Streamlit path remains a reachable compatibility surface. Its explicit UI-side calculations/fallbacks and stale placeholder controls are known findings assigned to M2/M9; they are not treated as canonical data paths.
 - `DecisionEngine` / `DecisionBuilder` expose authoritative direction/signal and confidence plus execution validation; no distinct actionability object exists in the current decision model. M1 preserves that current contract rather than inventing semantics.
 - `RuntimeContext` carries execution intent/result/lifecycle and position recovery/reconciliation, and M1-B2 now projects those values through DashboardData/UI contract; visual execution/recovery presentation remains for M6/M7.
+- `engine/option_chain_manager.py` now preserves canonical bid/ask values from provider quote normalization; missing bid/ask remains unknown rather than synthesized from LTP.
 
 ---
 
@@ -662,8 +676,9 @@ M0 inventory, field tracing, calculation/fallback audit and disposition matrix a
 
 ### M1 boundaries completed
 - B1 — Decision direction vs actionability audit: complete, audit-only. Current Decision/Signal contract has authoritative direction and confidence/validation but no independent actionability object; no new semantics were invented. Disposition: intentionally unavailable as a distinct contract pending explicit specification.
-- B2 — Canonical execution/recovery projection: implemented. `DashboardData`, `DashboardController`, and `ui_runtime_contract` now carry execution intent/result/lifecycle and position recovery/reconciliation by direct pass-through, with deterministic AppTest coverage committed. Test execution is pending because no GitHub Actions run is available for commit `105464b6e0ea9b79b0d0e1e2a3325bd1043b8565` and the repository Python environment is not exposed by the GitHub connector.
-- Next active boundary: validate B2 with the targeted test; after green, continue M1 field completeness/semantics without changing legacy compatibility pages.
+- B2 — Canonical execution/recovery projection: complete at targeted-test level. `DashboardData`, `DashboardController`, and `ui_runtime_contract` carry execution intent/result/lifecycle and position recovery/reconciliation by direct pass-through. Local targeted regression: `pytest -q tests/test_streamlit_runtime_ui_contract.py` → **2 passed in 7.77s**.
+- B3 — Canonical option-chain quote projection (bid/ask): complete at targeted-test level. `OptionChainManager` now carries normalized provider `bid_price` / `ask_price` into CE/PE bid/ask fields without synthesis; missing values remain unknown. Local targeted regression: `pytest -q tests/test_option_chain_quote_fields.py` → **2 passed in 2.33s**. Implementation commit `4660d61f35ff851afec6d61f6554a7d8d12473de`; regression-test commit `31a9d899ae0fe941b42309a8ab4b62596c32de90`.
+- Next active boundary: audit OI / OI-change / volume / IV projection and the corresponding DashboardData/UI contract. Keep compatibility pages unchanged.
 
 ---
 
