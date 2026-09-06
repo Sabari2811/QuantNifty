@@ -74,7 +74,7 @@
 - [ ] Regression coverage for every correction
 
 ## M3 — Live option-chain UI certification
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Live expiry/spot
 - [ ] Expected/received/missing contracts
@@ -87,7 +87,7 @@
 - [ ] No silent substitution
 
 ## M4 — Analytics/intelligence UI certification
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] All analytics fields and semantics
 - [ ] Direction/actionability/decision
@@ -98,7 +98,7 @@
 - [ ] Historical/replay isolation
 
 ## M5 — Provenance/data-quality UI
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Source/provider
 - [ ] Observation/processing timestamps
