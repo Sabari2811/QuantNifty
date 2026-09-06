@@ -55,23 +55,31 @@ class LiveExecutionRuntimeGuard:
 
     def execute(
         self,
-        *,
         intent: OrderIntent,
+        decision=None,
+        *,
         reconciliation_result=None,
         reconciliation_report=None,
     ) -> ExecutionResult:
+        """Execute through the guarded live adapter.
+
+        ``decision`` is retained as an optional compatibility argument for
+        execution adapters that historically accepted ``(intent, decision)``.
+        The live runtime gate remains authoritative and does not derive safety
+        state from that legacy argument.
+        """
         if intent is None:
             raise ValueError("Order intent is required")
 
-        decision = self.evaluate(
+        gate = self.evaluate(
             intent=intent,
             reconciliation_result=reconciliation_result,
             reconciliation_report=reconciliation_report,
         )
-        if not decision.allowed:
+        if not gate.allowed:
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
                 intent=intent,
-                reason=decision.reason,
+                reason=gate.reason,
             )
         return self.adapter.execute(intent)
