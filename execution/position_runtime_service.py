@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from execution.position_lifecycle import PositionLifecycleAction
 from execution.position_lifecycle_adapter import evaluate_paper_position_lifecycle
-from execution.position_state import PositionState
+from execution.position_state import PositionState, PositionStatus
 from execution.position_state_store import SQLitePositionStateStore
 
 
@@ -27,10 +27,14 @@ class PositionRuntimeService:
         )
 
     def persist_after_lifecycle(self, position, lifecycle_decision, *, closed_at=None) -> PositionState:
-        if lifecycle_decision.action is PositionLifecycleAction.HOLD:
+        lifecycle = getattr(lifecycle_decision, "lifecycle", lifecycle_decision)
+        if lifecycle is None or not hasattr(lifecycle, "action"):
+            raise ValueError("Lifecycle decision is required")
+
+        if lifecycle.action is PositionLifecycleAction.HOLD:
             return self.persist_paper_position(position)
 
-        if lifecycle_decision.action in {
+        if lifecycle.action in {
             PositionLifecycleAction.CLOSE_STOP_LOSS,
             PositionLifecycleAction.CLOSE_TARGET,
             PositionLifecycleAction.CLOSE_MANUAL,
@@ -49,13 +53,13 @@ class PositionRuntimeService:
                     stop_loss=state.stop_loss,
                     target=state.target,
                     trailing_stop=state.trailing_stop,
-                    status=state.status.CLOSED,
+                    status=PositionStatus.CLOSED,
                     opened_at=state.opened_at,
                     closed_at=closed_at or getattr(position, "exit_time", None),
                 )
             return self.store.save(state)
 
-        raise ValueError(f"Unsupported lifecycle action: {lifecycle_decision.action}")
+        raise ValueError(f"Unsupported lifecycle action: {lifecycle.action}")
 
 
 def _paper_position_to_state(position) -> PositionState:
