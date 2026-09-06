@@ -41,6 +41,18 @@ class DashboardData:
     # contract against the exact runtime artifact without recomputation.
     intelligence: dict | None = None
 
+    # Canonical execution state passed through from RuntimeContext. The
+    # dashboard layer must display these values as supplied and never infer
+    # broker state locally.
+    execution_intent: Any = None
+    execution_result: Any = None
+    execution_lifecycle: str = ""
+
+    # Canonical position/recovery state passed through from RuntimeContext.
+    # Recovery/reconciliation semantics remain owned by the runtime layer.
+    position_recovery: Any = None
+    position_reconciliation: Any = None
+
     portfolio: Any = None
     position: Any = None
     last_trade: Any = None
