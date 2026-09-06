@@ -78,14 +78,35 @@ def test_execute_maps_provider_success_to_canonical_result():
     assert len(provider.requests) == 1
 
 
+def test_execute_transport_timeout_is_unknown_and_requires_reconciliation():
+    provider = FakeProvider(error=TimeoutError("timeout"))
+    adapter = LiveINDMoneyExecutionAdapter(provider, FakeResolver())
+
+    result = adapter.execute(intent())
+
+    assert result.status is ExecutionStatus.UNKNOWN
+    assert "outcome is unknown" in result.reason
+    assert "timeout" in result.reason
+
+
+def test_execute_connection_failure_is_unknown_and_requires_reconciliation():
+    provider = FakeProvider(error=ConnectionError("disconnected"))
+    adapter = LiveINDMoneyExecutionAdapter(provider, FakeResolver())
+
+    result = adapter.execute(intent())
+
+    assert result.status is ExecutionStatus.UNKNOWN
+    assert "outcome is unknown" in result.reason
+
+
 def test_execute_provider_failure_maps_to_failed():
-    provider = FakeProvider(error=RuntimeError("timeout"))
+    provider = FakeProvider(error=RuntimeError("provider rejected locally"))
     adapter = LiveINDMoneyExecutionAdapter(provider, FakeResolver())
 
     result = adapter.execute(intent())
 
     assert result.status is ExecutionStatus.FAILED
-    assert "timeout" in result.reason
+    assert "provider rejected locally" in result.reason
 
 
 def test_execute_mapping_failure_maps_to_failed():
