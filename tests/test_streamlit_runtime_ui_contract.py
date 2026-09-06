@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
+from execution.execution_contract import ExecutionAction, ExecutionResult, ExecutionStatus, OrderIntent
 from models.dashboard_data import DashboardData
 from models.dealer_data import DealerData
 
@@ -40,6 +41,22 @@ def _dashboard():
     greeks["PE_THETA"] = -1.0
     greeks["PE_VEGA"] = 2.0
     greeks["PE_RHO"] = -1.0
+
+    intent = OrderIntent(
+        symbol="NIFTY",
+        option_type="CE",
+        strike=25000.0,
+        action=ExecutionAction.BUY,
+        quantity=50,
+        limit_price=150.0,
+        strategy_name="test-strategy",
+        client_order_id="qn-test-order",
+    )
+    execution_result = ExecutionResult(
+        status=ExecutionStatus.UNKNOWN,
+        intent=intent,
+        reason="broker-timeout",
+    )
 
     return DashboardData(
         provider="indmoney",
@@ -95,6 +112,11 @@ def _dashboard():
             "vetoed": False,
             "decision_signal": "BUY CALL",
         },
+        execution_intent=intent,
+        execution_result=execution_result,
+        execution_lifecycle="RECONCILE",
+        position_recovery={"status": "RECOVERED"},
+        position_reconciliation={"status": "MATCH"},
         trade_status="BLOCKED",
         trade_block_reason="",
         runtime_status="IDLE",
@@ -165,6 +187,11 @@ def test_streamlit_entrypoint_exposes_exact_runtime_ui_contract(monkeypatch):
     assert contract["decision_intelligence_consistency"] is dashboard.decision_intelligence_consistency
     assert contract["provenance"] is dashboard.data_provenance
     assert contract["option_chain_integrity"] is dashboard.option_chain_integrity
+    assert contract["execution_intent"] is dashboard.execution_intent
+    assert contract["execution_result"] is dashboard.execution_result
+    assert contract["execution_lifecycle"] == dashboard.execution_lifecycle
+    assert contract["position_recovery"] is dashboard.position_recovery
+    assert contract["position_reconciliation"] is dashboard.position_reconciliation
     pd.testing.assert_frame_equal(contract["option_chain"], dashboard.option_chain)
     pd.testing.assert_frame_equal(contract["greeks"], dashboard.greeks)
 
