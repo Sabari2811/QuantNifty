@@ -1,4 +1,18 @@
+import math
+
 import streamlit as st
+
+
+def _display_percent(value):
+    """Render a known percentage or an explicit unknown marker."""
+    if value is None:
+        return "—"
+    try:
+        if math.isnan(float(value)):
+            return "—"
+    except (TypeError, ValueError):
+        pass
+    return f"{value}%"
 
 
 def render(dashboard):
@@ -9,15 +23,10 @@ def render(dashboard):
     dealer = dashboard.dealer
     probability = dashboard.probability
 
-    bullish = probability.get(
-        "bullish_probability",
-        0
-    )
-
-    confidence = probability.get(
-        "confidence",
-        0
-    )
+    # Do not default missing canonical values to 0: zero is a real value and
+    # must not be fabricated when the backend value is unavailable.
+    bullish = probability.get("bullish_probability")
+    confidence = probability.get("confidence")
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
 
@@ -54,7 +63,7 @@ def render(dashboard):
 
     c4.metric(
         "Bullish %",
-        f"{bullish}%"
+        _display_percent(bullish)
     )
 
     # ======================================================
@@ -63,7 +72,7 @@ def render(dashboard):
 
     c5.metric(
         "Confidence",
-        f"{confidence}%"
+        _display_percent(confidence)
     )
 
     # ======================================================
