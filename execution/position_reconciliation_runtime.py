@@ -18,14 +18,38 @@ def evaluate_position_reconciliation_runtime(
 ) -> PositionReconciliationRuntimeDecision:
     """Gate continuation of a recovered position on explicit reconciliation.
 
-    Accepts the persisted-position recovery runtime decision so an open
-    recovered position cannot continue merely because it was loaded.
+    A supplied broker reconciliation report is authoritative for the
+    continuation decision. Recovery state is used only when no reconciliation
+    report is available, so a successful MATCH cannot be masked by a stale or
+    conservative recovery flag.
     """
     if recovery is None:
         return PositionReconciliationRuntimeDecision(
             False,
             False,
             "Position recovery decision is unavailable.",
+        )
+
+    if reconciliation_report is not None:
+        status = getattr(reconciliation_report, "status", None)
+        if status is ReconciliationStatus.MATCH or status == "MATCH":
+            return PositionReconciliationRuntimeDecision(
+                True,
+                False,
+                "Recovered position reconciled to broker state.",
+            )
+
+        if status is ReconciliationStatus.MISMATCH or status == "MISMATCH":
+            return PositionReconciliationRuntimeDecision(
+                False,
+                True,
+                "Recovered position reconciliation mismatch requires manual resolution.",
+            )
+
+        return PositionReconciliationRuntimeDecision(
+            False,
+            False,
+            "Recovered position reconciliation remains unknown; continuation is blocked.",
         )
 
     positions = tuple(getattr(recovery, "positions", ()) or ())
@@ -36,30 +60,8 @@ def evaluate_position_reconciliation_runtime(
             getattr(recovery, "reason", "No recovered positions require reconciliation."),
         )
 
-    if reconciliation_report is None:
-        return PositionReconciliationRuntimeDecision(
-            False,
-            False,
-            "Recovered position requires broker reconciliation before continuation.",
-        )
-
-    status = getattr(reconciliation_report, "status", None)
-    if status is ReconciliationStatus.MATCH or status == "MATCH":
-        return PositionReconciliationRuntimeDecision(
-            True,
-            False,
-            "Recovered position reconciled to broker state.",
-        )
-
-    if status is ReconciliationStatus.MISMATCH or status == "MISMATCH":
-        return PositionReconciliationRuntimeDecision(
-            False,
-            True,
-            "Recovered position reconciliation mismatch requires manual resolution.",
-        )
-
     return PositionReconciliationRuntimeDecision(
         False,
         False,
-        "Recovered position reconciliation remains unknown; continuation is blocked.",
+        "Recovered position requires broker reconciliation before continuation.",
     )
