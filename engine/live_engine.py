@@ -99,6 +99,20 @@ class LiveEngine:
         self.ctx.runtime_status = "READY"
         logger.info("Initialization Complete")
 
+    def _persist_position_runtime_state(self):
+        service = getattr(self, "position_runtime_service", None)
+        if service is None:
+            return
+
+        broker = self.paper_broker
+        for position in getattr(broker.portfolio, "open_positions", ()): 
+            service.persist_paper_position(position)
+
+        last_trade = getattr(broker, "last_trade", None)
+        if last_trade is not None and getattr(last_trade, "closed", False):
+            lifecycle = service.evaluate_paper_position(last_trade, manual_close=True)
+            service.persist_after_lifecycle(last_trade, lifecycle)
+
     def _calculate_greeks(self):
         self.ctx.greeks_df = self.greeks.calculate_chain_greeks(self.ctx.option_chain, self.ctx.spot, self.ctx.expiry)
         logger.info("GREEKS DATAFRAME | columns=%s", self.ctx.greeks_df.columns.tolist())
@@ -226,6 +240,7 @@ class LiveEngine:
         self.trade_pipeline.execute(self.ctx)
         if self.ctx.execution_result is not None:
             self.ctx.execution_lifecycle = classify_execution_result(self.ctx.execution_result).value
+        self._persist_position_runtime_state()
 
     def run_cycle(self):
         self.ctx.runtime_status = "RUNNING"
@@ -255,6 +270,7 @@ class LiveEngine:
                 position = self.paper_broker.last_trade
                 if position is not None:
                     self.risk_manager.on_trade_closed(position)
+            self._persist_position_runtime_state()
             self.trade_pipeline.sync_context(self.ctx)
             if self._is_replay_fast():
                 pass
