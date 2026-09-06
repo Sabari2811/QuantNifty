@@ -182,7 +182,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 ## M0 — Baseline, inventory and audit lock
 **Status: IN PROGRESS**
 
-- [ ] Confirm exact branch/HEAD
+- [x] Confirm exact branch/HEAD
 - [ ] Inventory all Streamlit/UI entry points
 - [ ] Inventory UI components/pages
 - [ ] Inventory UI adapters/presenters
@@ -198,6 +198,17 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] Create complete UI/backend gap matrix
 - [ ] Assign every item VALIDATED / FIX REQUIRED / INTENTIONALLY UNAVAILABLE / UNSUPPORTED
 - [ ] Record audit evidence and commit SHA
+
+### M0 boundary B1 — Exact branch / HEAD confirmation
+**Status: COMPLETE**
+
+- Verified branch: `r2-011-canonical-snapshot-provenance`
+- Verified HEAD: `74e43edbf6ff560c6126e58531aa6218dba69311`
+- Verification source: GitHub branch ref `refs/heads/r2-011-canonical-snapshot-provenance`
+- Verification date: 2026-09-06
+- Scope: repository identity only; no local working-tree state inferred or changed.
+
+**Next action:** inventory all Streamlit/UI entry points.
 
 **Exit gate:** zero unexplained UI surfaces or fields.
 
