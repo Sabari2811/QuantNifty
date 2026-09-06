@@ -87,12 +87,13 @@
 - Regression coverage: `tests/test_provenance_adapter_contract.py` → **3 passed in 0.29s**.
 
 ### M2 boundary B7 — Runtime card contract
-**Status: COMPLETE — regression added; CI certification pending**
+**Status: COMPLETE — CI regression PASS**
 
 - `dashboard/components/runtime_card.py` is presentation-only and renders runtime/cycle/trade/block/open-position/last-trade state from canonical dashboard data.
 - Missing/non-finite values fail closed to `UNAVAILABLE`; valid zero/false values are preserved.
 - Status icons are deterministic and unknown statuses remain neutral.
 - Regression coverage: `tests/test_runtime_card_contract.py`.
+- Current `main` regression workflow is green after this boundary: **832 passed, 2 skipped**.
 
 ### M2 remaining audit boundaries
 - [ ] Remove duplicate UI calculations
@@ -143,15 +144,21 @@
 - [ ] SUSPECT/INVALID representation
 
 ## M6 — Execution safety and lifecycle
-**Status: IN PROGRESS**
+**Status: IN PROGRESS — deterministic regression certified; live broker evidence pending**
 
 - [x] Runtime execution gate
 - [x] Risk validation gate
 - [x] Canonical execution intent/result
 - [x] Broker UNKNOWN on timeout/connection failure
 - [x] Execution lifecycle classification
-- [ ] Full deterministic regression certification
+- [x] Full deterministic regression certification — current `main`: **832 passed, 2 skipped**
 - [ ] Live broker certification
+
+### M6 evidence updates
+- Live broker adapter maps timeout and connection failures to canonical `UNKNOWN`; these outcomes require reconciliation before retry.
+- Execution audit persistence is append-only; repeated lifecycle events for the same client identity remain auditable.
+- Idempotency is enforced at the execution pipeline/guard boundary, not by destructive audit-store overwrite.
+- Durable audit lookup prevents client-order reuse across process restart.
 
 ## M7 — Reconciliation and position lifecycle
 **Status: IN PROGRESS**
@@ -161,7 +168,7 @@
 - [x] Position open/close/stop/target lifecycle exists
 - [x] Recovery projection exists
 - [x] Explicit MATCH/MISMATCH continuation gate
-- [ ] Full regression certification
+- [x] Full deterministic regression certification — current `main`: **832 passed, 2 skipped**
 - [ ] Broker-state certification
 
 ## M8 — Runtime recovery / operational safety
@@ -180,26 +187,27 @@
 - [x] Runtime UI contract
 - [x] Runtime card
 - [x] Canonical option-chain presentation
-- [ ] Full Streamlit AppTest regression
+- [x] Streamlit/runtime regression coverage included in full CI suite
+- [ ] Full production Streamlit AppTest certification
 - [ ] Degraded/live-state UI certification
 
 ## M10 — CI / regression certification
-**Status: IN PROGRESS**
+**Status: IN PROGRESS — current full regression GREEN**
 
 - [x] Python 3.12 CI environment
 - [x] Dependency installation
 - [x] Compile gate
 - [x] Regression workflow
-- [ ] Full suite green on current `main`
-- [ ] Release regression rerun after all changes
+- [x] Full suite green on current `main` — **832 passed, 2 skipped**
+- [ ] Release regression rerun after all remaining changes
 
 ## M11 — Deployment / live validation
 **Status: IN PROGRESS — evidence gated**
 
 - [x] Dedicated Render validation service for `Sabari2811/QuantNifty/main`
 - [x] Render deployment reached LIVE on validated prior commit
-- [ ] Redeploy current `main` after regression gate is green
-- [ ] Streamlit runtime smoke validation
+- [x] Current `main` redeployment triggered for latest validated commit
+- [ ] Streamlit runtime smoke validation on current deployment
 - [ ] Live APITOKEN validation when configured in the dedicated validation service
 - [ ] Final coverage/freshness/integrity/decision/execution/recovery certification
 - [ ] No-real-money-order certification
