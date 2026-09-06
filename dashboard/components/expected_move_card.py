@@ -1,12 +1,26 @@
+import math
+
 import streamlit as st
 
 
 def _display(value, suffix=""):
-    return "UNAVAILABLE" if value is None else f"{value}{suffix}"
+    """Render a known value or an explicit unknown marker."""
+    if value is None:
+        return "UNAVAILABLE"
+    return f"{value}{suffix}"
 
 
 def _display_number(value, decimals=2, prefix=""):
-    return "UNAVAILABLE" if value is None else f"{prefix}{value:,.{decimals}f}"
+    """Render a finite number or an explicit unknown marker."""
+    if value is None:
+        return "UNAVAILABLE"
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return "UNAVAILABLE"
+    if not math.isfinite(numeric):
+        return "UNAVAILABLE"
+    return f"{prefix}{numeric:,.{decimals}f}"
 
 
 def render(expected_move):
@@ -28,6 +42,4 @@ def render(expected_move):
     c3.metric("Upper", _display_number(upper))
     c4.metric("Lower", _display_number(lower))
 
-    st.caption(
-        f"Calculation Method : {_display(method)}"
-    )
+    st.caption(f"Calculation Method : {_display(method)}")
