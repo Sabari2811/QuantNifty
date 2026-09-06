@@ -1,5 +1,19 @@
+import math
+
 import streamlit as st
 import plotly.graph_objects as go
+
+
+def _normalize_probability(value):
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(numeric):
+        return None
+    return numeric
 
 
 def render(probability):
@@ -9,7 +23,12 @@ def render(probability):
 
     st.subheader("🎯 Bullish Probability")
 
-    value = probability["bullish_probability"]
+    data = probability or {}
+    value = _normalize_probability(data.get("bullish_probability"))
+
+    if value is None:
+        st.info("Bullish probability: UNAVAILABLE")
+        return
 
     fig = go.Figure(
 
