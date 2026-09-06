@@ -1,54 +1,192 @@
-# QuantNifty — M0–M11 Progress Tracker
+# QuantNifty — Master Project Tracker, Summary & Architecture
 
-## Purpose
+## 1. Project summary
 
-Persistent implementation, audit, validation and certification tracker for QuantNifty. This file is the continuity source for future chats. Every milestone, implementation change, regression result and certification decision must be recorded here.
+QuantNifty is a modular NIFTY options analytics, decision-intelligence, paper/live-execution and certification platform.
 
-## Operating contract
+**Current objective:** move from validated live analytics into a fully auditable, risk-controlled production system without bypassing canonical backend contracts.
 
-- Audit first; do not invent scope, data, mappings or evidence.
-- Canonical backend/DashboardData is authoritative.
-- UI must consume canonical data through approved adapters/presenters.
-- No fabricated, silently substituted or stale values.
-- Freshness and integrity remain independent.
-- `SUSPECT` remains explicit and is never relabeled `VALID` without evidence.
-- Direction and actionability remain separate.
-- Historical/replay recommendations cannot silently veto a direction-consistent live decision.
-- Gamma flip is regime/level evidence, not standalone BUY/SELL logic.
-- IV skew directional mapping is a project heuristic.
-- One change at a time.
-- Inspect implementation and tests before editing.
-- Targeted regression after every production behavior change.
-- Full regression before release gates.
-- Never run real-money order placement from tests.
-- Deployment is not certification.
-- Nothing is marked complete without evidence.
-- Unavailable/unsupported behavior must have an explicit disposition.
+**Current branch:** `r2-011-canonical-snapshot-provenance`  
+**Current phase:** M0 — UI/backend inventory and gap audit  
+**Program:** R2-015 — Production Execution, Operations, Deployment & Live Certification
 
-## Current state
-
-- Branch: `r2-011-canonical-snapshot-provenance`
-- Current program: M0 — UI/backend inventory and gap audit
-- R2-014 canonical analytics-context architecture: COMPLETE
-- R2-015 production execution/certification program: IN PROGRESS
-- Latest recorded full local regression baseline: 479 passed, 1 skipped, 0 failed
-- Latest recorded live validation: 3 cycles; coverage/freshness/reconciliation/OI/decision-intelligence gates passed
-- Live option-chain integrity: deliberately `SUSPECT`/`DEGRADED` where intrinsic-value validation fails; not treated as VALID
-- Open tracking issues: R2-013 issue #12 and R2-015 issue #18
+### Evidence baseline
+- R2-014 canonical analytics-context architecture: **COMPLETE**
+- Latest recorded full local regression baseline: **479 passed, 1 skipped, 0 failed**
+- Latest recorded live validation: **3 cycles**, with coverage/freshness/reconciliation/OI/Decision-Intelligence gates passing
+- Live option-chain integrity: deliberately **SUSPECT/DEGRADED** where intrinsic-value validation fails; never relabeled VALID without evidence
+- R2-013 issue #12: **OPEN**
+- R2-015 issue #18: **OPEN**
 
 ---
 
-# Milestone checklist
+# 2. Architecture
+
+## 2.1 Canonical market-data and intelligence flow
+
+```text
+INDMoney / INDstocks Provider
+        │
+        ▼
+Provider adapters / normalization
+        │
+        ▼
+Canonical market snapshot + provenance
+        │
+        ├── Spot / expiry / option chain
+        ├── Coverage / missing contracts
+        ├── Freshness / freshness reason
+        └── Integrity / integrity reason
+        │
+        ▼
+Analytics Pipeline
+        │
+        ▼
+Canonical MarketContext / analytics
+        │
+        ├── Greeks
+        ├── GEX / DEX
+        ├── Gamma walls / flip
+        ├── Expected Move
+        ├── Max Pain / PCR
+        ├── IV skew
+        ├── Dealer flow
+        └── Market structure
+        │
+        ▼
+Decision Engine
+        │
+        ├── Direction
+        ├── Actionability
+        └── Decision
+        │
+        ▼
+Intelligence / explanation / consistency
+        │
+        ▼
+Canonical DashboardData
+        │
+        ▼
+Dashboard adapters / presenters
+        │
+        ▼
+Streamlit UI
+```
+
+## 2.2 Canonical execution flow
+
+```text
+Canonical Decision
+      │
+      ▼
+Order Intent Factory
+      │
+      ▼
+Canonical OrderIntent
+      │
+      ▼
+Risk / market-data readiness gate
+      │
+      ├── blocked → canonical REJECTED result + audit
+      │
+      ▼
+Runtime safety gates
+      │
+      ├── kill switch
+      ├── reconciliation
+      └── execution-mode boundary
+      │
+      ▼
+Paper or live execution adapter
+      │
+      ▼
+Canonical ExecutionResult
+      │
+      ├── EXECUTED / SUBMITTED / REJECTED / FAILED / UNKNOWN
+      │
+      ├──────────────► Execution audit store
+      │
+      └──────────────► Position state / lifecycle
+                              │
+                              ▼
+                       Recovery / reconciliation
+                              │
+                              ▼
+                         Canonical runtime
+                              │
+                              ▼
+                              UI
+```
+
+## 2.3 Position/recovery flow
+
+```text
+Paper/Canonical Position
+        │
+        ▼
+PositionState
+        │
+        ▼
+SQLitePositionStateStore
+        │
+        ▼
+PositionRuntimeService
+        │
+        ├── lifecycle evaluation
+        ├── persistence
+        └── runtime recovery
+        │
+        ▼
+Position reconciliation
+        │
+        ├── MATCH → continuation allowed
+        ├── MISMATCH → manual resolution
+        └── UNKNOWN → continuation blocked
+```
+
+## 2.4 Shared runtime boundary
+
+`RuntimeContext` is the shared runtime boundary for market data, canonical typed analytics, decision/intelligence, execution, position, recovery and reconciliation state.
+
+Canonical state includes `market_context`, `analytics`, `data_provenance`, `decision`, `intelligence`, `execution_intent`, `execution_result`, `execution_lifecycle`, `position_recovery`, `position_reconciliation`, risk state and runtime status.
+
+---
+
+# 3. Architecture guardrails
+
+1. Audit first; never invent scope, data, mappings or evidence.
+2. Canonical backend/DashboardData is authoritative.
+3. UI consumes canonical data through approved adapters/presenters.
+4. No fabricated, silently substituted or stale values.
+5. Freshness and integrity are independent.
+6. `SUSPECT` and `INVALID` remain explicit.
+7. Direction and actionability remain separate.
+8. Historical/replay recommendations cannot silently veto a direction-consistent live decision.
+9. Gamma flip is regime/level evidence, not standalone BUY/SELL logic.
+10. IV skew directional mapping is a project heuristic.
+11. One change at a time.
+12. Inspect implementation and tests before editing.
+13. Targeted regression after every production behavior change.
+14. Full regression before release gates.
+15. Never run real-money order placement from tests.
+16. Unknown/ambiguous broker outcomes require reconciliation; blind retry is prohibited.
+17. Live execution must be impossible when safety/data gates block it.
+18. Deployment is not certification.
+19. Nothing is marked complete without evidence.
+20. Every unsupported/unavailable capability receives an explicit disposition.
+
+---
+
+# 4. Master milestone tracker
 
 ## M0 — Baseline, inventory and audit lock
-
-Status: IN PROGRESS
+**Status: IN PROGRESS**
 
 - [ ] Confirm exact branch/HEAD
 - [ ] Inventory all Streamlit/UI entry points
 - [ ] Inventory UI components/pages
 - [ ] Inventory UI adapters/presenters
-- [ ] Inventory canonical `DashboardData` models
+- [ ] Inventory canonical DashboardData models
 - [ ] Inventory backend-produced fields
 - [ ] Inventory every UI-rendered field
 - [ ] Map provider → canonical backend → DashboardData → adapter → UI
@@ -58,353 +196,284 @@ Status: IN PROGRESS
 - [ ] Identify missing backend fields
 - [ ] Identify unused backend capabilities
 - [ ] Create complete UI/backend gap matrix
-- [ ] Assign every item: VALIDATED / FIX REQUIRED / INTENTIONALLY UNAVAILABLE / UNSUPPORTED
+- [ ] Assign every item VALIDATED / FIX REQUIRED / INTENTIONALLY UNAVAILABLE / UNSUPPORTED
 - [ ] Record audit evidence and commit SHA
 
-Exit gate: zero unexplained UI surfaces or fields.
+**Exit gate:** zero unexplained UI surfaces or fields.
 
 ## M1 — Canonical Dashboard contract
+**Status: NOT STARTED**
 
-Status: NOT STARTED
-
-- [ ] Spot
-- [ ] Expiry
-- [ ] Option chain
-- [ ] Strike
-- [ ] CE/PE LTP
-- [ ] Bid/ask
-- [ ] OI
-- [ ] OI change
-- [ ] Volume
-- [ ] IV
-- [ ] Greeks
-- [ ] GEX
-- [ ] DEX
-- [ ] Gamma walls
-- [ ] Gamma flip
-- [ ] Expected move
-- [ ] Max pain
-- [ ] PCR
-- [ ] IV skew
-- [ ] Dealer flow
-- [ ] Market structure
-- [ ] Direction
-- [ ] Actionability
-- [ ] Decision
-- [ ] Intelligence/reason
-- [ ] Confidence/scoring
-- [ ] Provenance
-- [ ] Freshness
-- [ ] Integrity
-- [ ] Coverage
-- [ ] Missing-contract information
-- [ ] Degraded-data state
-- [ ] Execution state
-- [ ] Position state
-- [ ] Recovery state
-- [ ] Reconciliation state
+- [ ] Spot / expiry / option chain
+- [ ] Strike / CE / PE LTP / bid / ask
+- [ ] OI / OI change / volume / IV
+- [ ] Greeks / GEX / DEX / gamma walls / gamma flip
+- [ ] Expected move / Max Pain / PCR
+- [ ] IV skew / dealer flow / market structure
+- [ ] Direction / actionability / decision
+- [ ] Intelligence / confidence / scoring
+- [ ] Provenance / freshness / integrity / coverage
+- [ ] Missing-contract / degraded-data state
+- [ ] Execution / position / recovery / reconciliation state
 - [ ] Complete field-level mapping
 
-Exit gate: zero unexplained dashboard fields.
-
 ## M2 — UI/backend divergence elimination
+**Status: NOT STARTED**
 
-Status: NOT STARTED
-
-- [ ] Remove duplicate UI calculations where canonical backend exists
+- [ ] Remove duplicate UI calculations
 - [ ] Remove stale/duplicate adapters
-- [ ] Fix field-name mismatches
-- [ ] Fix type mismatches
-- [ ] Fix enum/status mismatches
-- [ ] Fix missing-value handling
-- [ ] Fix fallback semantics
+- [ ] Fix field/type/enum mismatches
+- [ ] Fix missing-value/fallback semantics
 - [ ] Prevent fabricated values
-- [ ] Preserve UNKNOWN
-- [ ] Preserve SUSPECT
-- [ ] Preserve INVALID
+- [ ] Preserve UNKNOWN / SUSPECT / INVALID
 - [ ] Preserve freshness separately from integrity
 - [ ] Preserve direction/actionability separation
-- [ ] Prevent history/replay from silently vetoing live decisions
-- [ ] Add regression coverage for every correction
-
-Exit gate: canonical backend is the sole authoritative source for displayed values.
+- [ ] Prevent history/replay vetoes
+- [ ] Regression coverage for every correction
 
 ## M3 — Live option-chain UI certification
+**Status: NOT STARTED**
 
-Status: NOT STARTED
-
-- [ ] Live expiry
-- [ ] Live spot
-- [ ] Expected contract count
-- [ ] Received contract count
-- [ ] Missing contracts
+- [ ] Live expiry/spot
+- [ ] Expected/received/missing contracts
 - [ ] Provider observation timestamp
-- [ ] Freshness
-- [ ] Integrity
-- [ ] Integrity reason
-- [ ] Bid/ask handling
-- [ ] OI/OI-change handling
+- [ ] Freshness/integrity/reasons
+- [ ] Bid/ask/OI/OI-change
 - [ ] Partial response handling
 - [ ] No stale-as-fresh display
 - [ ] No synthetic timestamp
-- [ ] No silent contract substitution
-
-Exit gate: live option-chain UI matches canonical live DashboardData.
+- [ ] No silent substitution
 
 ## M4 — Analytics/intelligence UI certification
+**Status: NOT STARTED**
 
-Status: NOT STARTED
-
-- [ ] Greeks
-- [ ] GEX
-- [ ] DEX
-- [ ] Gamma walls
-- [ ] Gamma flip
-- [ ] Expected move
-- [ ] Max pain
-- [ ] PCR
-- [ ] IV skew
-- [ ] Dealer flow
-- [ ] Market structure
-- [ ] Direction
-- [ ] Actionability
-- [ ] Decision
+- [ ] All analytics fields and semantics
+- [ ] Direction/actionability/decision
 - [ ] Intelligence explanation
-- [ ] Gamma flip remains regime/level evidence
-- [ ] IV skew heuristic remains explicit
-- [ ] WAIT remains possible and non-vetoing where appropriate
-- [ ] Historical/replay recommendations cannot silently veto live direction
-
-Exit gate: UI semantics exactly match canonical backend semantics.
+- [ ] Gamma flip semantics
+- [ ] IV skew heuristic semantics
+- [ ] WAIT behavior
+- [ ] Historical/replay isolation
 
 ## M5 — Provenance/data-quality UI
-
-Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Source/provider
-- [ ] Observation timestamp
-- [ ] Processing timestamp
-- [ ] Freshness
-- [ ] Coverage
-- [ ] Missing count
-- [ ] Integrity
-- [ ] Integrity reason
-- [ ] Freshness reason
-- [ ] Degraded state
-- [ ] Provider failure
-- [ ] Partial data
-- [ ] Clock skew
-- [ ] Structural invalidity
-- [ ] SUSPECT representation
-- [ ] INVALID representation
-- [ ] No generic green/live indicator when canonical state is degraded
-
-Exit gate: user can understand why displayed data is trusted or degraded.
+- [ ] Observation/processing timestamps
+- [ ] Freshness/freshness reason
+- [ ] Coverage/missing count
+- [ ] Integrity/integrity reason
+- [ ] Degraded/provider-failure/partial states
+- [ ] Clock skew/structural invalidity
+- [ ] SUSPECT/INVALID representation
 
 ## M6 — Decision → execution UI
+**Status: NOT STARTED**
 
-Status: NOT STARTED
-
-- [ ] Execution intent
-- [ ] Client order ID
-- [ ] Symbol
-- [ ] Option type
-- [ ] Strike
-- [ ] Quantity
-- [ ] Action
-- [ ] Limit price
-- [ ] Risk decision
-- [ ] Risk block reason
+- [ ] Intent/client ID
+- [ ] Instrument/action/quantity/price
+- [ ] Risk decision/block reason
 - [ ] Kill-switch state
-- [ ] Execution status
-- [ ] Broker order ID
-- [ ] Filled quantity
-- [ ] Average fill
-- [ ] Execution reason
+- [ ] Execution status/broker ID/fills
 - [ ] Retry/reconciliation state
 - [ ] Paper/live mode
 - [ ] No accidental live-order control
-- [ ] Rejected state
-- [ ] UNKNOWN/SUBMITTED states
-
-Exit gate: UI accurately represents canonical execution state and never bypasses safety boundaries.
 
 ## M7 — Position/recovery UI
+**Status: NOT STARTED**
 
-Status: NOT STARTED
-
-- [ ] Open position
-- [ ] Entry price
-- [ ] Current price
-- [ ] Quantity
-- [ ] Stop loss
-- [ ] Target
-- [ ] Trailing stop
-- [ ] Position status
-- [ ] Broker order identity
-- [ ] Client order identity
+- [ ] Position state/lifecycle
+- [ ] Entry/current/SL/target/trailing
+- [ ] Client/broker identities
 - [ ] Persisted state
-- [ ] Recovery state
-- [ ] Reconciliation state
+- [ ] Recovery/reconciliation
 - [ ] Manual-resolution requirement
-- [ ] Restart/recovery block
+- [ ] Restart block
 - [ ] No inferred broker position
 
-Exit gate: position state remains auditable through restart/recovery.
-
 ## M8 — Failure/degraded-state UI certification
+**Status: NOT STARTED**
 
-Status: NOT STARTED
-
-- [ ] Provider unavailable
-- [ ] Spot unavailable
-- [ ] Option chain incomplete
-- [ ] Stale quote
-- [ ] SUSPECT quote
-- [ ] INVALID quote
-- [ ] Missing contracts
-- [ ] Partial provider response
-- [ ] Analytics unavailable
-- [ ] Decision unavailable
-- [ ] Risk blocked
-- [ ] Kill switch active
-- [ ] Broker rejection
-- [ ] Broker timeout
-- [ ] UNKNOWN execution
+- [ ] Provider/spot/chain unavailable
+- [ ] Stale/SUSPECT/INVALID
+- [ ] Partial/missing data
+- [ ] Analytics/decision unavailable
+- [ ] Risk/kill-switch blocked
+- [ ] Broker rejection/timeout/UNKNOWN
 - [ ] Reconciliation mismatch
-- [ ] Recovery unavailable
-- [ ] Persistence unavailable
-- [ ] Every runtime state has defined UI disposition
-
-Exit gate: no undefined runtime state reaches UI.
+- [ ] Recovery/persistence unavailable
+- [ ] Every runtime state has UI disposition
 
 ## M9 — UI automated regression
+**Status: NOT STARTED**
 
-Status: NOT STARTED
-
-- [ ] DashboardData → adapter tests
-- [ ] Adapter → UI tests
-- [ ] Field completeness tests
-- [ ] No-recomputation tests
-- [ ] Provenance tests
-- [ ] Freshness tests
-- [ ] Integrity tests
-- [ ] Degraded-state tests
-- [ ] Decision tests
-- [ ] Execution-state tests
-- [ ] Position-state tests
-- [ ] Recovery-state tests
+- [ ] DashboardData → adapter
+- [ ] Adapter → UI
+- [ ] Field completeness
+- [ ] No recomputation
+- [ ] Provenance/freshness/integrity
+- [ ] Degraded states
+- [ ] Decision/execution/position/recovery states
 - [ ] Full regression
 
-Exit gate: UI contract is automatically protected.
-
 ## M10 — End-to-end certification
-
-Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Provider → canonical snapshot
-- [ ] Canonical snapshot → analytics
-- [ ] Analytics → decision
-- [ ] Decision → intelligence
-- [ ] Intelligence → DashboardData
-- [ ] DashboardData → UI
-- [ ] Decision → execution intent
-- [ ] Intent → risk gate
-- [ ] Risk → broker adapter
-- [ ] Broker → execution result
-- [ ] Result → audit
-- [ ] Result → position state
-- [ ] Position → recovery/reconciliation
-- [ ] Recovery/reconciliation → UI
-- [ ] One complete cycle
-- [ ] Multiple consecutive cycles
-- [ ] Degraded cycle
-- [ ] Recovery cycle
-- [ ] Reconciliation cycle
-- [ ] Paper execution cycle
-- [ ] Execution rejection cycle
-- [ ] Partial/ambiguous execution cycle
-- [ ] No stale-state leakage
+- [ ] Snapshot → analytics → decision → intelligence
+- [ ] Intelligence → DashboardData → UI
+- [ ] Decision → intent → risk → broker → result
+- [ ] Result → audit → position → recovery/reconciliation → UI
+- [ ] Complete cycle
+- [ ] Multiple cycles
+- [ ] Degraded/recovery/reconciliation cycles
+- [ ] Paper execution/rejection/ambiguous execution
+- [ ] No stale leakage
 - [ ] No duplicate order
 - [ ] No UI/backend divergence
 
-Exit gate: complete end-to-end evidence exists.
-
-## M11 — Final production readiness and deployment certification
-
-Status: NOT STARTED
+## M11 — Production readiness and deployment certification
+**Status: NOT STARTED**
 
 - [ ] Full regression
-- [ ] Live market validation
-- [ ] Live UI validation
-- [ ] Execution validation
-- [ ] Recovery validation
-- [ ] Reconciliation validation
-- [ ] Configuration validation
-- [ ] Secret handling validation
-- [ ] Structured logging
-- [ ] Runtime health monitoring
-- [ ] Alerting
+- [ ] Live market/UI validation
+- [ ] Execution/recovery/reconciliation validation
+- [ ] Configuration/secrets validation
+- [ ] Structured logging/health/alerts
 - [ ] Restart validation
-- [ ] Deployment validation
-- [ ] Post-deployment validation
+- [ ] Deployment/post-deployment validation
 - [ ] Evidence bundle
-- [ ] Final production-readiness gate
+- [ ] Production-readiness gate
 - [ ] Final LIVE certification
 
-Exit gate: evidence-backed production certification only. Deployment alone never changes status to LIVE.
+**Exit gate:** evidence-backed production certification only.
 
 ---
 
-# Backend → UI mapping register
+# 5. Backend → UI mapping register
 
-Every field discovered during M0 must be entered here with its authoritative source, adapter, UI destination, semantic contract, validation evidence and disposition.
+| Domain | Canonical source | Adapter/presenter | UI | Status | Evidence |
+|---|---|---|---|---|---|
+| Spot | M0 audit | Pending | Pending | PENDING | — |
+| Expiry | M0 audit | Pending | Pending | PENDING | — |
+| Option chain | M0 audit | Pending | Pending | PENDING | — |
+| Greeks | M0 audit | Pending | Pending | PENDING | — |
+| GEX / DEX | M0 audit | Pending | Pending | PENDING | — |
+| Gamma walls / flip | M0 audit | Pending | Pending | PENDING | — |
+| Expected Move / Max Pain / PCR | M0 audit | Pending | Pending | PENDING | — |
+| IV skew / dealer flow | M0 audit | Pending | Pending | PENDING | — |
+| Market structure | M0 audit | Pending | Pending | PENDING | — |
+| Direction / actionability | M0 audit | Pending | Pending | PENDING | — |
+| Decision / intelligence | M0 audit | Pending | Pending | PENDING | — |
+| Provenance / freshness / integrity | M0 audit | Pending | Pending | PENDING | — |
+| Execution | Canonical execution contract | Pending | Pending | PENDING | — |
+| Position / recovery / reconciliation | Canonical position state | Pending | Pending | PENDING | — |
 
-| Domain | Backend source | Canonical field | Adapter/presenter | UI destination | Status | Evidence/commit |
-|---|---|---|---|---|---|---|
-| Spot | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| Expiry | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| Option chain | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| Greeks | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| GEX/DEX | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| Gamma walls/flip | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| Expected move/Max Pain/PCR | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| IV skew/dealer flow | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| Market structure | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| Direction/actionability | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| Decision/intelligence | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| Provenance/freshness/integrity | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| Execution | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
-| Position/recovery | TBD by M0 audit | TBD | TBD | TBD | PENDING | — |
+No unresolved `TBD`/`PENDING` entry may remain after the relevant milestone exit gate.
 
-No `TBD` entry may remain at the end of M1.
+---
 
-# Progress log
+# 6. Implementation evidence register
+
+| Area | Evidence | Status |
+|---|---|---|
+| Canonical execution contract | `execution/execution_contract.py` + tests | VALIDATED |
+| Risk/data readiness gate | `risk/risk_manager.py` + targeted tests | VALIDATED |
+| Execution safety boundary | TradeExecutionPipeline + safety tests | VALIDATED |
+| Order intent | `execution/order_intent_factory.py` + tests | VALIDATED |
+| Idempotency | `execution/idempotency.py` + tests | VALIDATED |
+| Paper execution adapter | `execution/paper_execution_adapter.py` + tests | VALIDATED |
+| Execution lifecycle | `execution/execution_lifecycle.py` + tests | VALIDATED |
+| Live INDMoney adapter | resolver/mapper/result mapper/live adapter + tests | VALIDATED at targeted-contract level |
+| Live runtime safety | kill switch + reconciliation runtime gates + tests | VALIDATED at targeted-contract level |
+| Execution audit persistence | In-memory + SQLite stores + tests | VALIDATED |
+| Execution recovery | recovery decisions/runtime wiring + tests | VALIDATED at targeted-test level |
+| Canonical position state | `execution/position_state.py` + 14 tests | VALIDATED |
+| Position lifecycle | lifecycle/adapter/broker boundary tests | VALIDATED |
+| Position persistence | SQLite store + LiveEngine cycle tests | VALIDATED at targeted-test level |
+| Position recovery | runtime recovery + LiveEngine tests | VALIDATED at targeted-test level |
+| Position reconciliation | runtime reconciliation + LiveEngine tests | VALIDATED at targeted-test level |
+| Provider order capability | INDMoney order/positions APIs behind adapter | VALIDATED at contract level |
+| Production live-order certification | Real-money runtime evidence | NOT CERTIFIED |
+| Browser/UI certification | M0–M10 evidence incomplete | NOT CERTIFIED |
+| Deployment certification | Post-deployment evidence incomplete | NOT CERTIFIED |
+
+---
+
+# 7. Known limitations / explicit dispositions
+
+- REST full-quote timestamp semantics are not authoritative enough to treat every provider timestamp as live-price observation time; freshness/clock-skew state remains explicit.
+- Intrinsic-value failures intentionally produce SUSPECT/DEGRADED integrity, not VALID.
+- Provider `position_id` is not assumed to be canonical `client_order_id`; automatic broker-position reconciliation is not claimed until identity mapping is proven.
+- No real-money order placement is executed by tests.
+- Live execution remains uncertified until runtime evidence proves the complete decision → risk → intent → broker → result → reconciliation path.
+- Production UI remains uncertified until browser/runtime evidence proves the canonical DashboardData projection is rendered without divergence.
+
+---
+
+# 8. Progress log
 
 ## Tracker initialization
+**Status:** COMPLETE
 
-- Status: COMPLETE
-- Program: M0–M11
-- Tracker created on `r2-011-canonical-snapshot-provenance`
-- Commit: recorded by GitHub create-file operation
-- Next action: M0 UI/backend inventory audit
+Master tracker established as the persistent continuity source.
 
-## Per-commit update contract
+## R2-014 canonical analytics context
+**Status:** COMPLETE
 
-For every implementation commit, append an entry containing:
+Canonical typed analytics context established while preserving compatibility projections.
+
+## R2-015 execution foundation
+**Status:** COMPLETE at targeted-contract level
+
+Canonical intent/result, risk boundary, idempotency, lifecycle, paper/live boundaries, kill switch and runtime safety implemented and tested.
+
+## R2-015 audit persistence/recovery
+**Status:** COMPLETE at targeted-test level
+
+Execution audit persistence, recovery decisions and runtime recovery wiring implemented and tested.
+
+## R2-015 position state/recovery/reconciliation
+**Status:** COMPLETE at targeted-test level
+
+Canonical position state, lifecycle, persistence, recovery and reconciliation runtime boundaries implemented and tested.
+
+## RuntimeContext canonical recovery fields
+**Status:** IMPLEMENTED
+
+`position_recovery` and `position_reconciliation` are now explicit shared runtime fields rather than relying on dynamic LiveEngine attributes.
+
+Commit: `ec8251ac574ad026edd0b83f21ac227f92bf3847`
+
+## M0 UI/backend audit
+**Status:** IN PROGRESS
+
+Inventory and gap analysis remains the active workstream. Backend capability does not constitute UI certification.
+
+---
+
+# 9. Per-change evidence contract
+
+For every production behavior change, record:
 
 1. Date/time
 2. Milestone
-3. Change summary
+3. Exact change
 4. Files changed
-5. Targeted tests and result
-6. Full regression result when applicable
+5. Targeted tests + result
+6. Full regression when applicable
 7. Live evidence when applicable
 8. Commit SHA
 9. Checklist items completed
 10. Remaining gaps
 11. Exact next action
 
-## Final status rule
+---
 
-The program is complete only when M0–M11 are all closed with evidence and the final production-readiness gate explicitly records certification. Any unresolved item must remain visible with a reason and disposition; nothing is silently dropped.
+# 10. Completion rule
+
+QuantNifty is complete only when M0–M11 are closed with evidence and the final production-readiness gate explicitly records certification.
+
+Deployment alone never changes status to LIVE.
+
+Any unresolved item must remain visible with a reason and disposition. Nothing is silently dropped.
