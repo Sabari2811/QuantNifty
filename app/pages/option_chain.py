@@ -1,3 +1,5 @@
+import math
+
 import streamlit as st
 
 from app.services.live_service import LiveService
@@ -12,6 +14,57 @@ def _get_live_service():
         st.session_state["quantnifty_live_service"] = LiveService()
 
     return st.session_state["quantnifty_live_service"]
+
+
+def _display_value(mapping, key, unavailable="—"):
+    """Return a canonical summary value without inventing missing data."""
+    if not isinstance(mapping, dict) or key not in mapping:
+        return unavailable
+
+    value = mapping[key]
+    if value is None:
+        return unavailable
+
+    if isinstance(value, float) and not math.isfinite(value):
+        return unavailable
+
+    return value
+
+
+def _flow_count(flow, key):
+    """Display a flow count only when the canonical field exists."""
+    value = _display_value(flow, key)
+    if value == "—":
+        return value
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _recognized_flow_count(call, put):
+    keys = (
+        "long_buildup",
+        "short_buildup",
+        "long_unwinding",
+        "short_covering",
+    )
+    total = 0
+    for flow in (call, put):
+        for key in keys:
+            value = _flow_count(flow, key)
+            if value != "—":
+                total += value
+    return total
+
+
+def _unknown_flow_count(call, put):
+    total = 0
+    for flow in (call, put):
+        value = _flow_count(flow, "unknown")
+        if value != "—":
+            total += value
+    return total
 
 
 def show():
@@ -75,39 +128,19 @@ def show():
                 {},
             )
 
-            recognized_flow_count = sum(
-                call_history.get(key, 0)
-                for key in (
-                    "long_buildup",
-                    "short_buildup",
-                    "long_unwinding",
-                    "short_covering",
-                )
-            ) + sum(
-                put_history.get(key, 0)
-                for key in (
-                    "long_buildup",
-                    "short_buildup",
-                    "long_unwinding",
-                    "short_covering",
-                )
-            )
-
-            unknown_count = (
-                call_history.get("unknown", 0)
-                + put_history.get("unknown", 0)
-            )
+            recognized_flow_count = _recognized_flow_count(call_history, put_history)
+            unknown_count = _unknown_flow_count(call_history, put_history)
 
             if recognized_flow_count == 0 and unknown_count > 0:
                 oi_history_state = "NO CHANGE"
             else:
                 oi_history_state = "READY"
 
-        elif previous is None:
+        elif history_status is None and previous is None:
             oi_history_state = "WAITING"
 
         else:
-            oi_history_state = "READY"
+            oi_history_state = "UNAVAILABLE"
 
         st.metric(
             "OI History",
@@ -180,45 +213,19 @@ def show():
         with c1:
             st.metric(
                 "Market Bias",
-                summary.get(
-                    "market_bias",
-                    "-",
-                ),
+                _display_value(summary, "market_bias"),
             )
 
         with c2:
             st.metric(
                 "OI Trend",
-                summary.get(
-                    "trend",
-                    "-",
-                ),
+                _display_value(summary, "trend"),
             )
 
         # Distinguish a previous snapshot with no recognizable
         # flow from a snapshot containing actual OI flow.
-        recognized_flow_count = sum(
-            call.get(key, 0)
-            for key in (
-                "long_buildup",
-                "short_buildup",
-                "long_unwinding",
-                "short_covering",
-            )
-        ) + sum(
-            put.get(key, 0)
-            for key in (
-                "long_buildup",
-                "short_buildup",
-                "long_unwinding",
-                "short_covering",
-            )
-        )
-
-        unknown_count = (
-            call.get("unknown", 0)
-            + put.get("unknown", 0)
-        )
+        recognized_flow_count = _recognized_flow_count(call, put)
+        unknown_count = _unknown_flow_count(call, put)
 
         if recognized_flow_count == 0 and unknown_count > 0:
             st.info(
@@ -237,22 +244,22 @@ def show():
 
         c1.metric(
             "Long Build-up",
-            call.get("long_buildup", 0),
+            _flow_count(call, "long_buildup"),
         )
 
         c2.metric(
             "Short Build-up",
-            call.get("short_buildup", 0),
+            _flow_count(call, "short_buildup"),
         )
 
         c3.metric(
             "Long Unwinding",
-            call.get("long_unwinding", 0),
+            _flow_count(call, "long_unwinding"),
         )
 
         c4.metric(
             "Short Covering",
-            call.get("short_covering", 0),
+            _flow_count(call, "short_covering"),
         )
 
         # ======================================================
@@ -265,22 +272,22 @@ def show():
 
         c1.metric(
             "Long Build-up",
-            put.get("long_buildup", 0),
+            _flow_count(put, "long_buildup"),
         )
 
         c2.metric(
             "Short Build-up",
-            put.get("short_buildup", 0),
+            _flow_count(put, "short_buildup"),
         )
 
         c3.metric(
             "Long Unwinding",
-            put.get("long_unwinding", 0),
+            _flow_count(put, "long_unwinding"),
         )
 
         c4.metric(
             "Short Covering",
-            put.get("short_covering", 0),
+            _flow_count(put, "short_covering"),
         )
     else:
 
@@ -305,32 +312,20 @@ def show():
 
     a.metric(
         "Gamma Flip",
-        dealer.get(
-            "gamma_flip",
-            "-",
-        ),
+        _display_value(dealer, "gamma_flip"),
     )
 
     b.metric(
         "Gamma Wall",
-        dealer.get(
-            "gamma_wall",
-            "-",
-        ),
+        _display_value(dealer, "gamma_wall"),
     )
 
     c.metric(
         "Call Wall",
-        dealer.get(
-            "call_wall",
-            "-",
-        ),
+        _display_value(dealer, "call_wall"),
     )
 
     d.metric(
         "Put Wall",
-        dealer.get(
-            "put_wall",
-            "-",
-        ),
+        _display_value(dealer, "put_wall"),
     )
