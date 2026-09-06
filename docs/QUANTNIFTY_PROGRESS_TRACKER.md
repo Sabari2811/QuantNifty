@@ -1,3 +1,7 @@
+# QuantNifty Progress Tracker
+
+## M1 — Canonical dashboard/runtime boundary
+
 ### M1 boundary B1 — Decision direction vs actionability audit
 **Status: COMPLETE (audit-only; no behavior change)**
 
@@ -18,13 +22,12 @@
 - `tests/test_streamlit_runtime_ui_contract.py` creates deterministic execution/recovery/reconciliation fixtures and asserts identity preservation through the real Streamlit entrypoint contract.
 - Implementation commit: `105464b6e0ea9b79b0d0e1e2a3325bd1043b8565`.
 - Local targeted regression: `pytest -q tests/test_streamlit_runtime_ui_contract.py` → **2 passed in 7.77s**.
-- No provider credentials, broker calls, or real-money orders were required.
 
 ### M1 boundary B3 — Canonical option-chain quote projection (bid/ask)
 **Status: COMPLETE — targeted regression PASS**
 
-- `engine/option_chain_manager.py` now carries `CE_BID`, `CE_ASK`, `PE_BID`, and `PE_ASK` directly from provider quote payloads without deriving them from LTP or other fields.
-- Missing provider bid/ask values remain `None` / unknown; no synthetic spread or fallback value is introduced.
+- `engine/option_chain_manager.py` carries `CE_BID`, `CE_ASK`, `PE_BID`, and `PE_ASK` directly from provider quote payloads without deriving them from LTP or other fields.
+- Missing provider bid/ask values remain unknown; no synthetic spread or fallback value is introduced.
 - Regression coverage: `tests/test_option_chain_quote_fields.py`.
 - Implementation commit: `4660d61f35ff851afec6d61f6554a7d8d12473de`.
 - Targeted regression commit: `31a9d899ae0fe941b42309a8ab4b62596c32de90`.
@@ -44,72 +47,57 @@
 **M1 implementation status:** implementation/test boundaries B1–B4 are complete. Final M1 live UI certification remains evidence-gated.
 
 ## M2 — UI/backend divergence elimination
-**Status: IN PROGRESS — B1+B2+B3+B4+B5+B6 COMPLETE**
+**Status: IN PROGRESS — B1+B2+B3+B4+B5+B6+B7 COMPLETE**
 
 ### M2 boundary B1 — KPI missing-value semantics
 **Status: COMPLETE — targeted regression PASS**
 
-- `dashboard/components/kpi_cards.py` no longer defaults missing `bullish_probability` or `confidence` to `0`; missing/NaN values render as `—`.
-- A real zero remains `0%`; known numeric percentages remain unchanged.
-- Regression coverage: `tests/test_dashboard_kpi_contract.py`.
-- Implementation commit: `4353fab943d100bf08f28ebbc01f6145e97a2b45`.
-- Test coverage commit: `1e55baa2b66445677298786b6eb7fb32cc91ada7`.
-- Local targeted regression: `pytest -q tests/test_dashboard_kpi_contract.py` → **3 passed in 2.30s**.
+- `dashboard/components/kpi_cards.py` renders missing/NaN `bullish_probability`/`confidence` as `—`; real zero remains `0%`.
+- Regression coverage: `tests/test_dashboard_kpi_contract.py` → **3 passed in 2.30s**.
 
 ### M2 boundary B2 — Expected-move / Max-Pain / PCR missing-value semantics
 **Status: COMPLETE — targeted regression PASS**
 
-- `dashboard/components/expected_move_card.py` safely reads canonical keys and renders `UNAVAILABLE` for missing/non-numeric/NaN/infinite values.
-- `dashboard/components/max_pain_card.py` renders missing/invalid values as `UNAVAILABLE`, while preserving real zero values.
-- `dashboard/components/pcr_card.py` renders missing/invalid PCR and sentiment as `UNAVAILABLE`.
-- Regression coverage: `tests/test_expected_move_card_contract.py`, `tests/test_max_pain_card_contract.py`, `tests/test_pcr_card_contract.py`.
-- Implementation commits: `7f99e94632e40c68f9e3d7f273ad937a4b4c5e9e`, `4c37f78ce10be79bf284528c7baa306012119b8a`, `b4a54f6b12d60706fe8d58ae9a5c99b8ab123d29`.
-- Local targeted regression: `pytest -q tests/test_expected_move_card_contract.py tests/test_max_pain_card_contract.py tests/test_pcr_card_contract.py` → **7 passed in 2.68s**.
+- Expected Move, Max Pain, PCR and sentiment now fail closed to `UNAVAILABLE` for missing/non-numeric/NaN/infinite values while preserving valid zero values.
+- Regression coverage: `tests/test_expected_move_card_contract.py`, `tests/test_max_pain_card_contract.py`, `tests/test_pcr_card_contract.py` → **7 passed in 2.68s**.
 
 ### M2 boundary B3 — Probability gauge missing-value semantics
 **Status: COMPLETE — targeted regression PASS**
 
-- `dashboard/components/probability_gauge.py` now normalizes missing, non-numeric, NaN and infinite probability to an unavailable value while preserving valid numeric values including zero.
-- Regression coverage: `tests/test_probability_gauge_contract.py`.
-- Implementation commit: `0409f27dffd493ca8218329bf83d575bf238e8d7`.
-- Regression test file commit: `823db1c0ae9c6700dfc511830044f4718b584088`.
-- Local targeted regression: `pytest -q tests/test_probability_gauge_contract.py` → **3 passed in 1.32s**.
+- Missing/non-numeric/NaN/infinite probability is unavailable; valid zero remains zero.
+- Regression coverage: `tests/test_probability_gauge_contract.py` → **3 passed in 1.32s**.
 
 ### M2 boundary B4 — Market-banner missing/invalid presentation semantics
 **Status: COMPLETE — targeted regression PASS**
 
-- `dashboard/components/market_banner.py` now fails closed for missing/invalid Spot, Gamma Flip/Wall, probability, confidence, recommendation and risk/reward presentation values.
-- Real zero values are preserved rather than interpreted as missing.
-- Regression coverage: `tests/test_market_banner_contract.py`.
-- Implementation commit: `2ea2dbbb2a4b6ced8fb008b6559fc3f4c646fab5`.
-- Local targeted regression: `pytest -q tests/test_market_banner_contract.py` → **2 passed in 2.51s**.
+- Spot, Gamma Flip/Wall, probability, confidence, recommendation and risk/reward now fail closed when unavailable/invalid; valid zero is preserved.
+- Regression coverage: `tests/test_market_banner_contract.py` → **2 passed in 2.51s**.
 
 ### M2 boundary B5 — Signal-card missing/invalid presentation semantics
 **Status: COMPLETE — targeted regression PASS**
 
-- `dashboard/components/signal_card.py` now renders missing/invalid dealer presentation values explicitly as `UNAVAILABLE` instead of leaking raw `None`/invalid values into the UI.
-- Canonical decision direction, probability and confidence remain presentation-only; no signal recomputation or actionability inference is introduced.
-- Regression coverage: `tests/test_signal_card_contract.py`.
-- Implementation commit: `75db714ceb74c0397997bc241c3e54acab2fd270`.
-- Regression test file commit: `70895444889fee09b4b3ca1845458038fa7d5838`.
-- Local targeted regression: `pytest -q tests/test_signal_card_contract.py` → **3 passed in 1.44s**.
-- No provider credentials, broker calls, or real-money orders were required.
+- Missing/invalid dealer presentation values are explicitly `UNAVAILABLE`; no signal recomputation or actionability inference is introduced.
+- Regression coverage: `tests/test_signal_card_contract.py` → **3 passed in 1.44s**.
 
 ### M2 boundary B6 — Provenance unavailable-state preservation
 **Status: COMPLETE — targeted regression PASS**
 
-- `dashboard/provenance_adapter.py` no longer synthesizes a default `RuntimeDataProvenance` when runtime provenance is absent; it now returns explicit unavailable fields.
-- `option_chain_quality_state()` now returns `UNAVAILABLE` when required coverage/integrity status fields are absent, preserves `DEGRADED` for incomplete/SUSPECT/INVALID states, and returns `READY` only for complete/VALID state.
-- This keeps coverage, integrity and freshness semantics distinct and avoids silently converting missing provenance into a fabricated valid/default state.
-- Regression coverage: `tests/test_provenance_adapter_contract.py`.
-- Implementation commit: `266bbfd5d0739ec666b39ff6031965a57d232995`.
-- Regression test file commit: `cbb20d9e3f4b1943407f3ce9310c092895b1cccf`.
-- Local targeted regression: `pytest -q tests/test_provenance_adapter_contract.py` → **3 passed in 0.29s**.
-- No provider credentials, broker calls, or real-money orders were required.
+- Missing runtime provenance remains explicit `UNAVAILABLE`; coverage, integrity and freshness stay separate.
+- Option-chain quality is `READY` only for complete/VALID, `DEGRADED` for incomplete/SUSPECT/INVALID, and `UNAVAILABLE` when required statuses are absent.
+- Regression coverage: `tests/test_provenance_adapter_contract.py` → **3 passed in 0.29s**.
 
+### M2 boundary B7 — Runtime card contract
+**Status: COMPLETE — regression added; CI certification pending**
+
+- `dashboard/components/runtime_card.py` is presentation-only and renders runtime/cycle/trade/block/open-position/last-trade state from canonical dashboard data.
+- Missing/non-finite values fail closed to `UNAVAILABLE`; valid zero/false values are preserved.
+- Status icons are deterministic and unknown statuses remain neutral.
+- Regression coverage: `tests/test_runtime_card_contract.py`.
+
+### M2 remaining audit boundaries
 - [ ] Remove duplicate UI calculations
 - [ ] Remove stale/duplicate adapters
-- [ ] [x] Fix field/type/enum mismatches
+- [x] Fix field/type/enum mismatches
 - [x] Fix missing-value/fallback semantics
 - [x] Prevent fabricated values
 - [x] Preserve UNKNOWN / SUSPECT / INVALID
@@ -132,7 +120,7 @@
 - [ ] No silent substitution
 
 ## M4 — Analytics/intelligence UI certification
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] All analytics fields and semantics
 - [ ] Direction/actionability/decision
@@ -143,7 +131,7 @@
 - [ ] Historical/replay isolation
 
 ## M5 — Provenance/data-quality UI
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Source/provider
 - [ ] Observation/processing timestamps
@@ -153,3 +141,67 @@
 - [ ] Degraded/provider-failure/partial states
 - [ ] Clock skew/structural invalidity
 - [ ] SUSPECT/INVALID representation
+
+## M6 — Execution safety and lifecycle
+**Status: IN PROGRESS**
+
+- [x] Runtime execution gate
+- [x] Risk validation gate
+- [x] Canonical execution intent/result
+- [x] Broker UNKNOWN on timeout/connection failure
+- [x] Execution lifecycle classification
+- [ ] Full deterministic regression certification
+- [ ] Live broker certification
+
+## M7 — Reconciliation and position lifecycle
+**Status: IN PROGRESS**
+
+- [x] Reconciliation lifecycle exists
+- [x] UNKNOWN cannot be retried before reconciliation
+- [x] Position open/close/stop/target lifecycle exists
+- [x] Recovery projection exists
+- [x] Explicit MATCH/MISMATCH continuation gate
+- [ ] Full regression certification
+- [ ] Broker-state certification
+
+## M8 — Runtime recovery / operational safety
+**Status: IN PROGRESS**
+
+- [x] Runtime singleton recovery hardened against partial initialization
+- [x] Local instrument-master operations do not require broker credentials
+- [x] Credential requirement retained for provider downloads
+- [ ] End-to-end recovery rehearsal
+- [ ] Restart/recovery certification
+
+## M9 — Streamlit runtime certification
+**Status: IN PROGRESS**
+
+- [x] Canonical dashboard controller cycle
+- [x] Runtime UI contract
+- [x] Runtime card
+- [x] Canonical option-chain presentation
+- [ ] Full Streamlit AppTest regression
+- [ ] Degraded/live-state UI certification
+
+## M10 — CI / regression certification
+**Status: IN PROGRESS**
+
+- [x] Python 3.12 CI environment
+- [x] Dependency installation
+- [x] Compile gate
+- [x] Regression workflow
+- [ ] Full suite green on current `main`
+- [ ] Release regression rerun after all changes
+
+## M11 — Deployment / live validation
+**Status: IN PROGRESS — evidence gated**
+
+- [x] Dedicated Render validation service for `Sabari2811/QuantNifty/main`
+- [x] Render deployment reached LIVE on validated prior commit
+- [ ] Redeploy current `main` after regression gate is green
+- [ ] Streamlit runtime smoke validation
+- [ ] Live APITOKEN validation when configured in the dedicated validation service
+- [ ] Final coverage/freshness/integrity/decision/execution/recovery certification
+- [ ] No-real-money-order certification
+
+**Global safety rule:** deployment is not certification. Live execution remains blocked unless all canonical runtime, data-quality, decision, risk, reconciliation and execution gates pass. UNKNOWN broker outcomes require reconciliation before retry. No real-money orders are used for automated regression validation.
