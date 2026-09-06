@@ -56,34 +56,36 @@ class ExecutionAuditRecord:
 
 
 class InMemoryExecutionAuditStore:
-    """Reference store defining the persistence boundary used by runtime code.
+    """Reference append-only audit store used by runtime code.
 
-    The interface is intentionally append-only and keyed by canonical client
-    order identity. A durable implementation can replace this store later
-    without changing execution contracts.
+    Client order identity is used for lookup/idempotency, but is not itself a
+    primary key for audit events: a later lifecycle result (for example a
+    duplicate-order rejection) must be auditable without overwriting the
+    earlier execution event.
     """
 
     def __init__(self) -> None:
-        self._records: dict[str, ExecutionAuditRecord] = {}
+        self._records: list[ExecutionAuditRecord] = []
 
     def append(self, record: ExecutionAuditRecord) -> None:
         if not record.client_order_id:
             raise ValueError("client_order_id is required")
-        existing = self._records.get(record.client_order_id)
-        if existing is not None and existing != record:
-            raise ValueError("Execution audit record already exists for client_order_id")
-        self._records[record.client_order_id] = record
+        self._records.append(record)
 
     def get(self, client_order_id: str) -> ExecutionAuditRecord | None:
-        return self._records.get(str(client_order_id).strip())
+        key = str(client_order_id).strip()
+        for record in reversed(self._records):
+            if record.client_order_id == key:
+                return record
+        return None
 
     def records(self) -> tuple[ExecutionAuditRecord, ...]:
-        return tuple(self._records.values())
+        return tuple(self._records)
 
     def load_pending(self) -> tuple[ExecutionAuditRecord, ...]:
         return tuple(
             record
-            for record in self._records.values()
+            for record in self._records
             if record.status in {"SUBMITTED", "UNKNOWN"}
         )
 
@@ -106,7 +108,8 @@ class SQLiteExecutionAuditStore:
         self._connection.execute("PRAGMA journal_mode=WAL")
         self._connection.execute(
             """CREATE TABLE IF NOT EXISTS execution_audit (
-                client_order_id TEXT PRIMARY KEY,
+                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_order_id TEXT NOT NULL,
                 symbol TEXT NOT NULL,
                 option_type TEXT NOT NULL,
                 strike REAL NOT NULL,
@@ -123,6 +126,10 @@ class SQLiteExecutionAuditStore:
                 intent_created_at TEXT NOT NULL,
                 result_timestamp TEXT NOT NULL
             )"""
+        )
+        self._connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_execution_audit_client_order_id "
+            "ON execution_audit(client_order_id, event_id)"
         )
         self._connection.commit()
 
@@ -164,11 +171,6 @@ class SQLiteExecutionAuditStore:
     def append(self, record: ExecutionAuditRecord) -> None:
         if not record.client_order_id:
             raise ValueError("client_order_id is required")
-        existing = self.get(record.client_order_id)
-        if existing is not None:
-            if existing != record:
-                raise ValueError("Execution audit record already exists for client_order_id")
-            return
         placeholders = ", ".join("?" for _ in self._COLUMNS)
         columns = ", ".join(self._COLUMNS)
         self._connection.execute(
@@ -180,7 +182,7 @@ class SQLiteExecutionAuditStore:
     def get(self, client_order_id: str) -> ExecutionAuditRecord | None:
         cursor = self._connection.execute(
             "SELECT " + ", ".join(self._COLUMNS)
-            + " FROM execution_audit WHERE client_order_id = ?",
+            + " FROM execution_audit WHERE client_order_id = ? ORDER BY event_id DESC LIMIT 1",
             (str(client_order_id).strip(),),
         )
         row = cursor.fetchone()
@@ -189,14 +191,14 @@ class SQLiteExecutionAuditStore:
     def records(self) -> tuple[ExecutionAuditRecord, ...]:
         cursor = self._connection.execute(
             "SELECT " + ", ".join(self._COLUMNS)
-            + " FROM execution_audit ORDER BY rowid"
+            + " FROM execution_audit ORDER BY event_id"
         )
         return tuple(self._record_from_row(row) for row in cursor.fetchall())
 
     def load_pending(self) -> tuple[ExecutionAuditRecord, ...]:
         cursor = self._connection.execute(
             "SELECT " + ", ".join(self._COLUMNS)
-            + " FROM execution_audit WHERE status IN ('SUBMITTED', 'UNKNOWN') ORDER BY rowid"
+            + " FROM execution_audit WHERE status IN ('SUBMITTED', 'UNKNOWN') ORDER BY event_id"
         )
         return tuple(self._record_from_row(row) for row in cursor.fetchall())
 
