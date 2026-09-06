@@ -126,11 +126,9 @@ class LiveEngine:
         service = getattr(self, "position_runtime_service", None)
         if service is None:
             return
-
         broker = self.paper_broker
         for position in getattr(broker.portfolio, "open_positions", ()):
             service.persist_paper_position(position)
-
         last_trade = getattr(broker, "last_trade", None)
         if last_trade is not None and getattr(last_trade, "closed", False):
             lifecycle = service.evaluate_paper_position(last_trade, manual_close=True)
@@ -172,11 +170,9 @@ class LiveEngine:
             candles=self.ctx.candles,
             previous_greeks_df=getattr(self, "_previous_greeks_df", None),
         )
-
         computed_context = computed_analytics.get("context")
         if computed_context is None:
             raise RuntimeError("AnalyticsPipeline returned no canonical MarketContext")
-
         computed_greeks_df = getattr(computed_context, "greeks", None)
         if hasattr(computed_greeks_df, "copy"):
             self.ctx.greeks_df = computed_greeks_df.copy(deep=True)
@@ -186,15 +182,8 @@ class LiveEngine:
             if expected_analytics:
                 self.ctx.replay_computed_analytics = computed_analytics
                 self.ctx.replay_computed_market_context = computed_context
-                self.ctx.replay_analytics_equivalence = compare_replay_analytics(
-                    expected_analytics,
-                    computed_context,
-                )
-                self.ctx.market_context = MarketContext.from_analytics(
-                    expected_analytics,
-                    spot=self.ctx.spot,
-                    greeks=self.ctx.greeks_df,
-                )
+                self.ctx.replay_analytics_equivalence = compare_replay_analytics(expected_analytics, computed_context)
+                self.ctx.market_context = MarketContext.from_analytics(expected_analytics, spot=self.ctx.spot, greeks=self.ctx.greeks_df)
                 self.ctx.analytics = expected_analytics
             else:
                 self.ctx.replay_computed_market_context = computed_context
@@ -210,11 +199,7 @@ class LiveEngine:
         greeks_for_snapshot = self.ctx.greeks_df
         if not hasattr(greeks_for_snapshot, "copy"):
             greeks_for_snapshot = computed_analytics.get("greeks")
-        self.ctx.snapshot = MarketSnapshot().save(
-            greeks_df=greeks_for_snapshot,
-            spot=self.ctx.spot,
-            analytics=self.ctx.analytics,
-        )
+        self.ctx.snapshot = MarketSnapshot().save(greeks_df=greeks_for_snapshot, spot=self.ctx.spot, analytics=self.ctx.analytics)
         self.ctx.snapshot.market_context = self.ctx.market_context
         regime = self.market_regime.analyze(self.ctx.snapshot)
         self.ctx.snapshot.regime = regime
@@ -229,18 +214,11 @@ class LiveEngine:
                 if canonical_strike is not None:
                     self.ctx.decision.trade.strike = canonical_strike
 
-        self.ctx.explanation = self.explanation_engine.build(
-            decision=self.ctx.decision,
-            regime=self.ctx.regime,
-            snapshot=self.ctx.snapshot,
-        )
+        self.ctx.explanation = self.explanation_engine.build(decision=self.ctx.decision, regime=self.ctx.regime, snapshot=self.ctx.snapshot)
 
         if self.intelligence_service is not None:
             self.ctx.intelligence = self.intelligence_service.analyze(self.ctx)
-            self.ctx.decision_intelligence_consistency = reconcile_decision_intelligence(
-                self.ctx.decision,
-                self.ctx.intelligence,
-            )
+            self.ctx.decision_intelligence_consistency = reconcile_decision_intelligence(self.ctx.decision, self.ctx.intelligence)
         else:
             self.ctx.decision_intelligence_consistency = None
 
@@ -249,20 +227,15 @@ class LiveEngine:
             expected_intelligence = getattr(self.ctx, "replay_expected_intelligence", None)
             actual_intelligence = getattr(self.ctx, "intelligence", None)
             if expected_decision is not None and expected_intelligence:
-                self.ctx.replay_equivalence = compare_replay_outputs(
-                    expected_decision,
-                    self.ctx.decision,
-                    expected_intelligence,
-                    actual_intelligence,
-                )
+                self.ctx.replay_equivalence = compare_replay_outputs(expected_decision, self.ctx.decision, expected_intelligence, actual_intelligence)
             else:
                 self.ctx.replay_equivalence = None
 
         self.ctx.execution_intent = build_order_intent(self.ctx.decision)
-
         self.trade_pipeline.execute(self.ctx)
-        if self.ctx.execution_result is not None:
-            self.ctx.execution_lifecycle = classify_execution_result(self.ctx.execution_result).value
+        execution_result = getattr(self.ctx, "execution_result", None)
+        if execution_result is not None:
+            self.ctx.execution_lifecycle = classify_execution_result(execution_result).value
         self._persist_position_runtime_state()
 
     def run_cycle(self):
@@ -271,16 +244,12 @@ class LiveEngine:
         self.ctx.timestamp = datetime.now().strftime("%d-%b-%Y %H:%M:%S")
         try:
             self.market_pipeline.run(self.ctx)
-
             chain_ready, block_reason = self._option_chain_ready_for_analytics(self.ctx)
             if not chain_ready:
                 self.ctx.runtime_status = "DEGRADED"
                 self.ctx.trade_status = "BLOCKED"
                 self.ctx.trade_block_reason = block_reason
-                logger.warning(
-                    "LIVE ENGINE DEGRADED | analytics/trading blocked | reason=%s",
-                    block_reason,
-                )
+                logger.warning("LIVE ENGINE DEGRADED | analytics/trading blocked | reason=%s", block_reason)
                 self.trade_pipeline.sync_context(self.ctx)
                 if not self._is_replay():
                     self.recording_manager.record(self.ctx)
