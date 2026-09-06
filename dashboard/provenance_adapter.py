@@ -5,12 +5,15 @@ from core.data_provenance import AcquisitionProvenance, RuntimeDataProvenance
 
 def option_chain_quality_state(option_chain: dict | None) -> str:
     """Return presentation quality without collapsing canonical provenance states."""
-    if option_chain is None:
+    if not option_chain:
         return "UNAVAILABLE"
-    if (
-        option_chain["coverage_status"] != "COMPLETE"
-        or option_chain["integrity_status"] in ("SUSPECT", "INVALID")
-    ):
+
+    coverage_status = option_chain.get("coverage_status")
+    integrity_status = option_chain.get("integrity_status")
+
+    if coverage_status is None or integrity_status is None:
+        return "UNAVAILABLE"
+    if coverage_status != "COMPLETE" or integrity_status in ("SUSPECT", "INVALID"):
         return "DEGRADED"
     return "READY"
 
@@ -18,11 +21,18 @@ def option_chain_quality_state(option_chain: dict | None) -> str:
 def adapt_provenance(provenance: RuntimeDataProvenance | None) -> dict:
     """Expose canonical backend provenance without collapsing independent states.
 
-    The adapter is also safe for lightweight dashboard test doubles that only
-    provide a subset of provenance attributes.
+    A missing runtime provenance object remains unavailable rather than being
+    replaced with a synthetic default provenance model.
     """
     if provenance is None:
-        provenance = RuntimeDataProvenance()
+        return {
+            "spot": None,
+            "option_chain": None,
+            "option_chain_quality": "UNAVAILABLE",
+            "candles": None,
+            "coverage_ratio": None,
+            "complete": False,
+        }
 
     def adapt(item: AcquisitionProvenance | None) -> dict | None:
         if item is None:
@@ -53,6 +63,6 @@ def adapt_provenance(provenance: RuntimeDataProvenance | None) -> dict:
         "option_chain": option_chain,
         "option_chain_quality": option_chain_quality,
         "candles": adapt(getattr(provenance, "candles", None)),
-        "coverage_ratio": getattr(provenance, "coverage_ratio", 0.0),
+        "coverage_ratio": getattr(provenance, "coverage_ratio", None),
         "complete": getattr(provenance, "complete", False),
     }
