@@ -15,7 +15,6 @@ class TradeExecutionPipeline:
         self.paper_broker = paper_broker
         self.risk_manager = risk_manager
         self.intelligence_gate = intelligence_gate if intelligence_gate is not None else IntelligenceGate()
-        self.idempotency_guard = idempotency_guard if idempotency_guard is not None else OrderIdempotencyGuard()
         self.execution_adapter = execution_adapter if execution_adapter is not None else PaperExecutionAdapter(paper_broker)
         if audit_store is not None and audit_db_path is not None:
             raise ValueError("Provide either audit_store or audit_db_path, not both")
@@ -24,6 +23,7 @@ class TradeExecutionPipeline:
             if audit_db_path is not None
             else InMemoryExecutionAuditStore()
         )
+        self.idempotency_guard = idempotency_guard if idempotency_guard is not None else OrderIdempotencyGuard(self.audit_store)
 
     def sync_context(self, ctx):
         broker = self.paper_broker
