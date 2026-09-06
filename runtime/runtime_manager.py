@@ -17,7 +17,19 @@ class RuntimeManager:
 
     def __new__(cls, mode: RuntimeMode = RuntimeMode.LIVE, replay_session=None):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            instance = super().__new__(cls)
+            try:
+                instance._initialize(mode, replay_session)
+            except Exception:
+                # Do not leave a partially initialized singleton behind. A
+                # failed provider/runtime construction must not poison later
+                # deterministic tests or recovery attempts in the same process.
+                cls._instance = None
+                raise
+            cls._instance = instance
+        elif not hasattr(cls._instance, "engine"):
+            # Backstop for legacy callers that may have retained a partially
+            # initialized instance from an older construction path.
             cls._instance._initialize(mode, replay_session)
         return cls._instance
 
