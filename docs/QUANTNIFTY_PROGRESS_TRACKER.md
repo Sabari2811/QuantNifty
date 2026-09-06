@@ -362,9 +362,7 @@ Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 - No real-money execution was run.
 - No provider credentials or user-side secret action is required to close M0.
 - M0 completion date: 2026-09-06.
-- Final M0 evidence closure commit: recorded by this tracker update.
-
-**Next action:** start M1 from the first FIX REQUIRED canonical contract gap: introduce a distinct actionability contract only after inspecting the existing decision/intelligence models and their tests. Do not modify legacy compatibility pages as part of the first M1 change.
+- Final M0 evidence closure commit: `3fbadeb4a103e83523a247b02903c2bdb59463ce`.
 
 **M0 exit gate:** PASSED — every audited surface/field has an evidence-backed disposition.
 
@@ -383,6 +381,20 @@ Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 - [ ] Missing-contract / degraded-data state
 - [ ] Execution / position / recovery / reconciliation state
 - [ ] Complete field-level mapping
+
+### M1 boundary B1 — Decision direction vs actionability audit
+**Status: COMPLETE (audit-only; no behavior change)**
+
+- `decision/models/decision.py` confirms the canonical Decision contains `signal`, `trade`, `market`, `reasons`, `score`, `strategy_name`, `authoritative_signal` and `validation`, but no independent `actionability` field.
+- `decision/models/signal.py` contains only `name` and `confidence` for the signal object.
+- `decision/decision_engine.py` treats `BUY CALL`, `BUY PUT` and `WAIT` as the valid decision directions; `DecisionBuilder` preserves an authoritative direction and computes confidence from score magnitude.
+- `decision/models/execution_plan.py` already carries the executable trade-quality/risk/reward/entry/SL/target fields. `Trade` already carries contract/option/strike plus its execution plan.
+- Therefore this audit does **not** invent or add an actionability field. Existing direction/signal and validation/execution-plan semantics remain unchanged. The earlier M0 “actionability” finding is reclassified here as **INTENTIONALLY UNAVAILABLE as a distinct current contract**, pending a future specification that defines actionability independently of direction/validation.
+- Evidence files inspected: `decision/models/decision.py`, `decision/models/signal.py`, `decision/decision_engine.py`, `decision/decision_builder.py`, `decision/models/trade.py`, `decision/models/execution_plan.py`.
+- Boundary date: 2026-09-06.
+- Boundary commit: recorded in next M1 tracker closure/update.
+
+**Next action:** inspect execution intent/result/lifecycle models and canonical DashboardData contract together, then add only the minimal projection required for M6.
 
 ## M2 — UI/backend divergence elimination
 **Status: NOT STARTED**
@@ -435,7 +447,7 @@ Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 - [ ] SUSPECT/INVALID representation
 
 ## M6 — Decision → execution UI
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Intent/client ID
 - [ ] Instrument/action/quantity/price
@@ -447,7 +459,7 @@ Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 - [ ] No accidental live-order control
 
 ## M7 — Position/recovery UI
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Position state/lifecycle
 - [ ] Entry/current/SL/target/trailing
@@ -530,8 +542,8 @@ Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 | Expected Move / Max Pain / PCR | MarketContext | market_summary_adapter + cards | canonical cards | VALIDATED | B7/B9 |
 | IV skew / dealer flow | IV skew typed in MarketContext; dealer_flow dedicated | no dedicated skew adapter; dealer_flow direct | dealer flow card; skew compatibility-only | INTENTIONALLY UNAVAILABLE for dedicated skew UI | B5/B9 |
 | Market structure | MarketContext | DashboardController | market_structure card | VALIDATED | B6/B9 |
-| Direction / actionability | DecisionEngine / DecisionBuilder | decision_adapter | signal/banner/intelligence; actionability absent | FIX REQUIRED for distinct actionability field | B9 |
-| Decision / intelligence | DecisionEngine / Intelligence | decision/intelligence adapters | signal/intelligence cards | VALIDATED except actionability gap | B9 |
+| Direction / actionability | DecisionEngine / DecisionBuilder | decision_adapter | signal/banner/intelligence; actionability absent by contract | INTENTIONALLY UNAVAILABLE as distinct actionability contract pending specification | M1-B1 |
+| Decision / intelligence | DecisionEngine / Intelligence | decision/intelligence adapters | signal/intelligence cards | VALIDATED except distinct actionability gap | B9/M1-B1 |
 | Provenance / freshness / integrity | RuntimeDataProvenance / option-chain integrity | provenance_adapter | header/option-chain/intelligence/runtime | VALIDATED | B7/B9 |
 | Execution | RuntimeContext execution state | no canonical DashboardData adapter | no active canonical execution UI | FIX REQUIRED | B9 |
 | Position / recovery / reconciliation | RuntimeContext position state | no canonical DashboardData adapter | position fields partly present; recovery/reconciliation absent | FIX REQUIRED | B9 |
@@ -576,7 +588,7 @@ No unresolved `TBD`/`PENDING` entry may remain after the relevant milestone exit
 - Live execution remains uncertified until runtime evidence proves the complete decision → risk → intent → broker → result → reconciliation path.
 - Production UI remains uncertified until browser/runtime evidence proves the canonical DashboardData projection is rendered without divergence.
 - The legacy `app/*` Streamlit path remains a reachable compatibility surface. Its explicit UI-side calculations/fallbacks and stale placeholder controls are known findings assigned to M2/M9; they are not treated as canonical data paths.
-- `DecisionEngine` / `DecisionBuilder` currently expose direction/signal and confidence but no distinct actionability contract; this remains a deliberate FIX REQUIRED gap for M1/M4/M6 rather than an inferred equivalence.
+- `DecisionEngine` / `DecisionBuilder` expose authoritative direction/signal and confidence plus execution validation; no distinct actionability object exists in the current decision model. M1 preserves that current contract rather than inventing semantics.
 - `RuntimeContext` carries execution intent/result/lifecycle and position recovery/reconciliation, but `DashboardData` does not currently project those fields; this remains a FIX REQUIRED gap for M6/M7.
 
 ---
@@ -624,14 +636,20 @@ M0 inventory, field tracing, calculation/fallback audit and disposition matrix a
 - B1 — exact branch/HEAD confirmation: complete, tracker commit `af9ede4b021a7c8024208aec888b790df9e8ab60`.
 - B2 — Streamlit/UI entry-point and legacy-path inventory: complete. Active canonical entry point `dashboard/app.py`; legacy `app/app.py` and `app/pages/*` remain classified as compatibility path; `app.services.LiveService` delegates to canonical `RuntimeManager` and does not own acquisition.
 - B3 — UI adapter/presenter inventory: complete. Canonical adapters are `decision_adapter.py`, `intelligence_adapter.py`, `market_summary_adapter.py`, `provenance_adapter.py`, `ui_runtime_contract.py`, plus Decision ↔ Intelligence consistency mapping; legacy presentation remains explicitly separate.
-- B4 — canonical DashboardData model and field inventory: complete. Dedicated UI fields are typed in `DashboardData`; generic `analytics` is retained only as compatibility/display projection; additional typed MarketContext fields receive explicit dispositions.
+- B4 — canonical DashboardData model and field inventory: complete. Dedicated UI fields are typed in `DashboardData`; generic `analytics` is retained only as compatibility/display projection; additional typed MarketContext fields require explicit downstream disposition.
 - B5 — backend-produced canonical analytics inventory: complete. `AnalyticsPipeline` and `RuntimeContext` expose the canonical analytics surface without calculation changes; typed fields and compatibility projection are explicitly distinguished.
 - B6 — UI-rendered field inventory and legacy-field classification: complete. Canonical dashboard rendering is traced across identity, decision, intelligence, analytics, option-chain/Greeks, provenance and runtime fields; legacy UI fields/defaults are recorded as compatibility-path findings.
 - B7 — provider → canonical backend → DashboardData → adapter → UI field-family trace: complete. Provider normalization, runtime provenance, canonical analytics, DashboardData projection and UI adapter/presenter consumption are evidenced; no behavior changed in this boundary.
 - B8 — UI-side recomputation / fallback audit: complete. Canonical dashboard rendering remains projection/presentation-only; legacy compatibility paths contain explicit derived display logic and fallback semantics, including OI-flow zero defaults that conflict with canonical UNKNOWN/NO_CHANGE distinctions. These findings are deferred to M2 unless they are required to close a certified canonical UI path.
-- B9 — final M0 gap matrix and disposition classification: complete. All audited field families and reachable UI findings are classified as VALIDATED, FIX REQUIRED, INTENTIONALLY UNAVAILABLE, or UNSUPPORTED with downstream milestone ownership. Remaining action was final evidence closure.
-- M0 evidence closure — final: complete. All checklist items are now checked, the gap matrix is recorded, and the M0 exit gate passed.
-- Next active milestone: M1 — Canonical Dashboard contract.
+- B9 — final M0 gap matrix and disposition classification: complete. All audited field families and reachable UI findings are classified as VALIDATED, FIX REQUIRED, INTENTIONALLY UNAVAILABLE, or UNSUPPORTED with downstream milestone ownership.
+- M0 evidence closure — final: complete. All checklist items are checked, the gap matrix is recorded, and the M0 exit gate passed. Final closure commit: `3fbadeb4a103e83523a247b02903c2bdb59463ce`.
+
+## M1 Canonical Dashboard contract
+**Status:** IN PROGRESS
+
+### M1 boundaries completed
+- B1 — Decision direction vs actionability audit: complete, audit-only. Current Decision/Signal contract has authoritative direction and confidence/validation but no independent actionability object; no new semantics were invented. Disposition: intentionally unavailable as a distinct contract pending explicit specification.
+- Next active boundary: execution intent/result/lifecycle projection into the canonical DashboardData/UI contract.
 
 ---
 
