@@ -392,9 +392,21 @@ Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 - Therefore this audit does **not** invent or add an actionability field. Existing direction/signal and validation/execution-plan semantics remain unchanged. The earlier M0 “actionability” finding is reclassified here as **INTENTIONALLY UNAVAILABLE as a distinct current contract**, pending a future specification that defines actionability independently of direction/validation.
 - Evidence files inspected: `decision/models/decision.py`, `decision/models/signal.py`, `decision/decision_engine.py`, `decision/decision_builder.py`, `decision/models/trade.py`, `decision/models/execution_plan.py`.
 - Boundary date: 2026-09-06.
-- Boundary commit: recorded in next M1 tracker closure/update.
+- Boundary commit: `7dab61399804f8a1b8ad5f03b133b0f48c792452`.
 
-**Next action:** inspect execution intent/result/lifecycle models and canonical DashboardData contract together, then add only the minimal projection required for M6.
+### M1 boundary B2 — Canonical execution/recovery projection
+**Status: IMPLEMENTED — TEST PENDING**
+
+- `models/dashboard_data.py` now explicitly projects `execution_intent`, `execution_result`, `execution_lifecycle`, `position_recovery`, and `position_reconciliation` as canonical pass-through fields.
+- `dashboard/dashboard_controller.py` now maps those five fields directly from the same `RuntimeContext` cycle; no broker state is inferred and no execution semantics are recomputed.
+- `dashboard/ui_runtime_contract.py` now exposes those exact five objects to the real Streamlit runtime contract by direct pass-through.
+- `tests/test_streamlit_runtime_ui_contract.py` now creates deterministic `OrderIntent` / `ExecutionResult` and recovery/reconciliation fixtures and asserts identity preservation through the real Streamlit entrypoint contract.
+- Static repository verification completed for all four modified files at commit `105464b6e0ea9b79b0d0e1e2a3325bd1043b8565`.
+- GitHub Actions workflow runs for commit `105464b6e0ea9b79b0d0e1e2a3325bd1043b8565`: none available.
+- Therefore **no test-pass claim is made yet**. The deterministic test must be run in a Python environment before this boundary is marked validated.
+- No provider credentials, broker calls, or real-money orders are required for this targeted test.
+
+**Next action:** run the targeted deterministic regression `pytest -q tests/test_streamlit_runtime_ui_contract.py` from the repository environment. If green, record the result and continue to the next M1 boundary.
 
 ## M2 — UI/backend divergence elimination
 **Status: NOT STARTED**
@@ -447,7 +459,7 @@ Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 - [ ] SUSPECT/INVALID representation
 
 ## M6 — Decision → execution UI
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Intent/client ID
 - [ ] Instrument/action/quantity/price
@@ -459,7 +471,7 @@ Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 - [ ] No accidental live-order control
 
 ## M7 — Position/recovery UI
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Position state/lifecycle
 - [ ] Entry/current/SL/target/trailing
@@ -545,8 +557,8 @@ Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 | Direction / actionability | DecisionEngine / DecisionBuilder | decision_adapter | signal/banner/intelligence; actionability absent by contract | INTENTIONALLY UNAVAILABLE as distinct actionability contract pending specification | M1-B1 |
 | Decision / intelligence | DecisionEngine / Intelligence | decision/intelligence adapters | signal/intelligence cards | VALIDATED except distinct actionability gap | B9/M1-B1 |
 | Provenance / freshness / integrity | RuntimeDataProvenance / option-chain integrity | provenance_adapter | header/option-chain/intelligence/runtime | VALIDATED | B7/B9 |
-| Execution | RuntimeContext execution state | no canonical DashboardData adapter | no active canonical execution UI | FIX REQUIRED | B9 |
-| Position / recovery / reconciliation | RuntimeContext position state | no canonical DashboardData adapter | position fields partly present; recovery/reconciliation absent | FIX REQUIRED | B9 |
+| Execution | RuntimeContext execution state | DashboardData + ui_runtime_contract pass-through | canonical runtime contract; dedicated visual card pending | IMPLEMENTED — TEST PENDING | M1-B2 |
+| Position / recovery / reconciliation | RuntimeContext position state | DashboardData + ui_runtime_contract pass-through | position fields partly present; recovery/reconciliation projection implemented | IMPLEMENTED — TEST PENDING | M1-B2 |
 
 No unresolved `TBD`/`PENDING` entry may remain after the relevant milestone exit gate.
 
@@ -576,6 +588,7 @@ No unresolved `TBD`/`PENDING` entry may remain after the relevant milestone exit
 | Production live-order certification | Real-money runtime evidence | NOT CERTIFIED |
 | Browser/UI certification | M0–M10 evidence incomplete | NOT CERTIFIED |
 | Deployment certification | Post-deployment evidence incomplete | NOT CERTIFIED |
+| Canonical DashboardData execution/recovery projection | `models/dashboard_data.py` + `dashboard/dashboard_controller.py` + `dashboard/ui_runtime_contract.py` + deterministic AppTest | IMPLEMENTED — TEST PENDING |
 
 ---
 
@@ -589,7 +602,7 @@ No unresolved `TBD`/`PENDING` entry may remain after the relevant milestone exit
 - Production UI remains uncertified until browser/runtime evidence proves the canonical DashboardData projection is rendered without divergence.
 - The legacy `app/*` Streamlit path remains a reachable compatibility surface. Its explicit UI-side calculations/fallbacks and stale placeholder controls are known findings assigned to M2/M9; they are not treated as canonical data paths.
 - `DecisionEngine` / `DecisionBuilder` expose authoritative direction/signal and confidence plus execution validation; no distinct actionability object exists in the current decision model. M1 preserves that current contract rather than inventing semantics.
-- `RuntimeContext` carries execution intent/result/lifecycle and position recovery/reconciliation, but `DashboardData` does not currently project those fields; this remains a FIX REQUIRED gap for M6/M7.
+- `RuntimeContext` carries execution intent/result/lifecycle and position recovery/reconciliation, and M1-B2 now projects those values through DashboardData/UI contract; visual execution/recovery presentation remains for M6/M7.
 
 ---
 
@@ -649,7 +662,8 @@ M0 inventory, field tracing, calculation/fallback audit and disposition matrix a
 
 ### M1 boundaries completed
 - B1 — Decision direction vs actionability audit: complete, audit-only. Current Decision/Signal contract has authoritative direction and confidence/validation but no independent actionability object; no new semantics were invented. Disposition: intentionally unavailable as a distinct contract pending explicit specification.
-- Next active boundary: execution intent/result/lifecycle projection into the canonical DashboardData/UI contract.
+- B2 — Canonical execution/recovery projection: implemented. `DashboardData`, `DashboardController`, and `ui_runtime_contract` now carry execution intent/result/lifecycle and position recovery/reconciliation by direct pass-through, with deterministic AppTest coverage committed. Test execution is pending because no GitHub Actions run is available for commit `105464b6e0ea9b79b0d0e1e2a3325bd1043b8565` and the repository Python environment is not exposed by the GitHub connector.
+- Next active boundary: validate B2 with the targeted test; after green, continue M1 field completeness/semantics without changing legacy compatibility pages.
 
 ---
 
