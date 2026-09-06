@@ -190,8 +190,8 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [x] Inventory backend-produced fields
 - [x] Inventory every UI-rendered field
 - [x] Map provider → canonical backend → DashboardData → adapter → UI
-- [ ] Identify UI-side calculations/recomputation
-- [ ] Identify hardcoded/default/fallback values
+- [x] Identify UI-side calculations/recomputation
+- [x] Identify hardcoded/default/fallback values
 - [x] Identify stale/legacy UI paths
 - [ ] Identify missing backend fields
 - [ ] Identify unused backend capabilities
@@ -310,9 +310,22 @@ Boundary commit: `3cc34c22f2b062988317cb3389d356b92063a37e`.
 - Evidence for field dispositions: `tests/test_dashboard_canonical_field_disposition.py` proves all typed canonical analytics fields have exactly one disposition: dedicated DashboardData, existing canonical mapping, or generic analytics-only compatibility surface. `tests/test_market_data_pipeline_provenance.py` proves provider timestamps/freshness/integrity survive into runtime provenance.
 - No runtime behavior was changed in this boundary; this is a field-family trace and evidence classification only.
 - Boundary date: 2026-09-06.
-- Boundary commit: recorded in tracker update following B7.
+- Boundary commit: `0636409f82e1d7803ec61d8bf5f5322ec685eafe`.
 
-**Next action:** audit UI-side calculations/recomputation and hardcoded/default/fallback semantics across canonical and reachable legacy surfaces, then classify each as VALIDATED / FIX REQUIRED / INTENTIONALLY UNAVAILABLE / UNSUPPORTED.
+### M0 boundary B8 — UI-side recomputation / fallback audit
+**Status: COMPLETE (findings recorded; no behavior change)
+
+- Canonical dashboard renderers inspected for calculation ownership. Presentation-time formatting, sorting, styling and chart construction do not recompute the canonical analytics values.
+- Canonical option-chain renderer delegates provenance state to `provenance_adapter` and renders same-cycle values; no alternate market-data calculation path was introduced.
+- Canonical dashboard adapters are projection-only except for explicit semantic presentation states such as READY/DEGRADED/UNAVAILABLE and display formatting.
+- Legacy compatibility UI contains UI-side derived presentation logic, including OI-history status/count aggregation in `app/pages/option_chain.py`, dynamic holding-time in `app/components/active_position_card.py`, and dealer/market interpretation text in `app/components/market_map_panel.py`.
+- Legacy compatibility UI also contains hardcoded/default fallbacks for missing values, including `0`, `"-"`, `"--"`, and default runtime/replay states. These are not authoritative canonical values.
+- The canonical `OIFlowEngine` explicitly distinguishes `UNKNOWN`, `NO_CHANGE`, and `AWAITING_PREVIOUS_SNAPSHOT`; therefore legacy zero-default flow counts must not be treated as canonical “no flow”. This is a genuine compatibility-path semantic gap and is deferred to M2 rather than altered during M0.
+- Evidence files inspected: canonical renderers/adapters plus `app/pages/option_chain.py`, `app/pages/runtime.py`, `app/pages/replay.py`, `app/components/active_position_card.py`, `app/components/market_map_panel.py`, `analytics/oi/oi_flow_engine.py`.
+- Boundary date: 2026-09-06.
+- Boundary commit: recorded in tracker update following B8.
+
+**Next action:** identify missing DashboardData-backed fields and unused backend capabilities, build the complete M0 gap matrix, and assign an explicit disposition to each gap.
 
 **Exit gate:** zero unexplained UI surfaces or fields.
 
@@ -448,7 +461,7 @@ Boundary commit: `3cc34c22f2b062988317cb3389d356b92063a37e`.
 - [ ] No UI/backend divergence
 
 ## M11 — Production readiness and deployment certification
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Full regression
 - [ ] Live market/UI validation
@@ -573,7 +586,8 @@ Inventory and gap analysis remains the active workstream. Backend capability doe
 - B5 — backend-produced canonical analytics inventory: complete. `AnalyticsPipeline` and `RuntimeContext` expose the canonical analytics surface without calculation changes; typed fields and compatibility projection are explicitly distinguished.
 - B6 — UI-rendered field inventory and legacy-field classification: complete. Canonical dashboard rendering is traced across identity, decision, intelligence, analytics, option-chain/Greeks, provenance and runtime fields; legacy UI fields/defaults are recorded as compatibility-path findings.
 - B7 — provider → canonical backend → DashboardData → adapter → UI field-family trace: complete. Provider normalization, runtime provenance, canonical analytics, DashboardData projection and UI adapter/presenter consumption are evidenced; no behavior changed in this boundary.
-- Next boundary: audit UI-side calculations/recomputation and hardcoded/default/fallback semantics.
+- B8 — UI-side recomputation / fallback audit: complete. Canonical dashboard rendering remains projection/presentation-only; legacy compatibility paths contain explicit derived display logic and fallback semantics, including OI-flow zero defaults that conflict with canonical UNKNOWN/NO_CHANGE distinctions. These findings are deferred to M2 unless they are required to close a certified canonical UI path.
+- Next boundary: identify missing DashboardData-backed fields and unused backend capabilities, then build and disposition the complete M0 gap matrix.
 
 ---
 
