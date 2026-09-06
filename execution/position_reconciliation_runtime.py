@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from execution.reconciliation import ReconciliationStatus
-from execution.position_recovery import PositionRecoveryDecision
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,10 +13,14 @@ class PositionReconciliationRuntimeDecision:
 
 
 def evaluate_position_reconciliation_runtime(
-    recovery: PositionRecoveryDecision | None,
+    recovery,
     reconciliation_report=None,
 ) -> PositionReconciliationRuntimeDecision:
-    """Gate continuation of a recovered position on explicit reconciliation."""
+    """Gate continuation of a recovered position on explicit reconciliation.
+
+    Accepts the persisted-position recovery runtime decision so an open
+    recovered position cannot continue merely because it was loaded.
+    """
     if recovery is None:
         return PositionReconciliationRuntimeDecision(
             False,
@@ -25,11 +28,12 @@ def evaluate_position_reconciliation_runtime(
             "Position recovery decision is unavailable.",
         )
 
-    if not recovery.requires_reconciliation:
+    positions = tuple(getattr(recovery, "positions", ()) or ())
+    if not positions:
         return PositionReconciliationRuntimeDecision(
-            recovery.safe_to_continue,
-            recovery.requires_manual_resolution,
-            recovery.reason,
+            bool(getattr(recovery, "safe_to_continue", False)),
+            False,
+            getattr(recovery, "reason", "No recovered positions require reconciliation."),
         )
 
     if reconciliation_report is None:
