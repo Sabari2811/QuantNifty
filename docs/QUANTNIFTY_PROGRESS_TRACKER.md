@@ -44,7 +44,7 @@
 **M1 implementation status:** implementation/test boundaries B1–B4 are complete. Final M1 live UI certification remains evidence-gated.
 
 ## M2 — UI/backend divergence elimination
-**Status: IN PROGRESS — B1+B2+B3+B4+B5 COMPLETE**
+**Status: IN PROGRESS — B1+B2+B3+B4+B5+B6 IMPLEMENTED; B6 VALIDATION PENDING**
 
 ### M2 boundary B1 — KPI missing-value semantics
 **Status: COMPLETE — targeted regression PASS**
@@ -95,13 +95,24 @@
 - Local targeted regression: `pytest -q tests/test_signal_card_contract.py` → **3 passed in 1.44s**.
 - No provider credentials, broker calls, or real-money orders were required.
 
+### M2 boundary B6 — Provenance unavailable-state preservation
+**Status: IMPLEMENTED — targeted regression pending**
+
+- `dashboard/provenance_adapter.py` no longer synthesizes a default `RuntimeDataProvenance` when runtime provenance is absent; it now returns explicit unavailable fields.
+- `option_chain_quality_state()` now returns `UNAVAILABLE` when required coverage/integrity status fields are absent, preserves `DEGRADED` for incomplete/SUSPECT/INVALID states, and returns `READY` only for complete/VALID state.
+- This keeps coverage, integrity and freshness semantics distinct and avoids silently converting missing provenance into a fabricated valid/default state.
+- Regression coverage: `tests/test_provenance_adapter_contract.py`.
+- Implementation commit: `266bbfd5d0739ec666b39ff6031965a57d232995`.
+- Regression test file commit: `cbb20d9e3f4b1943407f3ce9310c092895b1cccf`.
+- No provider credentials, broker calls, or real-money orders are required.
+
 - [ ] Remove duplicate UI calculations
 - [ ] Remove stale/duplicate adapters
 - [ ] Fix field/type/enum mismatches
 - [x] Fix missing-value/fallback semantics
 - [x] Prevent fabricated values
-- [ ] Preserve UNKNOWN / SUSPECT / INVALID
-- [ ] Preserve freshness separately
+- [x] Preserve UNKNOWN / SUSPECT / INVALID
+- [x] Preserve freshness separately
 - [ ] Preserve direction/actionability separation
 - [ ] Prevent history/replay vetoes
 - [x] Regression coverage for every correction
