@@ -63,6 +63,12 @@ class RuntimeContext:
     execution_result: Any = None
     execution_lifecycle: str = ""
 
+    # Canonical position recovery/reconciliation state. These fields keep
+    # runtime recovery decisions explicit at the shared context boundary
+    # rather than relying on dynamic attributes on LiveEngine.
+    position_recovery: Any = None
+    position_reconciliation: Any = None
+
     portfolio: Any = None
     position: Any = None
     last_trade: Any = None
