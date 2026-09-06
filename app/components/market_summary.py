@@ -1,3 +1,5 @@
+import math
+
 import streamlit as st
 
 
@@ -5,89 +7,63 @@ import streamlit as st
 # HELPERS
 # ==========================================================
 
-def _find_atm(ctx):
-
+def _display_number(value, formatter):
+    if value is None:
+        return "UNAVAILABLE"
     try:
+        if not math.isfinite(float(value)):
+            return "UNAVAILABLE"
+        return formatter(value)
+    except (TypeError, ValueError):
+        return "UNAVAILABLE"
 
+
+def _find_atm(ctx):
+    try:
         df = ctx.greeks_df
-
-        if df is None or df.empty:
-            return "-"
-
-        return min(
-            df["Strike"],
-            key=lambda x: abs(x - ctx.spot)
-        )
-
+        spot = ctx.spot
+        if df is None or df.empty or spot is None or not math.isfinite(float(spot)):
+            return "UNAVAILABLE"
+        return min(df["Strike"], key=lambda x: abs(x - spot))
     except Exception:
-
-        return "-"
+        return "UNAVAILABLE"
 
 
 def _get_pcr(ctx):
-
     try:
-
         pcr = ctx.analytics.get("pcr", {})
-
-        value = pcr.get("oi_pcr")
-
-        if value is None:
-            return "-"
-
-        return f"{value:.2f}"
-
+        return _display_number(pcr.get("oi_pcr"), lambda value: f"{value:.2f}")
     except Exception:
-
-        return "-"
+        return "UNAVAILABLE"
 
 
 def _get_max_pain(ctx):
-
     try:
-
         mp = ctx.analytics.get("max_pain", {})
-
-        value = mp.get("max_pain")
-
-        if value is None:
-            return "-"
-
-        return f"{value:.0f}"
-
+        return _display_number(mp.get("max_pain"), lambda value: f"{value:.0f}")
     except Exception:
-
-        return "-"
+        return "UNAVAILABLE"
 
 
 def _get_expected_move(ctx):
-
     try:
-
         em = ctx.analytics.get("expected_move", {})
-
         low = em.get("lower")
         high = em.get("upper")
-
         if low is None or high is None:
-            return "-"
-
+            return "UNAVAILABLE"
+        if not math.isfinite(float(low)) or not math.isfinite(float(high)):
+            return "UNAVAILABLE"
         return f"{low:.2f} - {high:.2f}"
-
     except Exception:
-
-        return "-"
+        return "UNAVAILABLE"
 
 
 def _get_expiry(ctx):
-
     try:
-
-        return ctx.expiry
-
+        return ctx.expiry if ctx.expiry else "UNAVAILABLE"
     except Exception:
-
-        return "-"
+        return "UNAVAILABLE"
 
 
 # ==========================================================
@@ -95,7 +71,6 @@ def _get_expiry(ctx):
 # ==========================================================
 
 def show(ctx):
-
     st.subheader("📈 Market Summary")
 
     row1 = st.columns(3)
@@ -103,7 +78,7 @@ def show(ctx):
 
     row1[0].metric(
         "Spot",
-        f"{ctx.spot:,.2f}"
+        _display_number(ctx.spot, lambda value: f"{value:,.2f}")
     )
 
     row1[1].metric(
