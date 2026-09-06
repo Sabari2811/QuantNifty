@@ -45,10 +45,22 @@
 - Local targeted regression executed after synchronizing branch `r2-011-canonical-snapshot-provenance`: `pytest -q tests/test_option_chain_canonical_field_contract.py` → **2 passed in 3.46s**.
 - No provider credentials, broker calls, or real-money orders were required.
 
-**Next action:** continue M1 field completeness with any remaining canonical option-chain/provenance contract gaps, then close M1 only after the required live option-chain UI certification evidence is established. Keep compatibility pages unchanged.
+**M1 implementation status:** implementation/test boundaries B1–B4 are complete. Final M1 live UI certification remains evidence-gated and is not marked green without live-market evidence.
 
 ## M2 — UI/backend divergence elimination
-**Status: NOT STARTED**
+**Status: IN PROGRESS — B1 targeted regression pending**
+
+### M2 boundary B1 — KPI missing-value semantics
+**Status: IMPLEMENTED — targeted regression pending**
+
+- `dashboard/components/kpi_cards.py` no longer defaults missing `bullish_probability` or `confidence` to `0`; missing/NaN values render as an explicit `—` marker.
+- A real zero remains `0%`; known numeric percentages remain unchanged.
+- This removes a fabricated-value path at the dashboard presentation boundary without changing canonical backend probability semantics.
+- Implementation commit: `4353fab943d100bf08f28ebbc01f6145e97a2b45`.
+- Regression coverage: `tests/test_dashboard_kpi_contract.py`.
+- Test coverage commit: `1e55baa2b66445677298786b6eb7fb32cc91ada7`.
+- Required local targeted regression: `pytest -q tests/test_dashboard_kpi_contract.py`.
+- No provider credentials, broker calls, or real-money orders are required.
 
 - [ ] Remove duplicate UI calculations
 - [ ] Remove stale/duplicate adapters
