@@ -72,6 +72,21 @@ def test_service_persists_hold_as_open_state(tmp_path):
     assert state.status is PositionStatus.OPEN
 
 
+def test_persisted_position_survives_runtime_restart(tmp_path):
+    path = tmp_path / "positions.db"
+    with SQLitePositionStateStore(str(path)) as store:
+        service = PositionRuntimeService(store)
+        state = service.persist_paper_position(Position(current_price=111.0))
+        assert state.status is PositionStatus.OPEN
+
+    with SQLitePositionStateStore(str(path)) as reopened:
+        recovered = reopened.get("client-1")
+
+    assert recovered == state
+    assert recovered.status is PositionStatus.OPEN
+    assert recovered.current_price == 111.0
+
+
 def test_service_requires_store():
     try:
         PositionRuntimeService(None)
