@@ -48,7 +48,7 @@
 **M1 implementation status:** implementation/test boundaries B1–B4 are complete. Final M1 live UI certification remains evidence-gated and is not marked green without live-market evidence.
 
 ## M2 — UI/backend divergence elimination
-**Status: IN PROGRESS — B1 COMPLETE; B2 IN PROGRESS**
+**Status: IN PROGRESS — B1+B2 COMPLETE; B3 NEXT**
 
 ### M2 boundary B1 — KPI missing-value semantics
 **Status: COMPLETE — targeted regression PASS**
@@ -64,17 +64,25 @@
 - No provider credentials, broker calls, or real-money orders were required.
 
 ### M2 boundary B2 — Expected-move / Max-Pain / PCR missing-value semantics
-**Status: IMPLEMENTED — targeted regression pending**
+**Status: COMPLETE — targeted regression PASS**
 
 - `dashboard/components/expected_move_card.py` now reads canonical keys through safe mapping access and renders `UNAVAILABLE` for missing, non-numeric, NaN or infinite values instead of crashing or displaying fabricated values.
 - `dashboard/components/max_pain_card.py` now renders missing/invalid values as `UNAVAILABLE`, while preserving real zero values and numeric formatting.
 - `dashboard/components/pcr_card.py` now renders missing/invalid PCR values and sentiment as `UNAVAILABLE` instead of raising key errors or treating absent data as valid.
-- Regression coverage added in `tests/test_expected_move_card_contract.py` and `tests/test_max_pain_card_contract.py` / PCR contract coverage.
+- Regression coverage added in `tests/test_expected_move_card_contract.py`, `tests/test_max_pain_card_contract.py`, and `tests/test_pcr_card_contract.py`.
 - Expected-move implementation commit: `7f99e94632e40c68f9e3d7f273ad937a4b4c5e9e`.
 - Expected-move regression coverage commit: `213229454e6fd488d4e2e8acadd47ab88f8de641`.
 - Max-Pain implementation commit: `4c37f78ce10be79bf284528c7baa306012119b8a`.
 - PCR implementation commit: `b4a54f6b12d60706fe8d58ae9a5c99b8ab123d29`.
-- No provider credentials, broker calls, or real-money orders are required.
+- Local targeted regression executed after synchronizing branch `r2-011-canonical-snapshot-provenance`: `pytest -q tests/test_expected_move_card_contract.py tests/test_max_pain_card_contract.py tests/test_pcr_card_contract.py` → **7 passed in 2.68s**.
+- No provider credentials, broker calls, or real-money orders were required.
+
+### M2 boundary B3 — Probability gauge missing-value semantics
+**Status: IMPLEMENTATION NEXT**
+
+- Audit target: `dashboard/components/probability_gauge.py` directly indexes `probability["bullish_probability"]`, so missing canonical probability can raise `KeyError`; `None`, NaN or non-numeric values are also not fail-closed.
+- Required behavior: preserve real numeric zero; render an explicit unavailable state for missing/invalid probability; do not fabricate a value and do not change canonical backend semantics.
+- Next change will be limited to this presentation boundary with focused deterministic regression coverage.
 
 - [ ] Remove duplicate UI calculations
 - [ ] Remove stale/duplicate adapters
@@ -112,7 +120,7 @@
 - [ ] Historical/replay isolation
 
 ## M5 — Provenance/data-quality UI
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Source/provider
 - [ ] Observation/processing timestamps
