@@ -186,7 +186,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [x] Inventory all Streamlit/UI entry points
 - [x] Inventory UI components/pages
 - [x] Inventory UI adapters/presenters
-- [ ] Inventory canonical DashboardData models
+- [x] Inventory canonical DashboardData models
 - [ ] Inventory backend-produced fields
 - [ ] Inventory every UI-rendered field
 - [ ] Map provider → canonical backend → DashboardData → adapter → UI
@@ -241,9 +241,24 @@ Legacy presentation remains under `app/components/*`; the legacy dashboard consu
 Evidence files inspected: `dashboard/decision_adapter.py`, `dashboard/intelligence_adapter.py`, `dashboard/market_summary_adapter.py`, `dashboard/provenance_adapter.py`, `dashboard/ui_runtime_contract.py`, `dashboard/decision_intelligence_status.py`, `dashboard/dashboard_controller.py`, `dashboard/app.py`.
 Evidence: `tests/test_streamlit_runtime_ui_contract.py` exercises the real `dashboard/app.py` entrypoint with deterministic `DashboardData` and validates the emitted UI contract.
 Boundary date: 2026-09-06.
-Boundary commit: recorded in tracker update following B3.
+Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 
-**Next action:** inventory canonical `DashboardData` models and fields against the adapter inputs.
+### M0 boundary B4 — Canonical DashboardData model and field inventory
+**Status: COMPLETE**
+
+- `models/dashboard_data.py` defines the canonical DashboardData projection used by `dashboard/dashboard_controller.py` and the active Streamlit dashboard.
+- Core identity/data fields: `provider`, `symbol`, `spot`, `expiry`, `option_chain`, `greeks`.
+- Canonical analytics fields: `dealer`, `dealer_flow`, `expected_move`, `max_pain`, `pcr`, `market_structure`, `liquidity`, `probability`, `signal`, `trade_plan`, `risk`, `institutional_score`.
+- Provenance/quality fields: `data_provenance`, `option_chain_integrity`.
+- Intelligence fields: adapted `intelligence`, canonical `canonical_intelligence`, and `decision_intelligence_consistency`.
+- Runtime/operational fields: `portfolio`, `position`, `last_trade`, `journal`, `statistics`, `risk_state`, `trade_status`, `trade_block_reason`, `runtime_status`, `cycle_no`.
+- `analytics` is explicitly retained as the generic serialized/backward-compatible display projection; dedicated DashboardData fields are mapped from typed `RuntimeContext.market_context` by `DashboardController` and are not sourced from conflicting generic analytics.
+- `MarketContext` remains the internal typed canonical analytics model and includes additional fields (`gamma_flip`, `gamma_wall`, `oi_flow`, `iv_skew`, `iv_smile`, `atr`, `volatility`, `technical`, `oi_shift`, `smart_strike`, `market_map`) that are not all exposed as dedicated DashboardData fields; these require downstream disposition rather than assumptions.
+- Evidence files inspected: `models/dashboard_data.py`, `models/market_context.py`, `models/dealer_data.py`, `dashboard/dashboard_controller.py`, `dashboard/components/*` consumers already traced above.
+- Boundary date: 2026-09-06.
+- Boundary commit: recorded in tracker update following B4.
+
+**Next action:** inventory backend-produced fields and reconcile the complete canonical `MarketContext` analytics surface against DashboardData/UI fields.
 
 **Exit gate:** zero unexplained UI surfaces or fields.
 
@@ -500,7 +515,8 @@ Inventory and gap analysis remains the active workstream. Backend capability doe
 - B1 — exact branch/HEAD confirmation: complete, tracker commit `af9ede4b021a7c8024208aec888b790df9e8ab60`.
 - B2 — Streamlit/UI entry-point and legacy-path inventory: complete. Active canonical entry point `dashboard/app.py`; legacy `app/app.py` and `app/pages/*` remain classified as compatibility path; `app.services.LiveService` delegates to canonical `RuntimeManager` and does not own acquisition.
 - B3 — UI adapter/presenter inventory: complete. Canonical adapters are `decision_adapter.py`, `intelligence_adapter.py`, `market_summary_adapter.py`, `provenance_adapter.py`, `ui_runtime_contract.py`, plus Decision ↔ Intelligence consistency mapping; legacy presentation remains explicitly separate.
-- Next boundary: canonical `DashboardData` model and field inventory.
+- B4 — canonical DashboardData model and field inventory: complete. Dedicated UI fields are typed in `DashboardData`; generic `analytics` is retained only as compatibility/display projection; additional typed MarketContext fields require explicit downstream disposition.
+- Next boundary: backend-produced field inventory and canonical field-by-field reconciliation with DashboardData/UI consumers.
 
 ---
 
