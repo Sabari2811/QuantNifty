@@ -187,7 +187,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [x] Inventory UI components/pages
 - [x] Inventory UI adapters/presenters
 - [x] Inventory canonical DashboardData models
-- [ ] Inventory backend-produced fields
+- [x] Inventory backend-produced fields
 - [ ] Inventory every UI-rendered field
 - [ ] Map provider → canonical backend → DashboardData → adapter → UI
 - [ ] Identify UI-side calculations/recomputation
@@ -256,9 +256,21 @@ Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 - `MarketContext` remains the internal typed canonical analytics model and includes additional fields (`gamma_flip`, `gamma_wall`, `oi_flow`, `iv_skew`, `iv_smile`, `atr`, `volatility`, `technical`, `oi_shift`, `smart_strike`, `market_map`) that are not all exposed as dedicated DashboardData fields; these require downstream disposition rather than assumptions.
 - Evidence files inspected: `models/dashboard_data.py`, `models/market_context.py`, `models/dealer_data.py`, `dashboard/dashboard_controller.py`, `dashboard/components/*` consumers already traced above.
 - Boundary date: 2026-09-06.
-- Boundary commit: recorded in tracker update following B4.
+- Boundary commit: `79cb6ecdaa42928eb2eeef61aa42fea99cf9404e`.
 
-**Next action:** inventory backend-produced fields and reconcile the complete canonical `MarketContext` analytics surface against DashboardData/UI fields.
+### M0 boundary B5 — Backend-produced canonical analytics inventory
+**Status: COMPLETE**
+
+- `analytics/analytics_pipeline.py` explicitly instantiates and runs the canonical analytics engines for gamma, dealer/dealer-flow, delta/vanna/charm, liquidity, OI flow, IV skew/smile, expected move, Max Pain, PCR, ATR/volatility, market structure, technicals, probability, signal, institutional score, smart strike, trade plan, risk and market map.
+- The pipeline constructs a typed `MarketContext`, assigns the canonical analytics fields, and returns those analytics in the established dictionary projection alongside `context` and `greeks`.
+- `core/runtime_context.py` promotes the typed `MarketContext` into `RuntimeContext.market_context`; `RuntimeContext.analytics` remains the serialized/backward-compatible projection.
+- Backend-produced canonical analytics fields are therefore evidenced as: `dealer`, `dealer_flow`, `liquidity`, `gamma_flip`, `gamma_wall`, `oi_flow`, `iv_skew`, `iv_smile`, `expected_move`, `max_pain`, `pcr`, `market_structure`, `atr`, `volatility`, `technical`, `probability`, `signal`, `smart_strike`, `trade_plan`, `risk`, `institutional_score`, `market_map`, plus `greeks` and the raw market identity values carried by runtime context.
+- No backend calculation was changed in this boundary; this is inventory/reconciliation only.
+- Evidence files inspected: `analytics/analytics_pipeline.py`, `core/runtime_context.py`, `models/market_context.py`, `models/dashboard_data.py`.
+- Boundary date: 2026-09-06.
+- Boundary commit: recorded in tracker update following B5.
+
+**Next action:** inventory every UI-rendered field from the canonical dashboard components and legacy UI components that remain reachable.
 
 **Exit gate:** zero unexplained UI surfaces or fields.
 
@@ -293,7 +305,7 @@ Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 - [ ] Regression coverage for every correction
 
 ## M3 — Live option-chain UI certification
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Live expiry/spot
 - [ ] Expected/received/missing contracts
@@ -306,7 +318,7 @@ Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 - [ ] No silent substitution
 
 ## M4 — Analytics/intelligence UI certification
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] All analytics fields and semantics
 - [ ] Direction/actionability/decision
@@ -317,7 +329,7 @@ Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 - [ ] Historical/replay isolation
 
 ## M5 — Provenance/data-quality UI
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Source/provider
 - [ ] Observation/processing timestamps
@@ -329,7 +341,7 @@ Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 - [ ] SUSPECT/INVALID representation
 
 ## M6 — Decision → execution UI
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Intent/client ID
 - [ ] Instrument/action/quantity/price
@@ -341,7 +353,7 @@ Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 - [ ] No accidental live-order control
 
 ## M7 — Position/recovery UI
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Position state/lifecycle
 - [ ] Entry/current/SL/target/trailing
@@ -353,7 +365,7 @@ Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 - [ ] No inferred broker position
 
 ## M8 — Failure/degraded-state UI certification
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Provider/spot/chain unavailable
 - [ ] Stale/SUSPECT/INVALID
@@ -366,7 +378,7 @@ Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 - [ ] Every runtime state has UI disposition
 
 ## M9 — UI automated regression
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] DashboardData → adapter
 - [ ] Adapter → UI
@@ -378,7 +390,7 @@ Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 - [ ] Full regression
 
 ## M10 — End-to-end certification
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Provider → canonical snapshot
 - [ ] Snapshot → analytics → decision → intelligence
@@ -394,7 +406,7 @@ Boundary commit: `f6bc7b53c23530f925c21811d364d56f856aea80`.
 - [ ] No UI/backend divergence
 
 ## M11 — Production readiness and deployment certification
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Full regression
 - [ ] Live market/UI validation
@@ -516,7 +528,8 @@ Inventory and gap analysis remains the active workstream. Backend capability doe
 - B2 — Streamlit/UI entry-point and legacy-path inventory: complete. Active canonical entry point `dashboard/app.py`; legacy `app/app.py` and `app/pages/*` remain classified as compatibility path; `app.services.LiveService` delegates to canonical `RuntimeManager` and does not own acquisition.
 - B3 — UI adapter/presenter inventory: complete. Canonical adapters are `decision_adapter.py`, `intelligence_adapter.py`, `market_summary_adapter.py`, `provenance_adapter.py`, `ui_runtime_contract.py`, plus Decision ↔ Intelligence consistency mapping; legacy presentation remains explicitly separate.
 - B4 — canonical DashboardData model and field inventory: complete. Dedicated UI fields are typed in `DashboardData`; generic `analytics` is retained only as compatibility/display projection; additional typed MarketContext fields require explicit downstream disposition.
-- Next boundary: backend-produced field inventory and canonical field-by-field reconciliation with DashboardData/UI consumers.
+- B5 — backend-produced canonical analytics inventory: complete. `AnalyticsPipeline` and `RuntimeContext` expose the canonical analytics surface without calculation changes; typed fields and compatibility projection are explicitly distinguished.
+- Next boundary: inventory every UI-rendered field from canonical and reachable legacy components.
 
 ---
 
