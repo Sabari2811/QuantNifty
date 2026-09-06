@@ -44,7 +44,7 @@ def test_record_requires_canonical_client_identity():
         ExecutionAuditRecord.from_result(make_result(client_order_id=""))
 
 
-def test_store_is_idempotent_for_identical_record():
+def test_store_is_append_only_for_repeated_events():
     store = InMemoryExecutionAuditStore()
     record = ExecutionAuditRecord.from_result(make_result())
 
@@ -52,19 +52,21 @@ def test_store_is_idempotent_for_identical_record():
     store.append(record)
 
     assert store.get("client-1") == record
-    assert store.records() == (record,)
+    assert store.records() == (record, record)
 
 
-def test_store_rejects_conflicting_record_for_same_client_identity():
+def test_store_allows_conflicting_lifecycle_event_for_same_client_identity():
     store = InMemoryExecutionAuditStore()
-    record = ExecutionAuditRecord.from_result(make_result())
-    conflicting = ExecutionAuditRecord.from_result(
+    executed = ExecutionAuditRecord.from_result(make_result())
+    rejected = ExecutionAuditRecord.from_result(
         make_result(status=ExecutionStatus.REJECTED)
     )
 
-    store.append(record)
-    with pytest.raises(ValueError, match="already exists"):
-        store.append(conflicting)
+    store.append(executed)
+    store.append(rejected)
+
+    assert store.get("client-1") == rejected
+    assert store.records() == (executed, rejected)
 
 
 def test_pending_records_are_explicitly_recoverable():
