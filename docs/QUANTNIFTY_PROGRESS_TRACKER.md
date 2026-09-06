@@ -48,7 +48,7 @@
 **M1 implementation status:** implementation/test boundaries B1–B4 are complete. Final M1 live UI certification remains evidence-gated and is not marked green without live-market evidence.
 
 ## M2 — UI/backend divergence elimination
-**Status: IN PROGRESS — B1+B2+B3 IMPLEMENTED; B3 VALIDATION PENDING**
+**Status: IN PROGRESS — B1+B2+B3 COMPLETE**
 
 ### M2 boundary B1 — KPI missing-value semantics
 **Status: COMPLETE — targeted regression PASS**
@@ -78,7 +78,7 @@
 - No provider credentials, broker calls, or real-money orders were required.
 
 ### M2 boundary B3 — Probability gauge missing-value semantics
-**Status: IMPLEMENTED — targeted regression pending**
+**Status: COMPLETE — targeted regression PASS**
 
 - Audit target: `dashboard/components/probability_gauge.py` directly indexed `probability["bullish_probability"]`, so missing canonical probability could raise `KeyError`; `None`, NaN or non-numeric values were also not fail-closed.
 - Required behavior: preserve real numeric zero; render an explicit unavailable state for missing/invalid probability; do not fabricate a value and do not change canonical backend semantics.
@@ -86,18 +86,19 @@
 - Regression coverage: `tests/test_probability_gauge_contract.py` verifies valid values, real zero, and missing/invalid inputs.
 - Implementation commit: `0409f27dffd493ca8218329bf83d575bf238e8d7`.
 - Regression test file commit: `823db1c0ae9c6700dfc511830044f4718b584088`.
-- No provider credentials, broker calls, or real-money orders are required.
+- Local targeted regression executed after synchronizing branch `r2-011-canonical-snapshot-provenance`: `pytest -q tests/test_probability_gauge_contract.py` → **3 passed in 1.32s**.
+- No provider credentials, broker calls, or real-money orders were required.
 
 - [ ] Remove duplicate UI calculations
 - [ ] Remove stale/duplicate adapters
 - [ ] Fix field/type/enum mismatches
-- [ ] Fix missing-value/fallback semantics
-- [ ] Prevent fabricated values
+- [x] Fix missing-value/fallback semantics
+- [x] Prevent fabricated values
 - [ ] Preserve UNKNOWN / SUSPECT / INVALID
 - [ ] Preserve freshness separately
 - [ ] Preserve direction/actionability separation
 - [ ] Prevent history/replay vetoes
-- [ ] Regression coverage for every correction
+- [x] Regression coverage for every correction
 
 ## M3 — Live option-chain UI certification
 **Status: NOT STARTED**
@@ -124,7 +125,7 @@
 - [ ] Historical/replay isolation
 
 ## M5 — Provenance/data-quality UI
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Source/provider
 - [ ] Observation/processing timestamps
