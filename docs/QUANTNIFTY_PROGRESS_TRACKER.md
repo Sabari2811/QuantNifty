@@ -7,7 +7,7 @@ QuantNifty is a modular NIFTY options analytics, decision-intelligence, paper/li
 **Current objective:** move from validated live analytics into a fully auditable, risk-controlled production system without bypassing canonical backend contracts.
 
 **Current branch:** `r2-011-canonical-snapshot-provenance`  
-**Current phase:** M0 — Baseline, inventory and audit lock  
+**Current phase:** M1 — Canonical Dashboard contract  
 **Program:** R2-015 — Production Execution, Operations, Deployment & Live Certification
 
 ### Evidence baseline
@@ -180,7 +180,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 # 4. Master milestone tracker
 
 ## M0 — Baseline, inventory and audit lock
-**Status: IN PROGRESS**
+**Status: COMPLETE**
 
 - [x] Confirm exact branch/HEAD
 - [x] Inventory all Streamlit/UI entry points
@@ -196,8 +196,8 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [x] Identify missing backend fields
 - [x] Identify unused backend capabilities
 - [x] Create complete UI/backend gap matrix
-- [ ] Assign every item VALIDATED / FIX REQUIRED / INTENTIONALLY UNAVAILABLE / UNSUPPORTED
-- [ ] Record audit evidence and commit SHA
+- [x] Assign every item VALIDATED / FIX REQUIRED / INTENTIONALLY UNAVAILABLE / UNSUPPORTED
+- [x] Record audit evidence and commit SHA
 
 ### M0 boundary B1 — Exact branch / HEAD confirmation
 **Status: COMPLETE**
@@ -351,14 +351,25 @@ Audit conclusion: there is no unexplained canonical market-data/analytics render
 
 Evidence files/tests inspected: `dashboard/app.py`, `dashboard/dashboard_controller.py`, `models/dashboard_data.py`, `models/market_context.py`, `core/runtime_context.py`, `analytics/analytics_pipeline.py`, `decision/decision_engine.py`, `decision/decision_builder.py`, `analytics/oi/oi_flow_engine.py`, `providers/indmoney_provider.py`, `engine/market_data_pipeline.py`, `tests/test_dashboard_canonical_field_disposition.py`, `tests/test_market_data_pipeline_provenance.py`, `tests/test_streamlit_runtime_ui_contract.py`, plus audited canonical/legacy UI components.
 Boundary date: 2026-09-06.
-Boundary commit: recorded in final M0 evidence closure commit.
+Boundary commit: `14f8778651406ba681523c3572c742fd15412bad`.
 
-**Next action:** close the M0 evidence record, then begin M1 canonical Dashboard contract from the first FIX REQUIRED contract gap without changing unrelated legacy behavior.
+### M0 evidence closure — FINAL
+**Status: COMPLETE**
 
-**Exit gate:** every identified surface and field has an explicit evidence-backed disposition.
+- All M0 checklist items are explicitly dispositioned.
+- All discovered canonical/legacy UI surfaces and fields are represented in the final gap matrix.
+- All remaining gaps have explicit downstream ownership and are not hidden.
+- No real-money execution was run.
+- No provider credentials or user-side secret action is required to close M0.
+- M0 completion date: 2026-09-06.
+- Final M0 evidence closure commit: recorded by this tracker update.
+
+**Next action:** start M1 from the first FIX REQUIRED canonical contract gap: introduce a distinct actionability contract only after inspecting the existing decision/intelligence models and their tests. Do not modify legacy compatibility pages as part of the first M1 change.
+
+**M0 exit gate:** PASSED — every audited surface/field has an evidence-backed disposition.
 
 ## M1 — Canonical Dashboard contract
-**Status: NOT STARTED**
+**Status: IN PROGRESS**
 
 - [ ] Spot / expiry / option chain
 - [ ] Strike / CE / PE LTP / bid / ask
@@ -388,7 +399,7 @@ Boundary commit: recorded in final M0 evidence closure commit.
 - [ ] Regression coverage for every correction
 
 ## M3 — Live option-chain UI certification
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Live expiry/spot
 - [ ] Expected/received/missing contracts
@@ -401,7 +412,7 @@ Boundary commit: recorded in final M0 evidence closure commit.
 - [ ] No silent substitution
 
 ## M4 — Analytics/intelligence UI certification
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] All analytics fields and semantics
 - [ ] Direction/actionability/decision
@@ -412,7 +423,7 @@ Boundary commit: recorded in final M0 evidence closure commit.
 - [ ] Historical/replay isolation
 
 ## M5 — Provenance/data-quality UI
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Source/provider
 - [ ] Observation/processing timestamps
@@ -605,21 +616,22 @@ Canonical position state, lifecycle, persistence, recovery and reconciliation ru
 Commit: `ec8251ac574ad026edd0b83f21ac227f92bf3847`
 
 ## M0 UI/backend audit
-**Status:** IN PROGRESS
+**Status:** COMPLETE
 
-Inventory and gap analysis remains the active workstream. Backend capability does not constitute UI certification.
+M0 inventory, field tracing, calculation/fallback audit and disposition matrix are closed with evidence. No canonical runtime behavior was changed during M0.
 
 ### M0 audit boundaries completed
 - B1 — exact branch/HEAD confirmation: complete, tracker commit `af9ede4b021a7c8024208aec888b790df9e8ab60`.
 - B2 — Streamlit/UI entry-point and legacy-path inventory: complete. Active canonical entry point `dashboard/app.py`; legacy `app/app.py` and `app/pages/*` remain classified as compatibility path; `app.services.LiveService` delegates to canonical `RuntimeManager` and does not own acquisition.
 - B3 — UI adapter/presenter inventory: complete. Canonical adapters are `decision_adapter.py`, `intelligence_adapter.py`, `market_summary_adapter.py`, `provenance_adapter.py`, `ui_runtime_contract.py`, plus Decision ↔ Intelligence consistency mapping; legacy presentation remains explicitly separate.
-- B4 — canonical DashboardData model and field inventory: complete. Dedicated UI fields are typed in `DashboardData`; generic `analytics` is retained only as compatibility/display projection; additional typed MarketContext fields require explicit downstream disposition.
+- B4 — canonical DashboardData model and field inventory: complete. Dedicated UI fields are typed in `DashboardData`; generic `analytics` is retained only as compatibility/display projection; additional typed MarketContext fields receive explicit dispositions.
 - B5 — backend-produced canonical analytics inventory: complete. `AnalyticsPipeline` and `RuntimeContext` expose the canonical analytics surface without calculation changes; typed fields and compatibility projection are explicitly distinguished.
 - B6 — UI-rendered field inventory and legacy-field classification: complete. Canonical dashboard rendering is traced across identity, decision, intelligence, analytics, option-chain/Greeks, provenance and runtime fields; legacy UI fields/defaults are recorded as compatibility-path findings.
 - B7 — provider → canonical backend → DashboardData → adapter → UI field-family trace: complete. Provider normalization, runtime provenance, canonical analytics, DashboardData projection and UI adapter/presenter consumption are evidenced; no behavior changed in this boundary.
 - B8 — UI-side recomputation / fallback audit: complete. Canonical dashboard rendering remains projection/presentation-only; legacy compatibility paths contain explicit derived display logic and fallback semantics, including OI-flow zero defaults that conflict with canonical UNKNOWN/NO_CHANGE distinctions. These findings are deferred to M2 unless they are required to close a certified canonical UI path.
-- B9 — final M0 gap matrix and disposition classification: complete. All audited field families and reachable UI findings are classified as VALIDATED, FIX REQUIRED, INTENTIONALLY UNAVAILABLE, or UNSUPPORTED with downstream milestone ownership. Remaining action is final evidence closure.
-- Next boundary: M0 evidence closure commit, then M1 contract work beginning from the first FIX REQUIRED canonical gap.
+- B9 — final M0 gap matrix and disposition classification: complete. All audited field families and reachable UI findings are classified as VALIDATED, FIX REQUIRED, INTENTIONALLY UNAVAILABLE, or UNSUPPORTED with downstream milestone ownership. Remaining action was final evidence closure.
+- M0 evidence closure — final: complete. All checklist items are now checked, the gap matrix is recorded, and the M0 exit gate passed.
+- Next active milestone: M1 — Canonical Dashboard contract.
 
 ---
 
