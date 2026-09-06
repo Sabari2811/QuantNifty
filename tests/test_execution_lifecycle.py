@@ -39,6 +39,19 @@ def test_submitted_requires_reconciliation_before_any_retry():
     assert classify_execution_result(result) is ExecutionLifecycleAction.RECONCILE
 
 
+def test_partial_fill_submitted_result_requires_reconciliation():
+    result = ExecutionResult(
+        ExecutionStatus.SUBMITTED,
+        intent(),
+        broker_order_id="broker-partial",
+        filled_quantity=25,
+        average_fill_price=100,
+        reason="Partially filled; broker order remains open",
+    )
+    assert 0 < result.filled_quantity < result.intent.quantity
+    assert classify_execution_result(result) is ExecutionLifecycleAction.RECONCILE
+
+
 def test_not_submitted_does_not_create_implicit_retry():
     result = ExecutionResult(ExecutionStatus.NOT_SUBMITTED, intent())
     assert classify_execution_result(result) is ExecutionLifecycleAction.DO_NOT_RETRY
