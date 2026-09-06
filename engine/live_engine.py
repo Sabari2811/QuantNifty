@@ -31,6 +31,8 @@ from execution.order_intent_factory import build_order_intent
 from execution.trade_execution_pipeline import TradeExecutionPipeline
 from execution.execution_lifecycle import classify_execution_result
 from execution.runtime_audit_config import build_runtime_audit_store
+from execution.position_runtime_config import build_position_state_store
+from execution.position_runtime_service import PositionRuntimeService
 
 from recording.recording_manager import RecordingManager
 
@@ -46,7 +48,7 @@ from simulation.replay_equivalence import (
 
 class LiveEngine:
 
-    def __init__(self, provider=None, intelligence_service=None, paper_broker=None, trade_pipeline=None, audit_store_path=None):
+    def __init__(self, provider=None, intelligence_service=None, paper_broker=None, trade_pipeline=None, audit_store_path=None, position_state_path=None):
         self.ctx = RuntimeContext()
         self._previous_greeks_df = None
         self.provider = provider
@@ -54,7 +56,10 @@ class LiveEngine:
         self.paper_broker = paper_broker
         self.trade_pipeline = trade_pipeline
         self.audit_store_path = audit_store_path
+        self.position_state_path = position_state_path
         self._runtime_audit_store = None
+        self._position_state_store = None
+        self.position_runtime_service = None
         self._initialize()
 
     def _initialize(self):
@@ -75,6 +80,9 @@ class LiveEngine:
         self.explanation_engine = ExplanationEngine()
         if self.paper_broker is None:
             self.paper_broker = PaperBroker()
+        if self.position_state_path is not None:
+            self._position_state_store = build_position_state_store(self.position_state_path)
+            self.position_runtime_service = PositionRuntimeService(self._position_state_store)
         if self.trade_pipeline is None:
             self.risk_manager = RiskManager()
             if self.audit_store_path is not None:
