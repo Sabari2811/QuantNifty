@@ -1,10 +1,23 @@
+import math
+
 import streamlit as st
+
+
+def _display(value, suffix="-", default="UNAVAILABLE"):
+    if value is None:
+        return default
+    if isinstance(value, float) and not math.isfinite(value):
+        return default
+    return f"{value}{suffix}" if suffix != "-" else f"{value}"
 
 
 def render(decision, dealer):
     """Render canonical decision fields without recomputing the signal."""
 
     st.subheader("🎯 Trade Signal")
+
+    decision = decision or {}
+    dealer = dealer
 
     bullish = decision.get("bullish_probability")
     bearish = decision.get("bearish_probability")
@@ -23,9 +36,9 @@ def render(decision, dealer):
         st.warning(f"🟡 {signal}")
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Bullish", "-" if bullish is None else f"{bullish}%")
-    c2.metric("Bearish", "-" if bearish is None else f"{bearish}%")
-    c3.metric("Confidence", "-" if confidence is None else f"{confidence}%")
+    c1.metric("Bullish", _display(bullish, "%"))
+    c2.metric("Bearish", _display(bearish, "%"))
+    c3.metric("Confidence", _display(confidence, "%"))
 
     reasons = decision.get("reasons", ())
     if reasons:
@@ -33,13 +46,17 @@ def render(decision, dealer):
         for reason in reasons:
             st.write(f"✅ {reason}")
 
+    dealer_gamma = getattr(dealer, "dealer_gamma", None)
+    market_mode = getattr(dealer, "market_mode", None)
+    expected_volatility = getattr(dealer, "expected_volatility", None)
+
     st.info(
         f"""
-Dealer Gamma : **{dealer.dealer_gamma}**
+Dealer Gamma : **{_display(dealer_gamma)}**
 
-Market Mode : **{dealer.market_mode}**
+Market Mode : **{_display(market_mode)}**
 
-Expected Volatility : **{dealer.expected_volatility}**
+Expected Volatility : **{_display(expected_volatility)}**
 """
     )
 
