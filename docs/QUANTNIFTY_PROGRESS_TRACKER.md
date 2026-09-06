@@ -183,8 +183,8 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 **Status: IN PROGRESS**
 
 - [x] Confirm exact branch/HEAD
-- [ ] Inventory all Streamlit/UI entry points
-- [ ] Inventory UI components/pages
+- [x] Inventory all Streamlit/UI entry points
+- [x] Inventory UI components/pages
 - [ ] Inventory UI adapters/presenters
 - [ ] Inventory canonical DashboardData models
 - [ ] Inventory backend-produced fields
@@ -192,7 +192,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] Map provider → canonical backend → DashboardData → adapter → UI
 - [ ] Identify UI-side calculations/recomputation
 - [ ] Identify hardcoded/default/fallback values
-- [ ] Identify stale/legacy UI paths
+- [x] Identify stale/legacy UI paths
 - [ ] Identify missing backend fields
 - [ ] Identify unused backend capabilities
 - [ ] Create complete UI/backend gap matrix
@@ -207,8 +207,23 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - Verification source: GitHub branch ref `refs/heads/r2-011-canonical-snapshot-provenance`
 - Verification date: 2026-09-06
 - Scope: repository identity only; no local working-tree state inferred or changed.
+- Boundary commit: `af9ede4b021a7c8024208aec888b790df9e8ab60`
 
-**Next action:** inventory all Streamlit/UI entry points.
+### M0 boundary B2 — Streamlit/UI entry-point and legacy-path inventory
+**Status: COMPLETE**
+
+- Primary Streamlit entry point: `dashboard/app.py`.
+- Legacy application entry point: `app/app.py`.
+- Legacy application page set: `app/pages/dashboard.py`, `portfolio.py`, `performance.py`, `journal.py`, `option_chain.py`, `replay.py`, `runtime.py`, `institutional.py`, with `strategy.py` currently empty.
+- `app/app.py` remains a reachable Streamlit entry point and routes its Dashboard page through `app/pages/dashboard.py`.
+- `app/pages/dashboard.py` uses `app.services.LiveService` for runtime context, but `LiveService` is explicitly documented and implemented as a compatibility adapter over the single canonical `RuntimeManager`; it is not a second market-data acquisition owner.
+- Active canonical dashboard path is `dashboard/app.py` → `DashboardController` → `RuntimeManager` → `DashboardData` → dashboard components.
+- Legacy path is therefore classified **LEGACY / COMPATIBILITY**, not deleted or treated as a second canonical runtime.
+- Evidence files inspected: `dashboard/app.py`, `app/app.py`, `app/pages/dashboard.py`, `app/services/live_service.py`.
+- Boundary date: 2026-09-06.
+- Boundary commit: recorded in tracker update following B2.
+
+**Next action:** inventory UI adapters/presenters and their exact consumers.
 
 **Exit gate:** zero unexplained UI surfaces or fields.
 
@@ -243,7 +258,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] Regression coverage for every correction
 
 ## M3 — Live option-chain UI certification
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Live expiry/spot
 - [ ] Expected/received/missing contracts
@@ -256,7 +271,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] No silent substitution
 
 ## M4 — Analytics/intelligence UI certification
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] All analytics fields and semantics
 - [ ] Direction/actionability/decision
@@ -267,7 +282,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] Historical/replay isolation
 
 ## M5 — Provenance/data-quality UI
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Source/provider
 - [ ] Observation/processing timestamps
@@ -279,7 +294,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] SUSPECT/INVALID representation
 
 ## M6 — Decision → execution UI
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Intent/client ID
 - [ ] Instrument/action/quantity/price
@@ -291,7 +306,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] No accidental live-order control
 
 ## M7 — Position/recovery UI
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Position state/lifecycle
 - [ ] Entry/current/SL/target/trailing
@@ -303,7 +318,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] No inferred broker position
 
 ## M8 — Failure/degraded-state UI certification
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] Provider/spot/chain unavailable
 - [ ] Stale/SUSPECT/INVALID
@@ -316,7 +331,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] Every runtime state has UI disposition
 
 ## M9 — UI automated regression
-**Status: NOT STARTED**
+**Status: NOT STARTED
 
 - [ ] DashboardData → adapter
 - [ ] Adapter → UI
@@ -460,6 +475,11 @@ Commit: `ec8251ac574ad026edd0b83f21ac227f92bf3847`
 **Status:** IN PROGRESS
 
 Inventory and gap analysis remains the active workstream. Backend capability does not constitute UI certification.
+
+### M0 audit boundaries completed
+- B1 — exact branch/HEAD confirmation: complete, tracker commit `af9ede4b021a7c8024208aec888b790df9e8ab60`.
+- B2 — Streamlit/UI entry-point and legacy-path inventory: complete. Active canonical entry point `dashboard/app.py`; legacy `app/app.py` and `app/pages/*` remain classified as compatibility path; `app.services.LiveService` delegates to canonical `RuntimeManager` and does not own acquisition.
+- Next boundary: UI adapter/presenter inventory.
 
 ---
 
