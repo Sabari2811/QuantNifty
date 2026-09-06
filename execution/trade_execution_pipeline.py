@@ -127,13 +127,18 @@ class TradeExecutionPipeline:
             )
             ctx.execution_result = result
             ctx.execution_lifecycle = classify_execution_result(result).value
+
+            # Preserve the broker's canonical lifecycle outcome. UNKNOWN and
+            # SUBMITTED are non-terminal reconciliation states and must never
+            # be presented as a rejection merely because execution was not
+            # immediately EXECUTED.
+            ctx.trade_status = result.status.value
+            if result.status in {ExecutionStatus.REJECTED, ExecutionStatus.FAILED, ExecutionStatus.NOT_SUBMITTED}:
+                ctx.trade_block_reason = result.reason or "Execution was not completed."
             self._persist_result(result)
+
             if result.status is ExecutionStatus.EXECUTED:
-                ctx.trade_status = "EXECUTED"
                 ctx.position = getattr(self.paper_broker, "position", None)
-            else:
-                ctx.trade_status = "REJECTED"
-                ctx.trade_block_reason = result.reason or "Paper broker rejected execution"
         else:
             position = self.paper_broker.execute(ctx.decision)
             if position is not None:
