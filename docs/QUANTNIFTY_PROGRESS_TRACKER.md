@@ -185,7 +185,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [x] Confirm exact branch/HEAD
 - [x] Inventory all Streamlit/UI entry points
 - [x] Inventory UI components/pages
-- [ ] Inventory UI adapters/presenters
+- [x] Inventory UI adapters/presenters
 - [ ] Inventory canonical DashboardData models
 - [ ] Inventory backend-produced fields
 - [ ] Inventory every UI-rendered field
@@ -203,7 +203,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 **Status: COMPLETE**
 
 - Verified branch: `r2-011-canonical-snapshot-provenance`
-- Verified HEAD: `74e43edbf6ff560c6126e58531aa6218dba69311`
+- Verified HEAD before tracker update: `74e43edbf6ff560c6126e58531aa6218dba69311`
 - Verification source: GitHub branch ref `refs/heads/r2-011-canonical-snapshot-provenance`
 - Verification date: 2026-09-06
 - Scope: repository identity only; no local working-tree state inferred or changed.
@@ -221,9 +221,29 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - Legacy path is therefore classified **LEGACY / COMPATIBILITY**, not deleted or treated as a second canonical runtime.
 - Evidence files inspected: `dashboard/app.py`, `app/app.py`, `app/pages/dashboard.py`, `app/services/live_service.py`.
 - Boundary date: 2026-09-06.
-- Boundary commit: recorded in tracker update following B2.
+- Boundary commit: `a321bfc9a3fc47c065f74c35b16cfa2055b0660f`.
 
-**Next action:** inventory UI adapters/presenters and their exact consumers.
+### M0 boundary B3 — UI adapter / presenter inventory
+**Status: COMPLETE**
+
+Canonical dashboard adapters/presenters identified and traced:
+- `dashboard/decision_adapter.py` — maps `DashboardData.signal`, `DashboardData.probability`, and `DashboardData.trade_plan` into the shared decision UI contract; confidence is sourced from canonical decision signal, not probability.
+- `dashboard/intelligence_adapter.py` — maps typed `IntelligenceResult` into UI-safe intelligence, scenario, historical-evidence, regime, data-quality, freshness and integrity payloads.
+- `dashboard/market_summary_adapter.py` — maps spot/expiry/expected-move/PCR/Max-Pain directly from `DashboardData` with no analytics recomputation.
+- `dashboard/provenance_adapter.py` — maps runtime acquisition provenance, coverage, freshness and integrity states; option-chain quality remains READY/DEGRADED/UNAVAILABLE.
+- `dashboard/ui_runtime_contract.py` — audit-only orchestration contract used by the real Streamlit entrypoint test; it reuses the canonical decision and market-summary adapters and passes through intelligence/provenance/integrity/option-chain/Greeks values from the same `DashboardData` cycle.
+- `dashboard/decision_intelligence_status.py` — canonical Decision ↔ Intelligence consistency mapping used by `DashboardController`.
+- `dashboard/dashboard_controller.py` is the primary backend-to-UI projection boundary, constructing `DashboardData` from `RuntimeContext.market_context` while retaining `ctx.analytics` only as the established generic compatibility/display projection.
+- The Streamlit entrypoint `dashboard/app.py` calls the canonical adapters/presenters and records the exact values used at the UI boundary through `_quantnifty_ui_contract` for runtime regression.
+
+Legacy presentation remains under `app/components/*`; the legacy dashboard consumes the canonical runtime through `LiveService`. No legacy presenter was deleted in this audit.
+
+Evidence files inspected: `dashboard/decision_adapter.py`, `dashboard/intelligence_adapter.py`, `dashboard/market_summary_adapter.py`, `dashboard/provenance_adapter.py`, `dashboard/ui_runtime_contract.py`, `dashboard/decision_intelligence_status.py`, `dashboard/dashboard_controller.py`, `dashboard/app.py`.
+Evidence: `tests/test_streamlit_runtime_ui_contract.py` exercises the real `dashboard/app.py` entrypoint with deterministic `DashboardData` and validates the emitted UI contract.
+Boundary date: 2026-09-06.
+Boundary commit: recorded in tracker update following B3.
+
+**Next action:** inventory canonical `DashboardData` models and fields against the adapter inputs.
 
 **Exit gate:** zero unexplained UI surfaces or fields.
 
@@ -258,7 +278,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] Regression coverage for every correction
 
 ## M3 — Live option-chain UI certification
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Live expiry/spot
 - [ ] Expected/received/missing contracts
@@ -271,7 +291,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] No silent substitution
 
 ## M4 — Analytics/intelligence UI certification
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] All analytics fields and semantics
 - [ ] Direction/actionability/decision
@@ -282,7 +302,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] Historical/replay isolation
 
 ## M5 — Provenance/data-quality UI
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Source/provider
 - [ ] Observation/processing timestamps
@@ -294,7 +314,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] SUSPECT/INVALID representation
 
 ## M6 — Decision → execution UI
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Intent/client ID
 - [ ] Instrument/action/quantity/price
@@ -306,7 +326,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] No accidental live-order control
 
 ## M7 — Position/recovery UI
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Position state/lifecycle
 - [ ] Entry/current/SL/target/trailing
@@ -318,7 +338,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] No inferred broker position
 
 ## M8 — Failure/degraded-state UI certification
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Provider/spot/chain unavailable
 - [ ] Stale/SUSPECT/INVALID
@@ -331,7 +351,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [ ] Every runtime state has UI disposition
 
 ## M9 — UI automated regression
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] DashboardData → adapter
 - [ ] Adapter → UI
@@ -479,7 +499,8 @@ Inventory and gap analysis remains the active workstream. Backend capability doe
 ### M0 audit boundaries completed
 - B1 — exact branch/HEAD confirmation: complete, tracker commit `af9ede4b021a7c8024208aec888b790df9e8ab60`.
 - B2 — Streamlit/UI entry-point and legacy-path inventory: complete. Active canonical entry point `dashboard/app.py`; legacy `app/app.py` and `app/pages/*` remain classified as compatibility path; `app.services.LiveService` delegates to canonical `RuntimeManager` and does not own acquisition.
-- Next boundary: UI adapter/presenter inventory.
+- B3 — UI adapter/presenter inventory: complete. Canonical adapters are `decision_adapter.py`, `intelligence_adapter.py`, `market_summary_adapter.py`, `provenance_adapter.py`, `ui_runtime_contract.py`, plus Decision ↔ Intelligence consistency mapping; legacy presentation remains explicitly separate.
+- Next boundary: canonical `DashboardData` model and field inventory.
 
 ---
 
