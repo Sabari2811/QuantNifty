@@ -7,7 +7,7 @@ QuantNifty is a modular NIFTY options analytics, decision-intelligence, paper/li
 **Current objective:** move from validated live analytics into a fully auditable, risk-controlled production system without bypassing canonical backend contracts.
 
 **Current branch:** `r2-011-canonical-snapshot-provenance`  
-**Current phase:** M0 — UI/backend inventory and gap audit  
+**Current phase:** M0 — Baseline, inventory and audit lock  
 **Program:** R2-015 — Production Execution, Operations, Deployment & Live Certification
 
 ### Evidence baseline
@@ -193,9 +193,9 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [x] Identify UI-side calculations/recomputation
 - [x] Identify hardcoded/default/fallback values
 - [x] Identify stale/legacy UI paths
-- [ ] Identify missing backend fields
-- [ ] Identify unused backend capabilities
-- [ ] Create complete UI/backend gap matrix
+- [x] Identify missing backend fields
+- [x] Identify unused backend capabilities
+- [x] Create complete UI/backend gap matrix
 - [ ] Assign every item VALIDATED / FIX REQUIRED / INTENTIONALLY UNAVAILABLE / UNSUPPORTED
 - [ ] Record audit evidence and commit SHA
 
@@ -313,7 +313,7 @@ Boundary commit: `3cc34c22f2b062988317cb3389d356b92063a37e`.
 - Boundary commit: `0636409f82e1d7803ec61d8bf5f5322ec685eafe`.
 
 ### M0 boundary B8 — UI-side recomputation / fallback audit
-**Status: COMPLETE (findings recorded; no behavior change)
+**Status: COMPLETE (findings recorded; no behavior change)**
 
 - Canonical dashboard renderers inspected for calculation ownership. Presentation-time formatting, sorting, styling and chart construction do not recompute the canonical analytics values.
 - Canonical option-chain renderer delegates provenance state to `provenance_adapter` and renders same-cycle values; no alternate market-data calculation path was introduced.
@@ -323,11 +323,39 @@ Boundary commit: `3cc34c22f2b062988317cb3389d356b92063a37e`.
 - The canonical `OIFlowEngine` explicitly distinguishes `UNKNOWN`, `NO_CHANGE`, and `AWAITING_PREVIOUS_SNAPSHOT`; therefore legacy zero-default flow counts must not be treated as canonical “no flow”. This is a genuine compatibility-path semantic gap and is deferred to M2 rather than altered during M0.
 - Evidence files inspected: canonical renderers/adapters plus `app/pages/option_chain.py`, `app/pages/runtime.py`, `app/pages/replay.py`, `app/components/active_position_card.py`, `app/components/market_map_panel.py`, `analytics/oi/oi_flow_engine.py`.
 - Boundary date: 2026-09-06.
-- Boundary commit: recorded in tracker update following B8.
+- Boundary commit: `c12d64b201d27c2c03d853dfa8c599ea523f6b19`.
 
-**Next action:** identify missing DashboardData-backed fields and unused backend capabilities, build the complete M0 gap matrix, and assign an explicit disposition to each gap.
+### M0 boundary B9 — Final M0 gap matrix and disposition classification
+**Status: COMPLETE**
 
-**Exit gate:** zero unexplained UI surfaces or fields.
+| Gap / field family | Evidence | Disposition | Downstream milestone |
+|---|---|---|---|
+| Spot / expiry / option chain / Greeks | `MarketDataPipeline` → `RuntimeContext` → `DashboardController` → canonical components | VALIDATED | M1/M3 |
+| Dealer / dealer flow / GEX / gamma levels | `MarketContext` + `DealerData` → `DashboardData` → canonical cards | VALIDATED | M1/M4 |
+| Expected Move / Max Pain / PCR | canonical adapters + cards | VALIDATED | M1/M4 |
+| Market structure / liquidity / probability / signal / trade plan / risk / institutional score | `DashboardController` + dedicated components | VALIDATED | M1/M4 |
+| Intelligence / consistency / freshness / integrity / provenance | typed `IntelligenceResult` + `provenance_adapter` + runtime contract | VALIDATED | M1/M4/M5 |
+| Gamma flip / gamma wall | canonical `DealerData` fields and existing renderer mapping | VALIDATED | M1/M4 |
+| Smart strike | included in canonical backend surface and represented by trade-plan path; no standalone DashboardData field | VALIDATED (represented by existing mapping) | M1/M4 |
+| OI flow / IV skew / IV smile / ATR / volatility / technical / OI shift / market map | typed `MarketContext`, retained in generic `DashboardData.analytics`; no dedicated canonical UI field | INTENTIONALLY UNAVAILABLE as dedicated DashboardData UI; compatibility-only access remains explicit | M1/M4 |
+| Execution intent / execution result / execution lifecycle | present on `RuntimeContext`, absent from `DashboardData` and active canonical UI projection | FIX REQUIRED | M6 |
+| Position recovery / position reconciliation | present on `RuntimeContext`, absent from `DashboardData` and active canonical UI projection | FIX REQUIRED | M7 |
+| Decision actionability | direction exists in canonical decision engine; no distinct actionability field was found | FIX REQUIRED | M1/M4/M6 |
+| Legacy OI-history UI derivation and zero-default flow counters | `app/pages/option_chain.py` vs canonical `OIFlowEngine` states | FIX REQUIRED | M2 |
+| Legacy runtime/replay placeholder controls and stale “Coming Soon” surfaces | `app/pages/runtime.py`, `app/pages/replay.py` | FIX REQUIRED | M2/M9 |
+| Legacy default/fallback presentation (`0`, `-`, `--`, READY) | reachable `app/*` compatibility components | FIX REQUIRED where semantics can misrepresent missing/unknown state | M2/M9 |
+| Canonical generic analytics expander | `dashboard/app.py` explicitly renders `DashboardData.analytics` | VALIDATED as compatibility/audit surface | M1/M9 |
+| Provider timestamp / freshness / integrity propagation | `INDMoneyProvider` + `MarketDataPipeline` + provenance tests | VALIDATED | M3/M5 |
+
+Audit conclusion: there is no unexplained canonical market-data/analytics rendering path remaining within the audited surface. The remaining gaps are explicit contract/UI omissions or reachable legacy compatibility findings and are assigned to downstream milestones rather than hidden or treated as complete.
+
+Evidence files/tests inspected: `dashboard/app.py`, `dashboard/dashboard_controller.py`, `models/dashboard_data.py`, `models/market_context.py`, `core/runtime_context.py`, `analytics/analytics_pipeline.py`, `decision/decision_engine.py`, `decision/decision_builder.py`, `analytics/oi/oi_flow_engine.py`, `providers/indmoney_provider.py`, `engine/market_data_pipeline.py`, `tests/test_dashboard_canonical_field_disposition.py`, `tests/test_market_data_pipeline_provenance.py`, `tests/test_streamlit_runtime_ui_contract.py`, plus audited canonical/legacy UI components.
+Boundary date: 2026-09-06.
+Boundary commit: recorded in final M0 evidence closure commit.
+
+**Next action:** close the M0 evidence record, then begin M1 canonical Dashboard contract from the first FIX REQUIRED contract gap without changing unrelated legacy behavior.
+
+**Exit gate:** every identified surface and field has an explicit evidence-backed disposition.
 
 ## M1 — Canonical Dashboard contract
 **Status: NOT STARTED**
@@ -360,7 +388,7 @@ Boundary commit: `3cc34c22f2b062988317cb3389d356b92063a37e`.
 - [ ] Regression coverage for every correction
 
 ## M3 — Live option-chain UI certification
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Live expiry/spot
 - [ ] Expected/received/missing contracts
@@ -373,7 +401,7 @@ Boundary commit: `3cc34c22f2b062988317cb3389d356b92063a37e`.
 - [ ] No silent substitution
 
 ## M4 — Analytics/intelligence UI certification
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] All analytics fields and semantics
 - [ ] Direction/actionability/decision
@@ -384,7 +412,7 @@ Boundary commit: `3cc34c22f2b062988317cb3389d356b92063a37e`.
 - [ ] Historical/replay isolation
 
 ## M5 — Provenance/data-quality UI
-**Status: NOT STARTED
+**Status: NOT STARTED**
 
 - [ ] Source/provider
 - [ ] Observation/processing timestamps
@@ -482,20 +510,20 @@ Boundary commit: `3cc34c22f2b062988317cb3389d356b92063a37e`.
 
 | Domain | Canonical source | Adapter/presenter | UI | Status | Evidence |
 |---|---|---|---|---|---|
-| Spot | M0 audit | Pending | Pending | PENDING | — |
-| Expiry | M0 audit | Pending | Pending | PENDING | — |
-| Option chain | M0 audit | Pending | Pending | PENDING | — |
-| Greeks | M0 audit | Pending | Pending | PENDING | — |
-| GEX / DEX | M0 audit | Pending | Pending | PENDING | — |
-| Gamma walls / flip | M0 audit | Pending | Pending | PENDING | — |
-| Expected Move / Max Pain / PCR | M0 audit | Pending | Pending | PENDING | — |
-| IV skew / dealer flow | M0 audit | Pending | Pending | PENDING | — |
-| Market structure | M0 audit | Pending | Pending | PENDING | — |
-| Direction / actionability | M0 audit | Pending | Pending | PENDING | — |
-| Decision / intelligence | M0 audit | Pending | Pending | PENDING | — |
-| Provenance / freshness / integrity | M0 audit | Pending | Pending | PENDING | — |
-| Execution | Canonical execution contract | Pending | Pending | PENDING | — |
-| Position / recovery / reconciliation | Canonical position state | Pending | Pending | PENDING | — |
+| Spot | RuntimeContext / MarketDataPipeline | DashboardController | header/market summary | VALIDATED | B7/B9 |
+| Expiry | RuntimeContext / instrument resolution | DashboardController / market summary adapter | header/market summary | VALIDATED | B7/B9 |
+| Option chain | RuntimeContext / MarketDataPipeline | DashboardController | option_chain / OI heatmap | VALIDATED | B7/B9 |
+| Greeks | LiveEngine / AnalyticsPipeline | DashboardController | greeks table / charts / heatmaps | VALIDATED | B7/B9 |
+| GEX / DEX | MarketContext dealer/dealer_flow + Greeks | DashboardController | dealer / flow / charts | VALIDATED | B7/B9 |
+| Gamma walls / flip | MarketContext + DealerData | DashboardController | dealer / banner / option-chain annotations | VALIDATED | B6/B9 |
+| Expected Move / Max Pain / PCR | MarketContext | market_summary_adapter + cards | canonical cards | VALIDATED | B7/B9 |
+| IV skew / dealer flow | IV skew typed in MarketContext; dealer_flow dedicated | no dedicated skew adapter; dealer_flow direct | dealer flow card; skew compatibility-only | INTENTIONALLY UNAVAILABLE for dedicated skew UI | B5/B9 |
+| Market structure | MarketContext | DashboardController | market_structure card | VALIDATED | B6/B9 |
+| Direction / actionability | DecisionEngine / DecisionBuilder | decision_adapter | signal/banner/intelligence; actionability absent | FIX REQUIRED for distinct actionability field | B9 |
+| Decision / intelligence | DecisionEngine / Intelligence | decision/intelligence adapters | signal/intelligence cards | VALIDATED except actionability gap | B9 |
+| Provenance / freshness / integrity | RuntimeDataProvenance / option-chain integrity | provenance_adapter | header/option-chain/intelligence/runtime | VALIDATED | B7/B9 |
+| Execution | RuntimeContext execution state | no canonical DashboardData adapter | no active canonical execution UI | FIX REQUIRED | B9 |
+| Position / recovery / reconciliation | RuntimeContext position state | no canonical DashboardData adapter | position fields partly present; recovery/reconciliation absent | FIX REQUIRED | B9 |
 
 No unresolved `TBD`/`PENDING` entry may remain after the relevant milestone exit gate.
 
@@ -536,6 +564,9 @@ No unresolved `TBD`/`PENDING` entry may remain after the relevant milestone exit
 - No real-money order placement is executed by tests.
 - Live execution remains uncertified until runtime evidence proves the complete decision → risk → intent → broker → result → reconciliation path.
 - Production UI remains uncertified until browser/runtime evidence proves the canonical DashboardData projection is rendered without divergence.
+- The legacy `app/*` Streamlit path remains a reachable compatibility surface. Its explicit UI-side calculations/fallbacks and stale placeholder controls are known findings assigned to M2/M9; they are not treated as canonical data paths.
+- `DecisionEngine` / `DecisionBuilder` currently expose direction/signal and confidence but no distinct actionability contract; this remains a deliberate FIX REQUIRED gap for M1/M4/M6 rather than an inferred equivalence.
+- `RuntimeContext` carries execution intent/result/lifecycle and position recovery/reconciliation, but `DashboardData` does not currently project those fields; this remains a FIX REQUIRED gap for M6/M7.
 
 ---
 
@@ -587,7 +618,8 @@ Inventory and gap analysis remains the active workstream. Backend capability doe
 - B6 — UI-rendered field inventory and legacy-field classification: complete. Canonical dashboard rendering is traced across identity, decision, intelligence, analytics, option-chain/Greeks, provenance and runtime fields; legacy UI fields/defaults are recorded as compatibility-path findings.
 - B7 — provider → canonical backend → DashboardData → adapter → UI field-family trace: complete. Provider normalization, runtime provenance, canonical analytics, DashboardData projection and UI adapter/presenter consumption are evidenced; no behavior changed in this boundary.
 - B8 — UI-side recomputation / fallback audit: complete. Canonical dashboard rendering remains projection/presentation-only; legacy compatibility paths contain explicit derived display logic and fallback semantics, including OI-flow zero defaults that conflict with canonical UNKNOWN/NO_CHANGE distinctions. These findings are deferred to M2 unless they are required to close a certified canonical UI path.
-- Next boundary: identify missing DashboardData-backed fields and unused backend capabilities, then build and disposition the complete M0 gap matrix.
+- B9 — final M0 gap matrix and disposition classification: complete. All audited field families and reachable UI findings are classified as VALIDATED, FIX REQUIRED, INTENTIONALLY UNAVAILABLE, or UNSUPPORTED with downstream milestone ownership. Remaining action is final evidence closure.
+- Next boundary: M0 evidence closure commit, then M1 contract work beginning from the first FIX REQUIRED canonical gap.
 
 ---
 
