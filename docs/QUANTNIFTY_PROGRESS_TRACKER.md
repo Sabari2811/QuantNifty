@@ -189,7 +189,7 @@ Canonical state includes `market_context`, `analytics`, `data_provenance`, `deci
 - [x] Inventory canonical DashboardData models
 - [x] Inventory backend-produced fields
 - [x] Inventory every UI-rendered field
-- [ ] Map provider → canonical backend → DashboardData → adapter → UI
+- [x] Map provider → canonical backend → DashboardData → adapter → UI
 - [ ] Identify UI-side calculations/recomputation
 - [ ] Identify hardcoded/default/fallback values
 - [x] Identify stale/legacy UI paths
@@ -297,9 +297,22 @@ Legacy components also contain explicit display defaults such as `"-"`, `"--"`, 
 
 Evidence files inspected: `dashboard/components/*` canonical renderers; `app/components/hero_header.py`, `kpi_cards.py`, `ai_decision_card.py`, `market_intelligence_card.py`, `active_position_card.py`, `checklist_panel.py`, `market_map_panel.py`, `trade_plan_card.py`, `live_option_chain.py`.
 Boundary date: 2026-09-06.
-Boundary commit: recorded in tracker update following B6.
+Boundary commit: `3cc34c22f2b062988317cb3389d356b92063a37e`.
 
-**Next action:** map provider → canonical backend → DashboardData → adapter → UI for each major field family and distinguish canonical projections from legacy compatibility paths.
+### M0 boundary B7 — Provider → canonical backend → DashboardData → adapter → UI field-family trace
+**Status: COMPLETE**
+
+- Provider identity/source: `providers/indmoney_provider.py` supplies normalized spot/option/historical quote data and preserves provider timestamps; market-data normalization does not synthesize market values.
+- Live market-data provenance: `engine/market_data_pipeline.py` populates `RuntimeContext.data_provenance` for spot, option-chain and candles, including coverage, freshness, timestamp and integrity state; option-chain integrity is attached to the same-cycle dataframe/context.
+- Canonical analytics: `engine/live_engine.py` runs `MarketDataPipeline`, verifies option-chain readiness, runs `AnalyticsPipeline`, promotes `MarketContext`, creates the canonical `MarketSnapshot`, builds Decision/Intelligence and carries the runtime state forward.
+- Dashboard projection: `dashboard/dashboard_controller.py` maps `RuntimeContext.market_context` and other same-cycle runtime artifacts to typed `DashboardData`.
+- UI adapter/presenter: `dashboard/decision_adapter.py`, `market_summary_adapter.py`, `intelligence_adapter.py`, `provenance_adapter.py` and the component presenters consume the DashboardData projection; `option_chain.render()` receives same-cycle option chain, Greeks, provenance and integrity.
+- Evidence for field dispositions: `tests/test_dashboard_canonical_field_disposition.py` proves all typed canonical analytics fields have exactly one disposition: dedicated DashboardData, existing canonical mapping, or generic analytics-only compatibility surface. `tests/test_market_data_pipeline_provenance.py` proves provider timestamps/freshness/integrity survive into runtime provenance.
+- No runtime behavior was changed in this boundary; this is a field-family trace and evidence classification only.
+- Boundary date: 2026-09-06.
+- Boundary commit: recorded in tracker update following B7.
+
+**Next action:** audit UI-side calculations/recomputation and hardcoded/default/fallback semantics across canonical and reachable legacy surfaces, then classify each as VALIDATED / FIX REQUIRED / INTENTIONALLY UNAVAILABLE / UNSUPPORTED.
 
 **Exit gate:** zero unexplained UI surfaces or fields.
 
@@ -559,7 +572,8 @@ Inventory and gap analysis remains the active workstream. Backend capability doe
 - B4 — canonical DashboardData model and field inventory: complete. Dedicated UI fields are typed in `DashboardData`; generic `analytics` is retained only as compatibility/display projection; additional typed MarketContext fields require explicit downstream disposition.
 - B5 — backend-produced canonical analytics inventory: complete. `AnalyticsPipeline` and `RuntimeContext` expose the canonical analytics surface without calculation changes; typed fields and compatibility projection are explicitly distinguished.
 - B6 — UI-rendered field inventory and legacy-field classification: complete. Canonical dashboard rendering is traced across identity, decision, intelligence, analytics, option-chain/Greeks, provenance and runtime fields; legacy UI fields/defaults are recorded as compatibility-path findings.
-- Next boundary: provider → canonical backend → DashboardData → adapter → UI mapping by field family.
+- B7 — provider → canonical backend → DashboardData → adapter → UI field-family trace: complete. Provider normalization, runtime provenance, canonical analytics, DashboardData projection and UI adapter/presenter consumption are evidenced; no behavior changed in this boundary.
+- Next boundary: audit UI-side calculations/recomputation and hardcoded/default/fallback semantics.
 
 ---
 
