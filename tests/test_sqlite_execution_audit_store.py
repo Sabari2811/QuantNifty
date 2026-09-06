@@ -41,27 +41,29 @@ def test_sqlite_store_survives_reopen(tmp_path):
         assert reopened.records() == (record,)
 
 
-def test_sqlite_store_is_idempotent_for_identical_record(tmp_path):
+def test_sqlite_store_is_append_only_for_repeated_events(tmp_path):
     path = tmp_path / "execution_audit.sqlite"
     record = ExecutionAuditRecord.from_result(make_result())
 
     with SQLiteExecutionAuditStore(path) as store:
         store.append(record)
         store.append(record)
-        assert store.records() == (record,)
+        assert store.get("client-1") == record
+        assert store.records() == (record, record)
 
 
-def test_sqlite_store_rejects_conflicting_record(tmp_path):
+def test_sqlite_store_allows_conflicting_lifecycle_event_for_same_client_identity(tmp_path):
     path = tmp_path / "execution_audit.sqlite"
-    record = ExecutionAuditRecord.from_result(make_result())
-    conflicting = ExecutionAuditRecord.from_result(
+    executed = ExecutionAuditRecord.from_result(make_result())
+    rejected = ExecutionAuditRecord.from_result(
         make_result(status=ExecutionStatus.REJECTED)
     )
 
     with SQLiteExecutionAuditStore(path) as store:
-        store.append(record)
-        with pytest.raises(ValueError, match="already exists"):
-            store.append(conflicting)
+        store.append(executed)
+        store.append(rejected)
+        assert store.get("client-1") == rejected
+        assert store.records() == (executed, rejected)
 
 
 def test_sqlite_store_loads_only_ambiguous_records(tmp_path):
