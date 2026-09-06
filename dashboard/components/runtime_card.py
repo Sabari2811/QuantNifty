@@ -1,3 +1,5 @@
+import math
+
 import streamlit as st
 
 
@@ -6,7 +8,7 @@ def _status_icon(status: str):
     if not status:
         return "⚪"
 
-    status = status.upper()
+    status = str(status).upper()
 
     if status in ("RUNNING", "EXECUTED"):
         return "🟢"
@@ -21,6 +23,14 @@ def _status_icon(status: str):
         return "❌"
 
     return "⚪"
+
+
+def _display(value, missing="UNAVAILABLE"):
+    if value is None:
+        return missing
+    if isinstance(value, float) and not math.isfinite(value):
+        return missing
+    return value
 
 
 def _metric(label, value):
@@ -40,23 +50,21 @@ def render(dashboard):
 
     with st.container(border=True):
 
+        runtime_status = _display(dashboard.runtime_status)
         runtime = (
-            f"{_status_icon(dashboard.runtime_status)} "
-            f"{dashboard.runtime_status}"
+            f"{_status_icon(runtime_status)} "
+            f"{runtime_status}"
         )
 
+        trade_status = _display(dashboard.trade_status)
         trade = (
-            f"{_status_icon(dashboard.trade_status)} "
-            f"{dashboard.trade_status or '-'}"
+            f"{_status_icon(trade_status)} "
+            f"{trade_status}"
         )
 
-        position = "YES" if dashboard.position else "NO"
+        position = "YES" if dashboard.position is True else "NO" if dashboard.position is False else "UNAVAILABLE"
 
-        last_trade = (
-            "AVAILABLE"
-            if dashboard.last_trade
-            else "-"
-        )
+        last_trade = "AVAILABLE" if dashboard.last_trade is not None else "UNAVAILABLE"
 
         _metric(
             "Runtime",
@@ -65,7 +73,7 @@ def render(dashboard):
 
         _metric(
             "Cycle",
-            dashboard.cycle_no
+            _display(dashboard.cycle_no)
         )
 
         _metric(
@@ -75,7 +83,7 @@ def render(dashboard):
 
         _metric(
             "Block Reason",
-            dashboard.trade_block_reason or "-"
+            _display(dashboard.trade_block_reason)
         )
 
         _metric(
