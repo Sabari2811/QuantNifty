@@ -23,4 +23,9 @@ def build_ui_runtime_contract(dashboard) -> dict:
         "greeks": dashboard.greeks,
         "provenance": dashboard.data_provenance,
         "option_chain_integrity": dashboard.option_chain_integrity,
+        "execution_intent": dashboard.execution_intent,
+        "execution_result": dashboard.execution_result,
+        "execution_lifecycle": dashboard.execution_lifecycle,
+        "position_recovery": dashboard.position_recovery,
+        "position_reconciliation": dashboard.position_reconciliation,
     }
