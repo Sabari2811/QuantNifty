@@ -1,5 +1,3 @@
-import math
-
 from dashboard.components.kpi_cards import _display_percent
 
 
