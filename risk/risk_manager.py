@@ -5,6 +5,10 @@ from risk.risk_state import RiskState
 
 class RiskManager:
 
+    # ------------------------------------
+    # Configuration
+    # ------------------------------------
+
     MAX_DAILY_LOSS = -5000
     MAX_TRADES_PER_DAY = 10
     MAX_OPEN_POSITIONS = 1
@@ -121,29 +125,36 @@ class RiskManager:
         execution = trade.execution
         investment = trade.entry * execution.lot_size * execution.lots
         if investment > self.MAX_CAPITAL_PER_TRADE:
-            return False, "Capital Per Trade Limit"
+            return False, "Capital Per Trade Exceeded"
         return True, ""
 
     def _capital_utilization(self, broker):
-        capital = broker.portfolio.capital
-        if capital <= 0:
+        p = broker.portfolio
+        used = p.invested_amount
+        if p.capital == 0:
             return False, "Invalid Capital"
-        if broker.portfolio.invested_amount / capital > self.MAX_CAPITAL_USAGE:
-            return False, "Capital Usage Limit"
+        if (used / p.capital) >= self.MAX_CAPITAL_USAGE:
+            return False, "Capital Utilization Exceeded"
         return True, ""
 
     def _loss_limit(self):
-        if self.state.todays_pnl <= self.MAX_DAILY_LOSS:
-            return False, "Daily Loss Limit Hit"
+        if self.state.consecutive_losses >= self.MAX_CONSECUTIVE_LOSSES:
+            return False, "Consecutive Loss Limit"
         return True, ""
 
     def _cooldown(self):
-        if self.state.cooldown_until is not None and datetime.now() < self.state.cooldown_until:
-            return False, "Risk Cooldown Active"
+        if self.state.cooldown_until is None:
+            return True, ""
+        if datetime.now() < self.state.cooldown_until:
+            return False, "Cooldown Active"
+        self.state.cooldown_until = None
         return True, ""
 
     def _reset_if_new_day(self):
-        # Preserve existing state-reset behavior when present.
-        reset = getattr(self.state, "reset_if_new_day", None)
-        if callable(reset):
-            reset()
+        today = datetime.now().date()
+        if (
+            self.state.trading_day is None or
+            self.state.trading_day.date() != today
+        ):
+            self.state.reset()
+            self.state.trading_day = datetime.now()
