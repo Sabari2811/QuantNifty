@@ -28,6 +28,16 @@ class LiveINDMoneyExecutionAdapter:
         try:
             request = self.build_request(intent)
             response = self.provider.place_order(request)
+        except (TimeoutError, ConnectionError) as exc:
+            # A transport timeout/disconnect does not establish whether the
+            # broker accepted the order.  Treat it as UNKNOWN so callers must
+            # reconcile before retrying; never turn it into a retry-safe FAILED.
+            return ExecutionResult(
+                status=ExecutionStatus.UNKNOWN,
+                intent=intent,
+                reason=f"INDMoney order submission outcome is unknown: {exc}",
+                raw=None,
+            )
         except Exception as exc:
             return ExecutionResult(
                 status=ExecutionStatus.FAILED,
