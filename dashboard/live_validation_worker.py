@@ -60,7 +60,7 @@ def _poll_loop(interval_seconds=60):
 
 
 def start_live_validation_worker():
-    """Start one validation-only background worker for the Render service."""
+    """Start one validation-only background worker for embedding hosts."""
     global _worker_started
     enabled = os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() == "true"
     if not enabled:
@@ -78,3 +78,24 @@ def start_live_validation_worker():
         thread.start()
     logger.info("LIVE VALIDATION WORKER STARTED")
     return True
+
+
+def run_live_validation_worker(interval_seconds=60):
+    """Run the validation worker as a foreground process.
+
+    This is the autonomous deployment entry point. It is intentionally
+    separate from Streamlit so live validation does not depend on a browser
+    session being connected to the dashboard.
+    """
+    enabled = os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() == "true"
+    if not enabled:
+        logger.info("LIVE VALIDATION WORKER DISABLED | set LIVE_VALIDATION_MODE=true to enable")
+        return 0
+
+    logger.info("LIVE VALIDATION WORKER FOREGROUND START | interval=%ss", interval_seconds)
+    _poll_loop(interval_seconds=interval_seconds)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(run_live_validation_worker())
