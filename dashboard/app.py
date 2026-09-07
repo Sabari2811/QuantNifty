@@ -15,6 +15,7 @@ from dashboard.dashboard_controller import DashboardController
 from dashboard.market_summary_adapter import adapt_market_summary
 from dashboard.decision_adapter import adapt_decision
 from dashboard.ui_runtime_contract import build_ui_runtime_contract
+from dashboard.live_validation_worker import start_live_validation_worker
 from dashboard.components import institutional_score_card
 from dashboard.components import intelligence_card
 
@@ -46,6 +47,13 @@ st.set_page_config(
     page_icon="📈",
     layout="wide",
 )
+
+
+# The validation Render service can continuously exercise the live provider
+# during NSE market hours without requiring a browser session. The worker uses
+# LiveEngine with the existing PaperBroker execution boundary, so this path
+# never submits real broker orders.
+start_live_validation_worker()
 
 
 @st.cache_resource
