@@ -64,14 +64,20 @@ def _initialize_runtime():
     return evidence_store, brain, provider, engine
 
 
+def _persistence_status(evidence_store, brain):
+    """Report durable persistence only when both required stores are durable."""
+    brain_durable = getattr(brain.store, "_sql_store", None) is not None
+    evidence_durable = bool(getattr(evidence_store, "durable", False))
+    return "DURABLE_DATABASE" if brain_durable and evidence_durable else "LOCAL_OR_PARTIAL"
+
+
 def run_validation_cycle(evidence_store, brain, provider, engine):
     """Execute exactly one validation-only live cycle and persist its evidence."""
     ctx = engine.run_cycle()
     brain_result = brain.observe(ctx, broker=engine.paper_broker)
     ctx.brain_status = brain_result.status
     ctx.learning_status = "LEARNED" if brain_result.status == "LEARNED" else "PENDING_OUTCOME"
-    persistence = "DURABLE_DATABASE" if getattr(brain.store, "_sql_store", None) is not None else "LOCAL_EPHEMERAL"
-    ctx.persistence_status = persistence
+    ctx.persistence_status = _persistence_status(evidence_store, brain)
 
     # The worker itself is the authoritative source for provider mode;
     # never fall back to an environment variable that could mislabel a
