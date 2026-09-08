@@ -1,8 +1,4 @@
-"""Durable, fail-closed evidence for genuine live validation cycles.
-
-This module records validation evidence without treating a successful engine cycle
-as proof of live data. Callers must explicitly provide LIVE_PROVIDER evidence.
-"""
+"""Durable, fail-closed evidence for genuine live validation cycles."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -33,10 +29,23 @@ class LiveCycleEvidence:
 
 
 def _is_live_provider(provider: Any, provider_mode: Any) -> bool:
-    return str(provider or "").strip().upper() in {"INDMONEY", "INDSTOCKS", "INDSTOCKS_PROVIDER"} and str(provider_mode or "").strip().upper() == "LIVE_PROVIDER"
+    return (
+        str(provider or "").strip().upper()
+        in {"INDMONEY", "INDSTOCKS", "INDSTOCKS_PROVIDER"}
+        and str(provider_mode or "").strip().upper() == "LIVE_PROVIDER"
+    )
 
 
-def build_live_cycle_evidence(ctx: Any, *, provider: str = "INDMONEY", provider_mode: str = "LIVE_PROVIDER", brain_status: Any = None, learning_status: Any = None, persistence_status: Any = None) -> LiveCycleEvidence:
+def build_live_cycle_evidence(
+    ctx: Any,
+    *,
+    provider: str | None = None,
+    provider_mode: str | None = None,
+    brain_status: Any = None,
+    learning_status: Any = None,
+    persistence_status: Any = None,
+) -> LiveCycleEvidence:
+    """Build evidence; missing identity is never assumed to be live."""
     provenance = getattr(ctx, "data_provenance", None)
     option = getattr(provenance, "option_chain", None) if provenance else None
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -44,8 +53,8 @@ def build_live_cycle_evidence(ctx: Any, *, provider: str = "INDMONEY", provider_
     evidence_state = "VALID_LIVE" if valid else "INVALID_NOT_LIVE"
     return LiveCycleEvidence(
         timestamp=timestamp,
-        provider=str(provider),
-        provider_mode=str(provider_mode),
+        provider=str(provider or "UNKNOWN"),
+        provider_mode=str(provider_mode or "UNKNOWN"),
         cycle_no=getattr(ctx, "cycle_no", None),
         spot=getattr(ctx, "spot", None),
         option_chain_coverage=getattr(option, "coverage_status", None),
@@ -62,7 +71,7 @@ def build_live_cycle_evidence(ctx: Any, *, provider: str = "INDMONEY", provider_
 
 
 class JsonlLiveEvidenceStore:
-    """Append-only local evidence store suitable for Render persistent mounts."""
+    """Append-only local evidence store."""
 
     def __init__(self, path: str | os.PathLike[str] | None = None):
         self.path = Path(path or os.getenv("LIVE_EVIDENCE_PATH", "runtime_data/live_validation.jsonl"))
