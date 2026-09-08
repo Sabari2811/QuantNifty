@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from monitoring.live_session_evidence import JsonlLiveEvidenceStore, build_live_cycle_evidence
+from monitoring.live_session_evidence import (
+    JsonlLiveEvidenceStore,
+    SqlLiveEvidenceStore,
+    build_live_cycle_evidence,
+)
 
 
 class Provenance:
@@ -41,3 +45,18 @@ def test_store_is_append_only_and_durable(tmp_path: Path):
     store.append(evidence)
     store.append(evidence)
     assert store.count() == 2
+
+
+def test_sql_live_evidence_restores_count_after_restart(tmp_path: Path):
+    url = f"sqlite:///{tmp_path / 'evidence.db'}"
+    evidence = build_live_cycle_evidence(Ctx(), provider="INDMONEY", provider_mode="LIVE_PROVIDER")
+
+    first = SqlLiveEvidenceStore(url)
+    first.append(evidence)
+    first.append(evidence)
+    assert first.count() == 2
+    first.close()
+
+    restarted = SqlLiveEvidenceStore(url)
+    assert restarted.count() == 2
+    restarted.close()
