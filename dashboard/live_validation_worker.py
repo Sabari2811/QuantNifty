@@ -4,6 +4,7 @@ import time
 from datetime import datetime, time as dt_time
 from zoneinfo import ZoneInfo
 
+from brain.adaptive_brain import AdaptiveBrain
 from core.logger import logger
 from engine.live_engine import LiveEngine
 from monitoring.live_session_evidence import JsonlLiveEvidenceStore, build_live_cycle_evidence
@@ -26,6 +27,7 @@ def is_nse_derivatives_session_open(now=None):
 
 def _poll_loop(interval_seconds=60):
     evidence_store = JsonlLiveEvidenceStore()
+    brain = AdaptiveBrain()
     try:
         provider = INDMoneyProvider()
         engine = LiveEngine(provider=provider)
@@ -42,15 +44,23 @@ def _poll_loop(interval_seconds=60):
                 continue
 
             ctx = engine.run_cycle()
+            brain_result = brain.observe(ctx, broker=engine.paper_broker)
+            ctx.brain_status = brain_result.status
+            ctx.learning_status = "LEARNED" if brain_result.status == "LEARNED" else "PENDING_OUTCOME"
+            ctx.persistence_status = "BRAIN_AND_EVIDENCE_PERSISTED" if brain_result.persisted else "PERSISTENCE_FAILED"
+
+            # The worker itself is the authoritative source for provider mode;
+            # never fall back to an environment variable that could mislabel a
+            # replay/simulation process as live.
             provider_name = getattr(provider, "provider_name", None) or getattr(provider, "name", None) or "INDMONEY"
-            provider_mode = getattr(provider, "mode", None) or getattr(provider, "provider_mode", None) or os.getenv("PROVIDER_MODE", "LIVE_PROVIDER")
+            provider_mode = "LIVE_PROVIDER" if isinstance(provider, INDMoneyProvider) else "UNKNOWN"
             evidence = build_live_cycle_evidence(
                 ctx,
                 provider=str(provider_name),
-                provider_mode=str(provider_mode),
-                brain_status=getattr(ctx, "brain_status", None),
-                learning_status=getattr(ctx, "learning_status", None),
-                persistence_status=getattr(ctx, "persistence_status", None),
+                provider_mode=provider_mode,
+                brain_status=ctx.brain_status,
+                learning_status=ctx.learning_status,
+                persistence_status=ctx.persistence_status,
             )
             evidence_store.append(evidence)
             provenance = getattr(ctx, "data_provenance", None)
@@ -58,7 +68,8 @@ def _poll_loop(interval_seconds=60):
             logger.info(
                 "LIVE VALIDATION CYCLE | timestamp=%s | cycle=%s | spot=%s | runtime=%s | "
                 "trade_status=%s | block_reason=%s | option_chain_coverage=%s | option_chain_integrity=%s | "
-                "provider=%s | provider_mode=%s | evidence=%s | evidence_count=%s",
+                "provider=%s | provider_mode=%s | brain=%s | learning=%s | persistence=%s | "
+                "evidence=%s | evidence_count=%s",
                 now.isoformat(),
                 getattr(ctx, "cycle_no", None),
                 getattr(ctx, "spot", None),
@@ -69,6 +80,9 @@ def _poll_loop(interval_seconds=60):
                 getattr(option_provenance, "integrity_status", None),
                 evidence.provider,
                 evidence.provider_mode,
+                evidence.brain_status,
+                evidence.learning_status,
+                evidence.persistence_status,
                 evidence.evidence_state,
                 evidence_store.count(),
             )
@@ -100,12 +114,7 @@ def start_live_validation_worker():
 
 
 def run_live_validation_worker(interval_seconds=60):
-    """Run the validation worker as a foreground process.
-
-    This is the autonomous deployment entry point. It is intentionally
-    separate from Streamlit so live validation does not depend on a browser
-    session being connected to the dashboard.
-    """
+    """Run validation as a foreground process, independent of Streamlit."""
     enabled = os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() == "true"
     if not enabled:
         logger.info("LIVE VALIDATION WORKER DISABLED | set LIVE_VALIDATION_MODE=true to enable")
