@@ -1,18 +1,11 @@
+"""Compatibility facade for the canonical intelligence similarity engine.
+
+The implementation lives under ``analytics.intelligence.similarity``. This
+module remains import-compatible with older callers while eliminating the
+legacy NotImplementedError stub.
+"""
 from __future__ import annotations
 
+from analytics.intelligence.similarity.similarity_engine import SimilarityEngine
 
-class SimilarityEngine:
-    """
-    Finds historically similar
-    Trade Intelligence records.
-    """
-
-    def search(
-        self,
-        current,
-        history,
-    ):
-
-        raise NotImplementedError(
-            "Similarity algorithm coming next."
-        )
+__all__ = ["SimilarityEngine"]
