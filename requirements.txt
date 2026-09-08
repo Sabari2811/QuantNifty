@@ -42,11 +42,11 @@ ipython==9.15.0
 ipython_pygments_lexers==1.1.1
 ipywidgets==8.1.8
 isoduration==20.11.0
-itsdangerous==2.2.1
+itsdangerous==2.2.0
 jedi==0.20.0
 Jinja2==3.1.6
 json5==0.15.0
-jsonpointer==3.0.0
+jsonpointer==3.1.1
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 jupyter==1.1.1
@@ -97,7 +97,7 @@ prompt_toolkit==3.0.52
 protobuf==7.35.1
 psutil==7.2.2
 psycopg[binary]==3.2.9
-pure_eval==2.0.0
+pure_eval==0.2.3
 py-vollib==1.0.12
 py-vollib-vectorized==0.1.1
 py_lets_be_rational==1.1.2
