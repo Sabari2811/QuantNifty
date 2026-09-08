@@ -1,8 +1,8 @@
 """Deterministic adaptive-learning layer for live validation.
 
 The Brain is downstream of the authoritative decision/analytics pipeline. It
-never changes a live decision. It captures the market fingerprint, uses only
-resolved outcomes for learning, and keeps unresolved observations pending.
+never changes a live decision. It captures market fingerprints, uses only
+resolved outcomes for learning, and restores learned history after restart.
 """
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from typing import Any
 
 from analytics.intelligence.feature_extractor import FeatureExtractor
 from analytics.intelligence.memory_engine import MarketMemory
+from analytics.intelligence.models import TradeIntelligenceRecord
 from analytics.intelligence.similarity_engine import SimilarityEngine
 
 
@@ -43,11 +44,25 @@ class BrainStore:
             fh.flush()
             os.fsync(fh.fileno())
 
-    def count(self) -> int:
+    def records(self) -> list[dict[str, Any]]:
         if not self.path.exists():
-            return 0
+            return []
+        records = []
         with self.path.open("r", encoding="utf-8") as fh:
-            return sum(1 for line in fh if line.strip())
+            for line in fh:
+                if not line.strip():
+                    continue
+                try:
+                    payload = json.loads(line)
+                    if isinstance(payload, dict):
+                        records.append(payload)
+                except json.JSONDecodeError:
+                    # A torn final line must not destroy prior learned history.
+                    continue
+        return records
+
+    def count(self) -> int:
+        return len(self.records())
 
 
 class AdaptiveBrain:
@@ -58,6 +73,20 @@ class AdaptiveBrain:
         self.similarity = SimilarityEngine()
         self.memory = MarketMemory()
         self.store = store or BrainStore()
+        self._restore_history()
+
+    def _restore_history(self) -> None:
+        for payload in self.store.records():
+            raw = payload.get("record")
+            if not isinstance(raw, dict):
+                continue
+            try:
+                fields = {k: v for k, v in raw.items() if k in TradeIntelligenceRecord.__dataclass_fields__}
+                if isinstance(fields.get("reasons"), list):
+                    fields["reasons"] = list(fields["reasons"])
+                self.memory.add(TradeIntelligenceRecord(**fields))
+            except (TypeError, ValueError):
+                continue
 
     @staticmethod
     def _resolved_outcome(ctx: Any, broker: Any = None) -> str:
