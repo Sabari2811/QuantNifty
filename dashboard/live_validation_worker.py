@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from brain.adaptive_brain import AdaptiveBrain
 from core.logger import logger
 from engine.live_engine import LiveEngine
-from monitoring.live_session_evidence import JsonlLiveEvidenceStore, build_live_cycle_evidence
+from monitoring.live_session_evidence import build_live_cycle_evidence, create_live_evidence_store
 from providers.indmoney_provider import INDMoneyProvider
 
 
@@ -26,12 +26,17 @@ def is_nse_derivatives_session_open(now=None):
 
 
 def _poll_loop(interval_seconds=60):
-    evidence_store = JsonlLiveEvidenceStore()
-    brain = AdaptiveBrain()
     try:
+        evidence_store = create_live_evidence_store()
+        brain = AdaptiveBrain()
         provider = INDMoneyProvider()
         engine = LiveEngine(provider=provider)
-        logger.info("LIVE VALIDATION WORKER READY | interval=%ss", interval_seconds)
+        logger.info(
+            "LIVE VALIDATION WORKER READY | interval=%ss | evidence_store=%s | brain_store=%s",
+            interval_seconds,
+            type(evidence_store).__name__,
+            type(brain.store).__name__,
+        )
     except Exception:
         logger.exception("LIVE VALIDATION WORKER INIT FAILED")
         return
@@ -47,7 +52,8 @@ def _poll_loop(interval_seconds=60):
             brain_result = brain.observe(ctx, broker=engine.paper_broker)
             ctx.brain_status = brain_result.status
             ctx.learning_status = "LEARNED" if brain_result.status == "LEARNED" else "PENDING_OUTCOME"
-            ctx.persistence_status = "BRAIN_AND_EVIDENCE_PERSISTED" if brain_result.persisted else "PERSISTENCE_FAILED"
+            persistence = "DURABLE_DATABASE" if getattr(brain.store, "_sql_store", None) is not None else "LOCAL_EPHEMERAL"
+            ctx.persistence_status = persistence
 
             # The worker itself is the authoritative source for provider mode;
             # never fall back to an environment variable that could mislabel a
