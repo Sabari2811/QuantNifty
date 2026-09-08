@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from core.logger import logger
 from engine.live_engine import LiveEngine
+from monitoring.live_session_evidence import JsonlLiveEvidenceStore, build_live_cycle_evidence
 from providers.indmoney_provider import INDMoneyProvider
 
 
@@ -24,8 +25,10 @@ def is_nse_derivatives_session_open(now=None):
 
 
 def _poll_loop(interval_seconds=60):
+    evidence_store = JsonlLiveEvidenceStore()
     try:
-        engine = LiveEngine(provider=INDMoneyProvider())
+        provider = INDMoneyProvider()
+        engine = LiveEngine(provider=provider)
         logger.info("LIVE VALIDATION WORKER READY | interval=%ss", interval_seconds)
     except Exception:
         logger.exception("LIVE VALIDATION WORKER INIT FAILED")
@@ -39,11 +42,23 @@ def _poll_loop(interval_seconds=60):
                 continue
 
             ctx = engine.run_cycle()
+            provider_name = getattr(provider, "provider_name", None) or getattr(provider, "name", None) or "INDMONEY"
+            provider_mode = getattr(provider, "mode", None) or getattr(provider, "provider_mode", None) or os.getenv("PROVIDER_MODE", "LIVE_PROVIDER")
+            evidence = build_live_cycle_evidence(
+                ctx,
+                provider=str(provider_name),
+                provider_mode=str(provider_mode),
+                brain_status=getattr(ctx, "brain_status", None),
+                learning_status=getattr(ctx, "learning_status", None),
+                persistence_status=getattr(ctx, "persistence_status", None),
+            )
+            evidence_store.append(evidence)
             provenance = getattr(ctx, "data_provenance", None)
             option_provenance = getattr(provenance, "option_chain", None) if provenance else None
             logger.info(
                 "LIVE VALIDATION CYCLE | timestamp=%s | cycle=%s | spot=%s | runtime=%s | "
-                "trade_status=%s | block_reason=%s | option_chain_coverage=%s | option_chain_integrity=%s",
+                "trade_status=%s | block_reason=%s | option_chain_coverage=%s | option_chain_integrity=%s | "
+                "provider=%s | provider_mode=%s | evidence=%s | evidence_count=%s",
                 now.isoformat(),
                 getattr(ctx, "cycle_no", None),
                 getattr(ctx, "spot", None),
@@ -52,6 +67,10 @@ def _poll_loop(interval_seconds=60):
                 getattr(ctx, "trade_block_reason", None),
                 getattr(option_provenance, "coverage_status", None),
                 getattr(option_provenance, "integrity_status", None),
+                evidence.provider,
+                evidence.provider_mode,
+                evidence.evidence_state,
+                evidence_store.count(),
             )
         except Exception:
             logger.exception("LIVE VALIDATION CYCLE FAILED")
