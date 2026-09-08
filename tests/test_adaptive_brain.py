@@ -64,3 +64,22 @@ def test_brain_restores_resolved_history_after_restart(tmp_path):
     assert result.status == "WAITING_OUTCOME"
     assert result.historical_win_rate == 100.0
     assert restarted.memory.size == 2
+
+
+def test_brain_sql_store_restores_history_after_restart(tmp_path):
+    url = f"sqlite:///{tmp_path / 'brain.db'}"
+    first_brain = AdaptiveBrain(BrainStore(database_url=url))
+    first_brain.extractor = FakeExtractor()
+    first_brain.observe(
+        SimpleNamespace(cycle_no=1),
+        broker=SimpleNamespace(last_trade=SimpleNamespace(closed=True, pnl=100.0)),
+    )
+    first_brain.store.close()
+
+    restarted = AdaptiveBrain(BrainStore(database_url=url))
+    restarted.extractor = FakeExtractor()
+    result = restarted.observe(SimpleNamespace(cycle_no=2), broker=None)
+
+    assert result.historical_win_rate == 100.0
+    assert restarted.memory.size == 2
+    restarted.store.close()
