@@ -46,3 +46,21 @@ def test_brain_learning_uses_previous_resolved_history(tmp_path):
     assert first.historical_win_rate == 0.0
     assert second.historical_win_rate == 100.0
     assert brain.store.count() == 2
+
+
+def test_brain_restores_resolved_history_after_restart(tmp_path):
+    path = tmp_path / "brain.jsonl"
+    first_brain = AdaptiveBrain(BrainStore(path))
+    first_brain.extractor = FakeExtractor()
+    first_brain.observe(
+        SimpleNamespace(cycle_no=1),
+        broker=SimpleNamespace(last_trade=SimpleNamespace(closed=True, pnl=100.0)),
+    )
+
+    restarted = AdaptiveBrain(BrainStore(path))
+    restarted.extractor = FakeExtractor()
+    result = restarted.observe(SimpleNamespace(cycle_no=2), broker=None)
+
+    assert result.status == "WAITING_OUTCOME"
+    assert result.historical_win_rate == 100.0
+    assert restarted.memory.size == 2
