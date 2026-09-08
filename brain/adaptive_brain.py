@@ -1,9 +1,8 @@
 """Deterministic adaptive-learning layer for live validation.
 
-The Brain is deliberately downstream of the authoritative decision/analytics
-pipeline. It never changes a live decision. It captures the market fingerprint,
-uses only resolved outcomes for learning, and keeps unresolved observations
-explicitly pending.
+The Brain is downstream of the authoritative decision/analytics pipeline. It
+never changes a live decision. It captures the market fingerprint, uses only
+resolved outcomes for learning, and keeps unresolved observations pending.
 """
 from __future__ import annotations
 
@@ -31,13 +30,7 @@ class BrainObservation:
 
 
 class BrainStore:
-    """Append-only JSONL persistence for Brain observations.
-
-    The file can be placed on a Render persistent disk through
-    ``BRAIN_STORE_PATH``. This store is intentionally independent from the
-    live-evidence log so learning failures cannot masquerade as market-data
-    failures.
-    """
+    """Append-only JSONL persistence for Brain observations."""
 
     def __init__(self, path: str | os.PathLike[str] | None = None):
         self.path = Path(path or os.getenv("BRAIN_STORE_PATH", "runtime_data/brain.jsonl"))
@@ -58,7 +51,7 @@ class BrainStore:
 
 
 class AdaptiveBrain:
-    """Capture live fingerprints and learn only from resolved outcomes."""
+    """Capture fingerprints and learn only from resolved paper/live outcomes."""
 
     def __init__(self, store: BrainStore | None = None):
         self.extractor = FeatureExtractor()
@@ -67,12 +60,10 @@ class AdaptiveBrain:
         self.store = store or BrainStore()
 
     @staticmethod
-    def _resolved_outcome(ctx: Any) -> str:
-        broker = getattr(ctx, "paper_broker", None)
+    def _resolved_outcome(ctx: Any, broker: Any = None) -> str:
+        broker = broker or getattr(ctx, "paper_broker", None)
         trade = getattr(broker, "last_trade", None) if broker else None
-        if trade is None:
-            return ""
-        if not getattr(trade, "closed", False):
+        if trade is None or not getattr(trade, "closed", False):
             return ""
         pnl = getattr(trade, "pnl", None)
         if pnl is None:
@@ -82,16 +73,15 @@ class AdaptiveBrain:
         except (TypeError, ValueError):
             return ""
 
-    def observe(self, ctx: Any) -> BrainObservation:
+    def observe(self, ctx: Any, broker: Any = None) -> BrainObservation:
         record = self.extractor.extract(ctx)
-        outcome = self._resolved_outcome(ctx)
+        outcome = self._resolved_outcome(ctx, broker)
         if outcome:
             record.outcome = outcome
 
         historical = [r for r in self.memory.records if r.outcome in {"WIN", "LOSS"}]
         matches = self.similarity.search(record, historical, top_n=20)
         similarity = float(matches[0][0]) if matches else 0.0
-
         signal_records = [r for r in historical if r.signal == record.signal]
         wins = sum(1 for r in signal_records if r.outcome == "WIN")
         win_rate = (wins / len(signal_records) * 100.0) if signal_records else 0.0
@@ -109,11 +99,7 @@ class AdaptiveBrain:
         })
         self.memory.add(record)
 
-        if outcome:
-            status = "LEARNED"
-        else:
-            status = "WAITING_OUTCOME"
-
+        status = "LEARNED" if outcome else "WAITING_OUTCOME"
         return BrainObservation(
             status=status,
             cycle_no=int(getattr(ctx, "cycle_no", 0) or 0),
