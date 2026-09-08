@@ -17,6 +17,7 @@ from analytics.intelligence.feature_extractor import FeatureExtractor
 from analytics.intelligence.memory_engine import MarketMemory
 from analytics.intelligence.models import TradeIntelligenceRecord
 from analytics.intelligence.similarity_engine import SimilarityEngine
+from monitoring.durable_store import SqlAppendStore
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,20 +32,35 @@ class BrainObservation:
 
 
 class BrainStore:
-    """Append-only JSONL persistence for Brain observations."""
+    """Append-only Brain persistence with optional SQL durability."""
 
-    def __init__(self, path: str | os.PathLike[str] | None = None):
-        self.path = Path(path or os.getenv("BRAIN_STORE_PATH", "runtime_data/brain.jsonl"))
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+    def __init__(
+        self,
+        path: str | os.PathLike[str] | None = None,
+        database_url: str | None = None,
+    ):
+        self._sql_store = None
+        configured_url = database_url or os.getenv("BRAIN_DATABASE_URL")
+        if configured_url:
+            self._sql_store = SqlAppendStore(configured_url, "brain_observations")
+            self.path = None
+        else:
+            self.path = Path(path or os.getenv("BRAIN_STORE_PATH", "runtime_data/brain.jsonl"))
+            self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def append(self, record: Any) -> None:
         payload = asdict(record) if hasattr(record, "__dataclass_fields__") else dict(record)
+        if self._sql_store is not None:
+            self._sql_store.append(payload)
+            return
         with self.path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(payload, default=str, sort_keys=True) + "\n")
             fh.flush()
             os.fsync(fh.fileno())
 
     def records(self) -> list[dict[str, Any]]:
+        if self._sql_store is not None:
+            return self._sql_store.records()
         if not self.path.exists():
             return []
         records = []
@@ -62,7 +78,13 @@ class BrainStore:
         return records
 
     def count(self) -> int:
+        if self._sql_store is not None:
+            return self._sql_store.count()
         return len(self.records())
+
+    def close(self) -> None:
+        if self._sql_store is not None:
+            self._sql_store.close()
 
 
 class AdaptiveBrain:
