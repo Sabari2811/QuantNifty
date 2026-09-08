@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from monitoring.durable_store import SqlAppendStore
+
 
 @dataclass(frozen=True)
 class LiveCycleEvidence:
@@ -73,6 +75,8 @@ def build_live_cycle_evidence(
 class JsonlLiveEvidenceStore:
     """Append-only local evidence store."""
 
+    durable = False
+
     def __init__(self, path: str | os.PathLike[str] | None = None):
         self.path = Path(path or os.getenv("LIVE_EVIDENCE_PATH", "runtime_data/live_validation.jsonl"))
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -88,3 +92,32 @@ class JsonlLiveEvidenceStore:
             return 0
         with self.path.open("r", encoding="utf-8") as fh:
             return sum(1 for line in fh if line.strip())
+
+
+class SqlLiveEvidenceStore:
+    """Append-only SQL-backed live evidence store."""
+
+    durable = True
+
+    def __init__(self, database_url: str | None = None):
+        url = database_url or os.getenv("LIVE_EVIDENCE_DATABASE_URL")
+        if not url:
+            raise ValueError("LIVE_EVIDENCE_DATABASE_URL is required for SQL evidence")
+        self._store = SqlAppendStore(url, "live_cycle_evidence")
+
+    def append(self, evidence: LiveCycleEvidence) -> None:
+        self._store.append(asdict(evidence))
+
+    def count(self) -> int:
+        return self._store.count()
+
+    def close(self) -> None:
+        self._store.close()
+
+
+def create_live_evidence_store():
+    """Select SQL durability only when explicitly configured."""
+    database_url = os.getenv("LIVE_EVIDENCE_DATABASE_URL")
+    if database_url:
+        return SqlLiveEvidenceStore(database_url)
+    return JsonlLiveEvidenceStore()
