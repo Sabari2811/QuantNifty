@@ -23,6 +23,13 @@ def test_live_evidence_requires_explicit_live_provider():
     assert evidence.provider_mode == "LIVE_PROVIDER"
 
 
+def test_missing_identity_cannot_be_certified_as_live():
+    evidence = build_live_cycle_evidence(Ctx())
+    assert evidence.evidence_state == "INVALID_NOT_LIVE"
+    assert evidence.provider == "UNKNOWN"
+    assert evidence.provider_mode == "UNKNOWN"
+
+
 def test_non_live_mode_cannot_be_certified_as_live():
     evidence = build_live_cycle_evidence(Ctx(), provider="INDMONEY", provider_mode="REPLAY")
     assert evidence.evidence_state == "INVALID_NOT_LIVE"
