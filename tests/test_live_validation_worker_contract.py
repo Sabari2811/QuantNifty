@@ -33,12 +33,12 @@ def test_live_validation_worker_uses_safe_interval_defaults_and_clamps():
 
 
 def test_live_validation_worker_requires_both_persistence_stores_for_durable_status():
-    durable_brain = type("Brain", (), {"_sql_store": object()})()
+    durable_brain = type("Brain", (), {"store": type("Store", (), {"_sql_store": object()})()})()
     durable_evidence = type("Evidence", (), {"durable": True})()
     local_evidence = type("Evidence", (), {"durable": False})()
 
     assert _persistence_status(durable_evidence, durable_brain) == "DURABLE_DATABASE"
     assert _persistence_status(local_evidence, durable_brain) == "LOCAL_OR_PARTIAL"
 
-    local_brain = type("Brain", (), {"_sql_store": None})()
+    local_brain = type("Brain", (), {"store": type("Store", (), {"_sql_store": None})()})()
     assert _persistence_status(durable_evidence, local_brain) == "LOCAL_OR_PARTIAL"
