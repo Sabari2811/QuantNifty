@@ -1,10 +1,10 @@
 # QuantNifty — Master Progress & Continuation Tracker
 
-**Last updated:** 2026-09-08
+**Last updated:** 2026-09-09
 **Repository:** `Sabari2811/QuantNifty`
 **Authoritative branch:** `main`
-**Current verified HEAD:** `1c3bbeceffcf883e9afe21a56f33da192f346f27`
-**Current state:** Backend implementation complete / regression green / production live certification pending
+**Current verified HEAD:** `62c1177301a3fa3eff7cc1804556246ede1d1dad`
+**Current state:** Backend validation infrastructure implemented / live certification pending
 
 > This file is the primary continuation tracker for future ChatGPT sessions. Read it before starting new work. Do not restart completed architecture work unless new evidence requires it.
 
@@ -31,6 +31,7 @@ QuantNifty is a modular NIFTY options market-intelligence platform covering:
 - Adaptive Brain / learning infrastructure
 - live-session evidence and validation
 - production hardening and durable audit/idempotency foundations
+- after-market/backtest/walk-forward/robustness validation infrastructure
 
 The project is being developed as a production-grade institutional market-intelligence system, with strict separation between **direction**, **actionability**, **risk permission**, **execution**, **historical replay**, and **learning/intelligence**.
 
@@ -43,8 +44,8 @@ The project is being developed as a production-grade institutional market-intell
 - Repository: `Sabari2811/QuantNifty`
 - Branch: **`main`**
 - `main` is the authoritative code branch for continuation.
-- Current HEAD: **`1c3bbeceffcf883e9afe21a56f33da192f346f27`**
-- Latest commit: `fix: use available rfc3987 syntax release`
+- Current HEAD: **`62c1177301a3fa3eff7cc1804556246ede1d1dad`**
+- Latest commit: `test: cover after-market validation orchestration`
 
 ### Separate project — DO NOT TOUCH
 
@@ -118,38 +119,40 @@ Every change follows:
 | Monitoring / health | ✅ Complete | Alert-event and runtime-health infrastructure implemented. |
 | Market clock | ✅ Complete | IST/Asia-Kolkata session boundaries and weekend behavior tested. |
 | Adaptive Brain | ✅ Complete | Observation, historical similarity/win-rate logic, outcome resolution and restart recovery implemented. |
-| Brain SQL persistence | ✅ Implemented/tested | SQL-backed path exists; production database wiring is still pending. |
-| Live-cycle evidence | ✅ Implemented/tested | Fail-closed evidence builder and persistence stores implemented. |
-| Live validation worker | 🟡 Implemented | Worker wiring exists, but autonomous production execution still needs infrastructure validation. |
-| CI / dependency reproducibility | ✅ Complete | Latest GitHub Actions run is green. |
-| Real live-market certification | ⚠️ Pending | Genuine live cycles must be captured and independently verified. |
-| Autonomous production worker | ⚠️ Pending | Current Render web service uses Streamlit and can sleep when idle. |
-| Production PostgreSQL wiring | ⚠️ Pending | Must provision/use a QuantNifty-specific database; do not touch QuantNifty-Next DB. |
-| Streamlit UI finalization | ⏸️ Deferred | Explicitly deferred until backend/project completion. |
+| Brain SQL persistence | ✅ Implemented/tested | SQL-backed path and restart regression implemented; real production observation/restart verification remains live-evidence work. |
+| Live-cycle evidence | ✅ Implemented/tested | Fail-closed evidence builder, JSONL and SQL stores implemented. |
+| Live certification verifier | ✅ Implemented/tested | Multi-cycle fail-closed verifier requires live identity, fresh/valid data and durable persistence. |
+| Production readiness/health | ✅ Implemented/tested | Non-secret configuration/readiness surface exists. |
+| Live validation worker | ✅ Implemented | Dedicated foreground worker with health endpoint and one-cycle path deployed. |
+| Production PostgreSQL wiring | ✅ Wired | QuantNifty-specific Render Postgres configured for Brain/evidence stores; runtime persistence still needs genuine-cycle verification. |
+| Backtest metrics/gates | ✅ Implemented/tested | P&L, win rate, profit factor, expectancy, drawdown and consecutive-loss gates. |
+| Strategy contract validation | ✅ Implemented/tested | Daily trade limit, actionability/risk execution boundaries and UNKNOWN reconciliation checks. |
+| After-market validation harness | ✅ Implemented/tested | Orchestrates strategy contract, backtest, temporal integrity, leakage, walk-forward and regime analysis. |
+| Walk-forward / out-of-sample framework | ✅ Implemented/tested | Chronological non-shuffled train/test windows with temporal-order validation. |
+| Data leakage validation | ✅ Implemented/tested | Future-feature and early-outcome checks. |
+| Robustness / regime analysis | ✅ Implemented/tested | Regime and parameter-run evaluation without silently selecting a winner. |
+| Unified certification report | ✅ Implemented/tested | Fail-closed overall status; live certification remains an independent gate. |
+| CI / dependency reproducibility | 🟡 Pending latest validation | Earlier CI baseline was green; latest validation-framework commits require fresh CI confirmation. |
+| Genuine live-market certification | ⚠️ Pending | Genuine live cycles must be captured and independently verified. |
+| Autonomous production worker | 🟡 Deployed workaround | Dedicated Render web-service worker is running; true background-worker runtime remains an infrastructure improvement, not a strategy-code blocker. |
+| Streamlit UI finalization | ⏸️ Deferred | Explicitly deferred until backend/project completion and validation. |
 
 ---
 
-## 5. Latest Regression / CI Evidence
+## 5. Validation Infrastructure Added
 
-### GitHub Actions
+The following backend-only validation components are now available:
 
-Latest verified run:
+- `validation/backtest_gates.py` — deterministic backtest metrics and explicit acceptance thresholds.
+- `validation/strategy_contract.py` — fail-closed strategy output/safety invariants.
+- `validation/walk_forward.py` — chronological walk-forward windows and temporal ordering checks.
+- `validation/data_leakage.py` — feature/decision/outcome temporal leakage checks.
+- `validation/robustness.py` — regime and parameter-run analysis.
+- `validation/after_market.py` — single orchestrator for post-market validation.
+- `validation/certification_report.py` — unified, secret-free, fail-closed certification status.
+- `monitoring/live_certification.py` — genuine-live evidence certification gate.
 
-- Run: **#86**
-- Run ID: `34228980286`
-- HEAD: `1c3bbeceffcf883e9afe21a56f33da192f346f27`
-- Result: **SUCCESS**
-- Dependency installation: PASS
-- Python compile check: PASS
-- Pytest: PASS
-
-Latest full regression baseline before the live-evidence/infrastructure phase:
-
-- **862 passed**
-- **2 skipped**
-- **0 known test failures**
-
-The preceding CI failure was dependency-only (`rfc3987-syntax==1.1.1` unavailable). It was corrected to the available `1.1.0` release and the subsequent CI run passed.
+These modules consume recorded outputs/evidence and do not place broker orders or alter live decisions.
 
 ---
 
@@ -201,15 +204,13 @@ Implemented behavior:
 - persists and restores resolved history across restart
 - supports SQL-backed persistence when `BRAIN_DATABASE_URL` is configured
 
-Important:
-
-> SQL support is implemented and regression-tested, but production DB wiring is not yet enabled for QuantNifty.
+Production SQL is now wired for QuantNifty. The remaining verification is an actual production observation and restart/read-back check during live validation.
 
 ---
 
 ## 8. Live Validation Status
 
-Live evidence is represented by a dedicated cycle-evidence model containing, among other fields:
+Live evidence is represented by a dedicated cycle-evidence model containing:
 
 - timestamp
 - provider / provider mode
@@ -233,7 +234,7 @@ The evidence builder is **fail closed**:
 - missing provider mode is not treated as live
 - live certification cannot be inferred from deterministic/replay execution
 
-Historical/local validation logs have previously shown cases such as `Freshness: NOT_VERIFIED` and `Raw Analytics: NOT_VERIFIED`; those are validation failures, not live certification.
+The new certification verifier additionally requires multiple valid cycles and rejects stale, incomplete, invalid or non-durable cycles.
 
 ### Certification rule
 
@@ -250,91 +251,99 @@ Live certification requires genuine live provider runtime evidence with verified
 
 ## 9. Render / Production Infrastructure Status
 
-### QuantNifty Render service
+### Dedicated QuantNifty live-validation worker
 
-- Service: `quantnifty-validation`
-- Service ID: `srv-daeoeqgu01pc73fc55dg`
-- URL: `https://quantnifty-validation.onrender.com`
+- Service: `quantnifty-live-validation-worker`
+- Service ID: `srv-dagittou01pc7383fqv0`
 - Repository: `Sabari2811/QuantNifty`
 - Branch: `main`
-- Auto deploy: enabled
-- Runtime: Python
-- Build: `pip install -r requirements.txt`
-- Current start command: `streamlit run dashboard/app.py --server.address 0.0.0.0 --server.port $PORT`
-- `.python-version`: Python `3.12.14`
-- `LIVE_VALIDATION_MODE=true` is configured.
+- Start command: `python -m dashboard.live_validation_worker`
+- Region: Singapore
+- Current runtime: Render web-service workaround with HTTP health endpoint.
+- `LIVE_VALIDATION_MODE=true`
+- `LIVE_VALIDATION_INTERVAL_SECONDS=60`
+- `INDSTOCKS_ENABLE_WS_LIVE_QUOTES=1`
 - `APITOKEN` is configured in Render; never paste or expose it in chat.
+
+### QuantNifty production Postgres
+
+- Dedicated Render Postgres: `quantnifty-production`
+- Region: Singapore
+- Used only by QuantNifty.
+- `BRAIN_DATABASE_URL` and `LIVE_EVIDENCE_DATABASE_URL` are configured in the dedicated worker.
+- PostgreSQL URL normalization uses the installed psycopg 3 driver.
 
 ### Infrastructure limitation
 
-The current service is a Streamlit web service. Render free web services can sleep when idle. Therefore, embedding the validation worker in Streamlit startup does **not** prove continuous/autonomous market-worker execution.
-
-A reliable autonomous worker requires an appropriate production runtime/infrastructure configuration (for example a dedicated worker/cron architecture as appropriate to the deployment plan).
+The dedicated validation process is currently a Render web service rather than a native background worker because of the available deployment tooling. It has a health server and foreground worker, so it is no longer dependent on Streamlit startup. A native background-worker conversion can be made later if the deployment plan requires it.
 
 ### Database rule
 
-There is an existing Render Postgres resource associated with the separate `quantnifty-next` environment. **Do not attach QuantNifty to that database.**
-
-QuantNifty needs its own explicitly identified production database before claiming durable production persistence.
+Never attach QuantNifty to the separate `quantnifty-next` database.
 
 ---
 
 ## 10. Remaining Work — Exact Order
 
-### P1 — Verify Brain SQL persistence path
+### P1 — Fresh CI/regression verification
 
-- Reinspect current `brain/sql_store.py` and `brain/adaptive_brain.py`.
-- Confirm SQL restart test is present and green.
-- Confirm DB failure cannot silently report durable persistence.
+- Allow the latest validation-framework commits to complete CI.
+- Confirm targeted and full regression are green.
+- Resolve only concrete failures; do not redesign completed architecture.
 
-### P2 — Verify live evidence persistence path
-
-- Reinspect `monitoring/live_session_evidence.py` and worker wiring.
-- Confirm local JSONL is reported as local/ephemeral, not PostgreSQL durability.
-- Confirm SQL-backed evidence is only marked durable when DB write succeeds.
-- Add/verify restart persistence regression for live evidence.
-
-### P3 — Production readiness/health visibility
-
-Implement a non-secret readiness/health surface that reports configuration state such as:
-
-- live provider configured/not configured
-- Brain SQL configured/not configured
-- live evidence SQL configured/not configured
-- worker mode
-- persistence mode
-- current runtime state
-
-Never expose credential values.
-
-### P4 — Autonomous worker infrastructure
-
-- Provide a one-cycle worker entry point suitable for production scheduling.
-- Ensure one cycle can run without Streamlit.
-- Ensure failure/reconciliation semantics are preserved.
-- Do not create a second QuantNifty service unless the deployment architecture explicitly requires it.
-- Do not touch QuantNifty-Next.
-
-### P5 — Genuine live certification
+### P2 — Genuine live certification
 
 During market hours:
 
-1. Start the actual live worker.
+1. Run the dedicated live worker.
 2. Use configured INDMoney/INDstocks credentials from Render.
 3. Capture multiple genuine live cycles.
-4. Verify provider mode is `LIVE_PROVIDER`.
+4. Verify `LIVE_PROVIDER` identity.
 5. Verify freshness.
 6. Verify option-chain coverage/integrity.
 7. Verify raw analytics evidence.
 8. Verify decision/intelligence consistency.
-9. Verify persistence state.
-10. Produce a durable live-session certification report.
+9. Verify Brain and evidence PostgreSQL persistence.
+10. Run the fail-closed live certification verifier.
+11. Produce a durable live-session certification report.
 
 Only then change the tracker to **LIVE CERTIFIED**.
 
+### P3 — After-market strategy validation on captured live/replay data
+
+Run the new after-market orchestrator against real captured/replay strategy records and inspect:
+
+- strategy contract
+- P&L metrics
+- profit factor / expectancy
+- drawdown
+- daily trade frequency
+- temporal integrity
+- leakage
+- walk-forward windows
+- regime results
+- parameter sensitivity
+
+### P4 — Final strategy/backtest acceptance
+
+Use actual historical datasets to establish explicit acceptance thresholds. Do not invent thresholds or performance from synthetic fixtures.
+
+### P5 — Final end-to-end certification
+
+Combine:
+
+- software regression
+- replay isolation
+- execution safety
+- historical/backtest results
+- walk-forward results
+- robustness results
+- genuine live evidence
+- durable persistence
+
 ### P6 — Streamlit UI
 
-Deferred until the backend/project completion and live-certification infrastructure are sufficiently complete. Do not prioritize UI redesign now.
+Deferred until backend and strategy validation are sufficiently complete.
 
 ---
 
@@ -355,7 +364,9 @@ Do not reopen these areas without a concrete regression or new requirement:
 - dashboard fail-closed semantics
 - provenance/freshness/integrity contracts
 - Adaptive Brain core behavior
-- CI dependency baseline
+- live evidence implementation
+- live certification verifier implementation
+- after-market validation framework implementation
 
 ---
 
@@ -369,12 +380,18 @@ QuantNifty is considered fully production-ready only when all of the following a
 - [x] Execution lifecycle safety regression green.
 - [x] Dashboard contract regression green.
 - [x] Brain restart recovery regression green.
-- [x] CI green on `main`.
 - [x] Live evidence framework implemented.
-- [ ] QuantNifty-specific production DB provisioned and wired.
-- [ ] Autonomous worker deployed using a runtime that does not depend on an idle-prone Streamlit process.
+- [x] QuantNifty-specific production DB provisioned and wired.
+- [x] After-market/backtest validation framework implemented.
+- [x] Walk-forward/leakage/robustness validation framework implemented.
+- [x] Fail-closed live certification verifier implemented.
+- [ ] Latest full CI/regression run confirmed after validation-framework changes.
 - [ ] Genuine live cycles captured during market hours.
 - [ ] Freshness/integrity/raw-analytics evidence verified from live cycles.
+- [ ] Brain/evidence persistence verified across genuine production cycles/restart.
+- [ ] Historical strategy results evaluated against explicit acceptance thresholds.
+- [ ] Walk-forward/out-of-sample results accepted.
+- [ ] Robustness/regime results accepted.
 - [ ] Durable live-session certification report produced.
 - [ ] Final Streamlit UI validation completed.
 
@@ -400,35 +417,43 @@ When a new chat starts:
 
 ### First inspection targets when continuing
 
-Before the next implementation change, inspect the exact current contents of:
-
-- `brain/sql_store.py`
 - `brain/adaptive_brain.py`
 - `monitoring/live_session_evidence.py`
+- `monitoring/live_certification.py`
 - `dashboard/live_validation_worker.py`
-- `dashboard/app.py`
+- `validation/after_market.py`
+- `validation/backtest_gates.py`
+- `validation/walk_forward.py`
+- `validation/data_leakage.py`
+- `validation/robustness.py`
+- `validation/strategy_contract.py`
+- `validation/certification_report.py`
 - `requirements.txt`
 
-Then verify the current tests around Brain SQL persistence, live evidence persistence, worker wiring, and dashboard startup before editing.
+Then verify the latest CI and Render deployment state before editing again.
 
 ---
 
 ## 14. Release / Continuation Snapshot
 
-**Software implementation:** ✅ Complete for the current backend scope
+**Software implementation:** ✅ Backend validation scope implemented
 
-**Regression:** ✅ Green
+**Regression:** 🟡 Fresh CI verification pending for latest validation framework
 
-**CI:** ✅ Green
+**CI:** 🟡 Fresh confirmation pending
 
-**Production live certification:** ⚠️ Pending
+**Production PostgreSQL:** ✅ Provisioned and wired
 
-**Autonomous production worker:** ⚠️ Pending
+**Live validation worker:** ✅ Deployed and independent of Streamlit startup
 
-**QuantNifty production DB:** ⚠️ Pending
+**Production live certification:** ⚠️ Pending genuine market evidence
+
+**After-market strategy framework:** ✅ Implemented; real captured/historical data evaluation pending
+
+**Backtest/walk-forward/robustness framework:** ✅ Implemented; real dataset acceptance pending
 
 **Streamlit finalization:** ⏸️ Deferred by user
 
 **Separate QuantNifty-Next project:** 🔒 Untouched / must remain untouched
 
-**Next engineering priority:** production persistence correctness → worker runtime → genuine live evidence → live certification.
+**Next engineering priority:** fresh CI verification → genuine live evidence tomorrow → after-market evaluation of captured session → final strategy acceptance.
