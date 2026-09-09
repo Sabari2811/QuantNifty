@@ -13,13 +13,34 @@ from typing import Any
 from sqlalchemy import Column, DateTime, Integer, MetaData, Table, Text, create_engine, select, func
 
 
+def _normalize_database_url(database_url: str) -> str:
+    """Normalize PostgreSQL URLs to the installed psycopg 3 SQLAlchemy driver.
+
+    Render commonly supplies ``postgresql://`` (or legacy ``postgres://``)
+    URLs. SQLAlchemy's generic PostgreSQL URL otherwise defaults to the
+    psycopg2 dialect, which is not installed in QuantNifty. The project pins
+    psycopg 3, so production PostgreSQL connections must use ``+psycopg``.
+    Other SQLAlchemy URLs are left unchanged so deterministic SQLite tests and
+    future supported dialects retain their existing behavior.
+    """
+    value = database_url.strip()
+    if value.startswith("postgres://"):
+        return "postgresql+psycopg://" + value[len("postgres://") :]
+    if value.startswith("postgresql://"):
+        return "postgresql+psycopg://" + value[len("postgresql://") :]
+    if value.startswith("postgresql+psycopg2://"):
+        return "postgresql+psycopg://" + value[len("postgresql+psycopg2://") :]
+    return value
+
+
 class SqlAppendStore:
     """Append-only JSON payload store backed by SQLAlchemy."""
 
     def __init__(self, database_url: str, table_name: str):
         if not database_url:
             raise ValueError("database_url is required")
-        self.engine = create_engine(database_url, pool_pre_ping=True)
+        self.database_url = _normalize_database_url(database_url)
+        self.engine = create_engine(self.database_url, pool_pre_ping=True)
         self.metadata = MetaData()
         self.table = Table(
             table_name,
