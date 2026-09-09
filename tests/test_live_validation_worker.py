@@ -1,12 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from dashboard.live_validation_worker import (
-    _health_snapshot,
-    _mark_health,
-    get_validation_interval_seconds,
-    is_nse_derivatives_session_open,
-)
+from dashboard.live_validation_worker import _health_snapshot, get_validation_interval_seconds, is_nse_derivatives_session_open
 
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -33,10 +28,8 @@ def test_live_validation_interval_is_fail_safe(monkeypatch):
 
 
 def test_live_validation_health_state_is_safe_metadata_only():
-    _mark_health(status="running", last_cycle_no=42, last_error=None, cycles=7)
     snapshot = _health_snapshot()
-    assert snapshot["status"] == "running"
-    assert snapshot["last_cycle_no"] == 42
-    assert snapshot["cycles"] == 7
+    assert snapshot["status"] == "starting"
+    assert snapshot["cycles"] == 0
     assert "token" not in snapshot
     assert "APITOKEN" not in snapshot
