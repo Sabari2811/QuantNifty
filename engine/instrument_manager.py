@@ -26,9 +26,9 @@ class InstrumentManager:
 
     def __init__(self):
         # Credentials are required for provider downloads, but not for local
-        # master loading/search. This keeps deterministic runtime tests and
-        # cached-master operations independent of broker secrets.
-        self.token = os.getenv("INDSTOCKS_API_TOKEN")
+        # master loading/search. Keep the Render deployment's APITOKEN alias
+        # compatible with the canonical provider environment variable.
+        self.token = os.getenv("INDSTOCKS_API_TOKEN") or os.getenv("APITOKEN")
         self.headers = {
             "Authorization": self.token,
             "Content-Type": "application/json"
@@ -39,7 +39,7 @@ class InstrumentManager:
 
     def download_instruments(self, source: str):
         if not self.token:
-            raise RuntimeError("INDSTOCKS_API_TOKEN is required to download instruments.")
+            raise RuntimeError("INDSTOCKS_API_TOKEN or APITOKEN is required to download instruments.")
         print(f"\nDownloading {source} instruments...")
         response = requests.get(
             f"{self.BASE_URL}/market/instruments",
