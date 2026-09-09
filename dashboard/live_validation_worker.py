@@ -1,7 +1,8 @@
+import json
 import os
 import threading
-import time
 from datetime import datetime, time as dt_time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from zoneinfo import ZoneInfo
 
 from brain.adaptive_brain import AdaptiveBrain
@@ -19,6 +20,14 @@ MIN_INTERVAL_SECONDS = 5
 
 _worker_lock = threading.Lock()
 _worker_started = False
+_health_lock = threading.Lock()
+_health_state = {
+    "status": "starting",
+    "last_cycle_at": None,
+    "last_cycle_no": None,
+    "last_error": None,
+    "cycles": 0,
+}
 
 
 def is_nse_derivatives_session_open(now=None):
@@ -51,6 +60,72 @@ def get_validation_interval_seconds(value=None):
     return interval
 
 
+def _health_snapshot():
+    with _health_lock:
+        return dict(_health_state)
+
+
+def _mark_health(**updates):
+    with _health_lock:
+        _health_state.update(updates)
+
+
+class _HealthHandler(BaseHTTPRequestHandler):
+    """Small dependency-free HTTP endpoint so Render can keep the worker alive."""
+
+    def do_GET(self):  # noqa: N802
+        if self.path not in {"/", "/healthz"}:
+            self.send_response(404)
+            self.end_headers()
+            return
+        payload = _health_snapshot()
+        payload["live_validation_mode"] = os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() == "true"
+        payload["market_open"] = is_nse_derivatives_session_open()
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):  # noqa: A003
+        return
+
+
+def _start_health_server(stop_event):
+    """Bind Render's PORT and serve a lightweight liveness endpoint."""
+    raw_port = os.getenv("PORT", "10000")
+    try:
+        port = int(raw_port)
+    except (TypeError, ValueError):
+        raise RuntimeError(f"Invalid PORT value: {raw_port!r}")
+    if not 1 <= port <= 65535:
+        raise RuntimeError(f"Invalid PORT value: {port!r}")
+
+    server = ThreadingHTTPServer(("0.0.0.0", port), _HealthHandler)
+    server.daemon_threads = True
+    thread = threading.Thread(
+        target=server.serve_forever,
+        kwargs={"poll_interval": 0.5},
+        name="quantnifty-health-server",
+        daemon=True,
+    )
+    thread.start()
+
+    def shutdown_watcher():
+        stop_event.wait()
+        server.shutdown()
+        server.server_close()
+
+    threading.Thread(
+        target=shutdown_watcher,
+        name="quantnifty-health-shutdown",
+        daemon=True,
+    ).start()
+    logger.info("LIVE VALIDATION HEALTH SERVER STARTED | port=%s", port)
+    return server
+
+
 def _initialize_runtime():
     evidence_store = create_live_evidence_store()
     brain = AdaptiveBrain()
@@ -79,9 +154,6 @@ def run_validation_cycle(evidence_store, brain, provider, engine):
     ctx.learning_status = "LEARNED" if brain_result.status == "LEARNED" else "PENDING_OUTCOME"
     ctx.persistence_status = _persistence_status(evidence_store, brain)
 
-    # The worker itself is the authoritative source for provider mode;
-    # never fall back to an environment variable that could mislabel a
-    # replay/simulation process as live.
     provider_name = getattr(provider, "provider_name", None) or getattr(provider, "name", None) or "INDMONEY"
     provider_mode = "LIVE_PROVIDER" if isinstance(provider, INDMoneyProvider) else "UNKNOWN"
     evidence = build_live_cycle_evidence(
@@ -114,6 +186,13 @@ def _poll_loop(interval_seconds=DEFAULT_INTERVAL_SECONDS, stop_event=None):
                 )
                 provenance = getattr(ctx, "data_provenance", None)
                 option_provenance = getattr(provenance, "option_chain", None) if provenance else None
+                _mark_health(
+                    status="running",
+                    last_cycle_at=now.isoformat(),
+                    last_cycle_no=getattr(ctx, "cycle_no", None),
+                    last_error=None,
+                    cycles=_health_snapshot()["cycles"] + 1,
+                )
                 logger.info(
                     "LIVE VALIDATION CYCLE | timestamp=%s | cycle=%s | spot=%s | runtime=%s | "
                     "trade_status=%s | block_reason=%s | option_chain_coverage=%s | option_chain_integrity=%s | "
@@ -135,11 +214,12 @@ def _poll_loop(interval_seconds=DEFAULT_INTERVAL_SECONDS, stop_event=None):
                     evidence.evidence_state,
                     evidence_store.count(),
                 )
-        except Exception:
+            else:
+                _mark_health(status="waiting_for_market", last_error=None)
+        except Exception as exc:
+            _mark_health(status="error", last_error=type(exc).__name__)
             logger.exception("LIVE VALIDATION CYCLE FAILED")
 
-        # Event.wait() makes Render shutdown/redeploy responsive instead of
-        # leaving the process asleep for the remainder of a polling interval.
         stop_event.wait(interval_seconds)
 
 
@@ -167,18 +247,23 @@ def start_live_validation_worker():
 
 
 def run_live_validation_worker(interval_seconds=None):
-    """Run validation as a foreground process, independent of Streamlit."""
+    """Run validation as a foreground process with a Render-compatible health endpoint."""
     enabled = os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() == "true"
     if not enabled:
         logger.info("LIVE VALIDATION WORKER DISABLED | set LIVE_VALIDATION_MODE=true to enable")
         return 0
 
     interval_seconds = get_validation_interval_seconds(interval_seconds)
+    stop_event = threading.Event()
+    server = _start_health_server(stop_event)
     logger.info("LIVE VALIDATION WORKER FOREGROUND START | interval=%ss", interval_seconds)
     try:
-        _poll_loop(interval_seconds=interval_seconds)
+        _poll_loop(interval_seconds=interval_seconds, stop_event=stop_event)
     except KeyboardInterrupt:
         logger.info("LIVE VALIDATION WORKER STOPPED | reason=keyboard_interrupt")
+    finally:
+        stop_event.set()
+        server.server_close()
     return 0
 
 
