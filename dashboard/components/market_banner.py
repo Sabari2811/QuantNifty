@@ -71,7 +71,7 @@ def render(dashboard):
         recommended_display = "N/A — no active strike"
     else:
         recommended_display = f"{recommended_strike} {option_type}".strip()
-    c9.metric("Recommended Strike", recommended_display)
+    c9.metric("Recommended", recommended_display)
     risk_reward = trade.get("risk_reward")
     c10.metric("Risk Reward", "N/A — no active trade" if signal_value == "WAIT" and risk_reward in (None, "", "-") else (risk_reward if risk_reward is not None else "UNAVAILABLE"))
 
