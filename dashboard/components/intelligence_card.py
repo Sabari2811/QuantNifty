@@ -48,9 +48,6 @@ def _render_consistency(consistency):
     vetoed = consistency.get("vetoed")
     reason = consistency.get("reason")
 
-    st.divider()
-    st.markdown("**Decision ↔ Intelligence**")
-
     if status == "CONSISTENT" and actionable:
         st.success(
             f"Consistent — Decision: {consistency.get('decision_signal', '-')} · "
@@ -84,7 +81,6 @@ def render(intelligence, decision_intelligence_consistency=None):
     st.subheader("🧠 Intelligence")
     if not intelligence:
         st.info("Intelligence unavailable for this runtime cycle.")
-        _render_consistency(decision_intelligence_consistency)
         return
 
     quality = _value(intelligence, "data_quality", {})
@@ -92,13 +88,14 @@ def render(intelligence, decision_intelligence_consistency=None):
     recommendation = _value(intelligence, "recommendation")
     wait = recommendation == "WAIT"
 
+    # Primary cockpit metrics stay visible. Detailed evidence is deliberately
+    # collapsible so the intelligence card does not stretch the whole row.
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Direction", _value(intelligence, "direction"))
     c2.metric("Conviction", _confidence(_value(intelligence, "conviction", 0.0)))
     c3.metric("Opportunity", _confidence(_value(intelligence, "opportunity_quality", 0.0)))
     c4.metric("Recommendation", recommendation)
 
-    st.divider()
     c5, c6, c7, c8 = st.columns(4)
     c5.metric("Regime", _value(regime, "regime"))
     c6.metric("Regime Confidence", _confidence(_value(regime, "confidence", 0.0), wait=wait))
@@ -107,7 +104,6 @@ def render(intelligence, decision_intelligence_consistency=None):
 
     freshness = _value(quality, "freshness_status")
     integrity = _value(quality, "integrity_status", _value(quality, "status"))
-    reasons = _value(quality, "reasons", ())
     if freshness == "VERIFIED":
         st.success("Freshness: VERIFIED")
     else:
@@ -116,37 +112,42 @@ def render(intelligence, decision_intelligence_consistency=None):
         st.warning("Data integrity: SUSPECT — option quote validation flagged an issue.")
     elif integrity == "UNVERIFIED":
         st.info("Data integrity: UNVERIFIED — no integrity failure was detected.")
-    if reasons:
-        with st.expander("View data-quality details", expanded=False):
+
+    reasons = _value(quality, "reasons", ())
+    with st.expander("Intelligence details", expanded=False):
+        if reasons:
+            st.markdown("**Data-quality details**")
             for reason in _compact_provenance_reasons(reasons):
                 st.write(f"• {reason}")
 
-    _render_consistency(decision_intelligence_consistency)
+        if decision_intelligence_consistency:
+            st.markdown("**Decision ↔ Intelligence**")
+            _render_consistency(decision_intelligence_consistency)
 
-    primary = _value(intelligence, "primary_scenario")
-    alternative = _value(intelligence, "alternative_scenario")
-    if primary or alternative:
-        st.divider()
-        c9, c10 = st.columns(2)
-        with c9:
-            st.markdown("**Primary scenario**")
-            if primary:
-                st.write(f"{_value(primary, 'name')} — {_value(primary, 'direction')} ({_value(primary, 'probability', 0.0):.1f}%)")
-                if _value(primary, "trigger", ""):
-                    st.caption(f"Trigger: {_value(primary, 'trigger')}")
-                if _value(primary, "invalidation", ""):
-                    st.caption(f"Invalidation: {_value(primary, 'invalidation')}")
-            else:
-                st.caption("Not available")
-        with c10:
-            st.markdown("**Alternative scenario**")
-            if alternative:
-                st.write(f"{_value(alternative, 'name')} — {_value(alternative, 'direction')} ({_value(alternative, 'probability', 0.0):.1f}%)")
-                if _value(alternative, "trigger", ""):
-                    st.caption(f"Trigger: {_value(alternative, 'trigger')}")
-            else:
-                st.caption("Not available")
+        primary = _value(intelligence, "primary_scenario")
+        alternative = _value(intelligence, "alternative_scenario")
+        if primary or alternative:
+            st.markdown("**Scenarios**")
+            c9, c10 = st.columns(2)
+            with c9:
+                st.markdown("**Primary scenario**")
+                if primary:
+                    st.write(f"{_value(primary, 'name')} — {_value(primary, 'direction')} ({_value(primary, 'probability', 0.0):.1f}%)")
+                    if _value(primary, "trigger", ""):
+                        st.caption(f"Trigger: {_value(primary, 'trigger')}")
+                    if _value(primary, "invalidation", ""):
+                        st.caption(f"Invalidation: {_value(primary, 'invalidation')}")
+                else:
+                    st.caption("Not available")
+            with c10:
+                st.markdown("**Alternative scenario**")
+                if alternative:
+                    st.write(f"{_value(alternative, 'name')} — {_value(alternative, 'direction')} ({_value(alternative, 'probability', 0.0):.1f}%)")
+                    if _value(alternative, "trigger", ""):
+                        st.caption(f"Trigger: {_value(alternative, 'trigger')}")
+                else:
+                    st.caption("Not available")
 
-    explanation = _value(intelligence, "explanation", "")
-    if explanation:
-        st.caption(explanation)
+        explanation = _value(intelligence, "explanation", "")
+        if explanation:
+            st.caption(explanation)
