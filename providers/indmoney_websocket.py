@@ -179,11 +179,12 @@ class IndmoneyPriceFeed:
     """Synchronous INDstocks price-feed client with bounded I/O."""
 
     def __init__(self, access_token: str, *, url: str = PRICE_FEED_URL, timeout: float = 10.0) -> None:
-        if not access_token:
+        normalized_token = str(access_token).strip()
+        if not normalized_token:
             raise ValueError("access_token is required")
         if timeout <= 0:
             raise ValueError("timeout must be positive")
-        self.access_token = access_token
+        self.access_token = normalized_token
         self.url = url
         self.timeout = float(timeout)
         self._socket: websocket.WebSocket | None = None
