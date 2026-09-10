@@ -124,21 +124,7 @@ def _dashboard():
     )
 
 
-def test_streamlit_entrypoint_exposes_exact_runtime_ui_contract(monkeypatch):
-    dashboard = _dashboard()
-
-    from dashboard.dashboard_controller import DashboardController
-
-    monkeypatch.setattr(
-        DashboardController,
-        "load",
-        lambda self, symbol, levels: dashboard,
-    )
-
-    # The contract test targets the real Streamlit entrypoint/orchestration.
-    # Component internals are separately covered by their own tests; replacing
-    # their render functions keeps this test deterministic and focused on the
-    # values handed to the UI boundary.
+def _patch_ui_components(monkeypatch):
     component_modules = [
         "header",
         "market_banner",
@@ -162,12 +148,27 @@ def test_streamlit_entrypoint_exposes_exact_runtime_ui_contract(monkeypatch):
         "charts",
         "intelligence_card",
         "institutional_score_card",
+        "backend_ui_integrity",
+        "execution_state",
     ]
     import importlib
 
     for name in component_modules:
         module = importlib.import_module(f"dashboard.components.{name}")
         monkeypatch.setattr(module, "render", lambda *args, **kwargs: None)
+
+
+def test_streamlit_entrypoint_exposes_exact_runtime_ui_contract(monkeypatch):
+    dashboard = _dashboard()
+
+    from dashboard.dashboard_controller import DashboardController
+
+    monkeypatch.setattr(
+        DashboardController,
+        "load",
+        lambda self, symbol, levels: dashboard,
+    )
+    _patch_ui_components(monkeypatch)
 
     app = AppTest.from_file("dashboard/app.py")
     app.run()
@@ -194,6 +195,14 @@ def test_streamlit_entrypoint_exposes_exact_runtime_ui_contract(monkeypatch):
     assert contract["position_reconciliation"] is dashboard.position_reconciliation
     pd.testing.assert_frame_equal(contract["option_chain"], dashboard.option_chain)
     pd.testing.assert_frame_equal(contract["greeks"], dashboard.greeks)
+
+    sections = contract["sections"]
+    assert sections["identity"]["spot"] == dashboard.spot
+    assert sections["market_banner"]["signal"] == dashboard.signal["signal"]
+    assert sections["market_regime"]["total_gex"] == dashboard.dealer.total_gex
+    assert sections["execution"]["intent"] is dashboard.execution_intent
+    assert sections["position_state"]["recovery"] is dashboard.position_recovery
+    assert app.session_state["_quantnifty_backend_ui_integrity"]["status"] == "PASS"
 
 
 def test_streamlit_contract_is_fail_closed_for_missing_provenance():
