@@ -68,7 +68,7 @@ def render(dashboard):
     recommended_strike = trade.get("recommended_strike")
     option_type = trade.get("option_type") or ""
     if recommended_strike in (None, "", "-"):
-        recommended_display = "N/A — no active strike"
+        recommended_display = "N/A — no active strike" if signal_value == "WAIT" else "UNAVAILABLE"
     else:
         recommended_display = f"{recommended_strike} {option_type}".strip()
     c9.metric("Recommended", recommended_display)
