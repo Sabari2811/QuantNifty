@@ -1,22 +1,20 @@
 from __future__ import annotations
 
-from dashboard.decision_adapter import adapt_decision
-from dashboard.market_summary_adapter import adapt_market_summary
+from dashboard.ui_data_contract import build_ui_data_contract
 
 
 def build_ui_runtime_contract(dashboard) -> dict:
-    """Capture the exact canonical values handed to the affected UI sections.
+    """Capture every canonical backend value handed to the Streamlit UI.
 
-    This is an audit surface for Streamlit runtime tests. It intentionally does
-    not recompute backend analytics: each value is taken from the DashboardData
-    object and from the same adapters used by the app entrypoint.
+    The legacy top-level keys remain for compatibility with existing tests and
+    consumers. The exhaustive ``sections`` mapping is the authoritative audit
+    surface for backend -> UI coverage and integrity checks.
     """
-    summary = adapt_market_summary(dashboard)
-    decision = adapt_decision(dashboard)
+    contract = build_ui_data_contract(dashboard)
 
     return {
-        "market_summary": summary,
-        "decision": decision,
+        "market_summary": contract["market_summary"],
+        "decision": contract["decision"],
         "intelligence": dashboard.intelligence,
         "decision_intelligence_consistency": dashboard.decision_intelligence_consistency,
         "option_chain": dashboard.option_chain,
@@ -28,4 +26,5 @@ def build_ui_runtime_contract(dashboard) -> dict:
         "execution_lifecycle": dashboard.execution_lifecycle,
         "position_recovery": dashboard.position_recovery,
         "position_reconciliation": dashboard.position_reconciliation,
+        "sections": contract,
     }
