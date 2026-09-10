@@ -27,6 +27,8 @@ from analytics.analytics_pipeline import AnalyticsPipeline
 from analytics.market_snapshot.market_snapshot import MarketSnapshot
 from analytics.intelligence.decision_consistency import reconcile_decision_intelligence
 
+from brain.adaptive_brain import AdaptiveBrain
+
 from execution.order_intent_factory import build_order_intent
 from execution.trade_execution_pipeline import TradeExecutionPipeline
 from execution.execution_lifecycle import classify_execution_result
@@ -50,13 +52,14 @@ from simulation.replay_equivalence import (
 
 class LiveEngine:
 
-    def __init__(self, provider=None, intelligence_service=None, paper_broker=None, trade_pipeline=None, audit_store_path=None, position_state_path=None):
+    def __init__(self, provider=None, intelligence_service=None, paper_broker=None, trade_pipeline=None, adaptive_brain=None, audit_store_path=None, position_state_path=None):
         self.ctx = RuntimeContext()
         self._previous_greeks_df = None
         self.provider = provider
         self.intelligence_service = intelligence_service
         self.paper_broker = paper_broker
         self.trade_pipeline = trade_pipeline
+        self.adaptive_brain = adaptive_brain
         self.audit_store_path = audit_store_path
         self.position_state_path = position_state_path
         self._runtime_audit_store = None
@@ -82,6 +85,8 @@ class LiveEngine:
         self.explanation_engine = ExplanationEngine()
         if self.paper_broker is None:
             self.paper_broker = PaperBroker()
+        if self.adaptive_brain is None:
+            self.adaptive_brain = AdaptiveBrain()
         if self.position_state_path is not None:
             self._position_state_store = build_position_state_store(self.position_state_path)
             self.position_runtime_service = PositionRuntimeService(self._position_state_store)
@@ -133,6 +138,34 @@ class LiveEngine:
         if last_trade is not None and getattr(last_trade, "closed", False):
             lifecycle = service.evaluate_paper_position(last_trade, manual_close=True)
             service.persist_after_lifecycle(last_trade, lifecycle)
+
+    def _sync_risk_snapshot(self):
+        """Expose the exact risk policy/state used by the execution gate."""
+        risk_snapshot = self.risk_manager.snapshot(self.paper_broker)
+        self.ctx.risk_state = self.risk_manager.state
+        self.ctx.market_context.risk = risk_snapshot
+        if isinstance(self.ctx.analytics, dict):
+            self.ctx.analytics["risk"] = risk_snapshot
+        return risk_snapshot
+
+    def _observe_brain(self):
+        """Persist one Brain observation after the canonical decision/execution path."""
+        if self._is_replay():
+            self.ctx.brain_observation = None
+            return None
+        if self.ctx.decision is None or self.ctx.market_context is None:
+            self.ctx.brain_observation = None
+            return None
+        observation = self.adaptive_brain.observe(self.ctx, broker=self.paper_broker)
+        self.ctx.brain_observation = observation
+        logger.info(
+            "BRAIN OBSERVATION | cycle=%s status=%s signal=%s outcome=%s",
+            observation.cycle_no,
+            observation.status,
+            observation.signal,
+            observation.outcome or "PENDING",
+        )
+        return observation
 
     def _calculate_greeks(self):
         self.ctx.greeks_df = self.greeks.calculate_chain_greeks(self.ctx.option_chain, self.ctx.spot, self.ctx.expiry)
@@ -236,7 +269,9 @@ class LiveEngine:
         execution_result = getattr(self.ctx, "execution_result", None)
         if execution_result is not None:
             self.ctx.execution_lifecycle = classify_execution_result(execution_result).value
+        self._sync_risk_snapshot()
         self._persist_position_runtime_state()
+        self._observe_brain()
 
     def run_cycle(self):
         self.ctx.runtime_status = "RUNNING"
@@ -251,6 +286,7 @@ class LiveEngine:
                 self.ctx.trade_block_reason = block_reason
                 logger.warning("LIVE ENGINE DEGRADED | analytics/trading blocked | reason=%s", block_reason)
                 self.trade_pipeline.sync_context(self.ctx)
+                self._sync_risk_snapshot()
                 if not self._is_replay():
                     self.recording_manager.record(self.ctx)
                 return self.ctx
