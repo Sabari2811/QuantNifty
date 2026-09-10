@@ -28,6 +28,7 @@ class RiskManager:
         The dashboard consumes this snapshot; it must not duplicate risk
         constants or infer policy locally.
         """
+        self._reset_if_new_day()
         portfolio = getattr(getattr(broker, "portfolio_engine", None), "portfolio", None)
         if portfolio is None and broker is not None:
             portfolio = getattr(broker, "portfolio", None)
