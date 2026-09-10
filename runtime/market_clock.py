@@ -8,6 +8,7 @@ IST = ZoneInfo("Asia/Kolkata")
 class MarketClock:
     """NSE equity-derivatives session clock in Asia/Kolkata time."""
 
+    PRE_MARKET_OPEN = time(9, 0)
     MARKET_OPEN = time(9, 15)
     MARKET_CLOSE = time(15, 40)
 
@@ -29,7 +30,10 @@ class MarketClock:
 
     def is_pre_market(self):
         current = self._current()
-        return self.is_weekday() and current.time() < self.MARKET_OPEN
+        return (
+            self.is_weekday()
+            and self.PRE_MARKET_OPEN <= current.time() < self.MARKET_OPEN
+        )
 
     def is_post_market(self):
         current = self._current()
