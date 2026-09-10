@@ -1,15 +1,24 @@
+from datetime import datetime, timedelta
+
 from validation.after_market import validate_after_market
 
 
 def _rows(count=25):
     rows = []
+    start = datetime.fromisoformat("2026-09-09T09:30:00+05:30")
     for i in range(count):
-        minute = i + 1
+        # Keep the synthetic fixture inside the real strategy contract:
+        # no more than three executed trades per trading day.
+        day_offset = i // 3
+        slot = i % 3
+        decision = start + timedelta(days=day_offset, minutes=slot * 10)
+        feature = decision - timedelta(minutes=1)
+        outcome = decision + timedelta(minutes=30)
         rows.append({
-            "timestamp": f"2026-09-09T09:{minute:02d}:00+05:30",
-            "decision_timestamp": f"2026-09-09T09:{minute:02d}:00+05:30",
-            "feature_timestamp": f"2026-09-09T09:{max(0, minute-1):02d}:00+05:30",
-            "outcome_timestamp": f"2026-09-09T10:{minute:02d}:00+05:30",
+            "timestamp": decision.isoformat(),
+            "decision_timestamp": decision.isoformat(),
+            "feature_timestamp": feature.isoformat(),
+            "outcome_timestamp": outcome.isoformat(),
             "pnl": 10 if i % 2 == 0 else -5,
             "actionable": True,
             "risk_allowed": True,
