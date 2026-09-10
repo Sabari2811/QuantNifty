@@ -21,6 +21,7 @@ from analytics.intelligence.evidence.evidence_engine import EvidenceEngine
 from analytics.intelligence.gate import IntelligenceGate
 
 from application.intelligence_service import IntelligenceService
+from brain.adaptive_brain import AdaptiveBrain
 
 from execution.trade_execution_pipeline import TradeExecutionPipeline
 
@@ -64,6 +65,12 @@ class CompositionRoot:
             market_memory=self.market_memory,
             evidence_engine=self.evidence_engine,
         )
+
+        # ======================================================
+        # Adaptive Brain
+        # ======================================================
+
+        self.adaptive_brain = AdaptiveBrain()
 
         # ======================================================
         # Risk
