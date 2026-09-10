@@ -85,6 +85,7 @@ class DashboardController:
             journal=ctx.journal,
             statistics=getattr(ctx, "statistics", {}),
             risk_state=ctx.risk_state,
+            brain_observation=getattr(ctx, "brain_observation", None),
             trade_status=ctx.trade_status,
             trade_block_reason=ctx.trade_block_reason,
             runtime_status=ctx.runtime_status,
