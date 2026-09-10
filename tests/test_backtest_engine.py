@@ -7,9 +7,13 @@ class FakePaperBroker:
         self.journal = []
         self.performance = {}
         self.updated_option_chains = []
+        self.finalized_option_chains = []
 
     def update_positions(self, option_chain):
         self.updated_option_chains.append(option_chain)
+
+    def close_all_positions(self, option_chain=None, reason="END_OF_REPLAY"):
+        self.finalized_option_chains.append((option_chain, reason))
 
 
 class FakePipeline:
@@ -98,6 +102,10 @@ def test_backtest_engine_runs_replay_through_pipeline():
     assert len(
         fake_pipeline.paper_broker.updated_option_chains
     ) == 3
+
+    assert fake_pipeline.paper_broker.finalized_option_chains == [
+        ([], "END_OF_REPLAY")
+    ]
 
     assert result["portfolio"] == {}
     assert result["journal"] == []
