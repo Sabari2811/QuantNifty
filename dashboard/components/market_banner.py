@@ -60,7 +60,7 @@ def render(dashboard):
     bullish = decision.get("bullish_probability")
     bullish_display = _display_number(bullish, decimals=1)
     c7.metric("Bullish %", bullish_display + ("%" if bullish_display != "UNAVAILABLE" else ""))
-    c8.metric("Decision Confidence", _confidence_display(signal_value, decision.get("confidence")))
+    c8.metric("Confidence", _confidence_display(signal_value, decision.get("confidence")))
 
     st.divider()
 
