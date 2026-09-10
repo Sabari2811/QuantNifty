@@ -40,7 +40,7 @@ def _valid_chain():
     return pd.DataFrame([{"Strike": 25000, "CE_ID": 111, "CE_LTP": 150, "CE_OI": 45000, "CE_VOLUME": 1200, "PE_ID": 222, "PE_LTP": 140, "PE_OI": 43000, "PE_VOLUME": 900}])
 
 
-def _suspect_chain():
+def _below_intrinsic_chain():
     chain = _valid_chain(); chain.loc[0, "Strike"] = 24900; chain.loc[0, "CE_LTP"] = 120; return chain
 
 
@@ -68,15 +68,23 @@ def test_missing_provider_candle_timestamp_is_unverified():
     assert _pipeline()._provider_candle_timestamp([{"o": 1, "h": 2}]) is None
 
 
-def test_live_option_integrity_is_attached_to_runtime_provenance():
-    pipeline = _pipeline(_suspect_chain())
+def test_live_option_integrity_uses_structural_validation_only():
+    pipeline = _pipeline(_below_intrinsic_chain())
     ctx = SimpleNamespace(symbol="NIFTY", spot=25050.0, strike_levels=1, data_provenance=RuntimeDataProvenance(spot=SimpleNamespace(source="spot")))
     pipeline._fetch_option_chain(ctx)
     provenance = ctx.data_provenance.option_chain
     assert provenance is not None
-    assert provenance.integrity_status == "SUSPECT"
-    assert "ce_ltp_below_intrinsic" in provenance.integrity_reasons
-    assert ctx.option_chain.attrs["quote_integrity"]["status"] == "SUSPECT"
+    assert provenance.integrity_status == "VALID"
+    assert provenance.integrity_reasons == ()
+    assert ctx.option_chain.attrs["quote_integrity"]["status"] == "VALID"
+
+
+def test_intrinsic_validation_remains_available_as_explicit_opt_in():
+    from core.quote_integrity import assess_option_chain
+
+    report = assess_option_chain(_below_intrinsic_chain(), 25050.0, check_intrinsic_consistency=True)
+    assert report.status == "SUSPECT"
+    assert "ce_ltp_below_intrinsic" in report.reasons
 
 
 def test_valid_live_option_chain_is_marked_valid_in_runtime_provenance():
