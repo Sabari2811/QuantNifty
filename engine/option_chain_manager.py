@@ -112,7 +112,18 @@ class OptionChainManager:
             })
 
         result = pd.DataFrame(rows)
-        integrity = assess_option_chain(result, spot_price)
+
+        # The option LTPs and the spot supplied to this method are acquired
+        # through separate provider observations. A last-trade LTP can remain
+        # below the intrinsic value of a newer spot without being a malformed
+        # quote. Do not turn that asynchronous market-consistency observation
+        # into a live certification integrity failure. Structural quote checks
+        # (missing/negative/non-finite values and identifiers) remain strict.
+        integrity = assess_option_chain(
+            result,
+            spot_price,
+            check_intrinsic_consistency=False,
+        )
 
         # A chain is freshness-verified only when every received quote has a
         # parseable provider timestamp. Never use acquisition time as a
