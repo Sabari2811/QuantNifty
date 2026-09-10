@@ -11,9 +11,14 @@ def _display(value, suffix="-", default="UNAVAILABLE"):
     return f"{value}{suffix}" if suffix != "-" else f"{value}"
 
 
+def _confidence_display(signal, confidence):
+    if signal == "WAIT" and confidence in (None, 0, 0.0):
+        return "N/A — no actionable edge"
+    return _display(confidence, "%")
+
+
 def render(decision, dealer):
     """Render canonical decision fields without recomputing the signal."""
-
     st.subheader("🎯 Trade Signal")
 
     decision = decision or {}
@@ -38,7 +43,7 @@ def render(decision, dealer):
     c1, c2, c3 = st.columns(3)
     c1.metric("Bullish", _display(bullish, "%"))
     c2.metric("Bearish", _display(bearish, "%"))
-    c3.metric("Confidence", _display(confidence, "%"))
+    c3.metric("Decision Confidence", _confidence_display(signal, confidence))
 
     reasons = decision.get("reasons", ())
     if reasons:
@@ -52,7 +57,7 @@ def render(decision, dealer):
 
     st.info(
         f"""
-Dealer Gamma : **{_display(dealer_gamma)}**
+Gamma Position : **{_display(dealer_gamma)}**
 
 Market Mode : **{_display(market_mode)}**
 
