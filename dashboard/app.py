@@ -12,9 +12,12 @@ from dashboard.dashboard_controller import DashboardController
 from dashboard.market_summary_adapter import adapt_market_summary
 from dashboard.decision_adapter import adapt_decision
 from dashboard.ui_runtime_contract import build_ui_runtime_contract
+from dashboard.ui_data_contract import build_ui_integrity_report
 from dashboard.components import institutional_score_card
 from dashboard.components import intelligence_card
 from dashboard.components.brain_performance import render as render_brain_performance
+from dashboard.components.backend_ui_integrity import render as render_backend_ui_integrity
+from dashboard.components.execution_state import render as render_execution_state
 from dashboard.live_validation_worker import start_live_validation_worker
 
 from dashboard.components import (
@@ -50,17 +53,27 @@ except Exception as e:
     st.exception(e)
     st.stop()
 
+# Build the backend -> UI contract once. All affected UI sections are sourced
+# from this same canonical DashboardData cycle; no component should recompute
+# analytics independently.
+ui_contract = build_ui_runtime_contract(dashboard)
+integrity_report = build_ui_integrity_report(dashboard)
+st.session_state["_quantnifty_dashboard_audit"] = dashboard
+st.session_state["_quantnifty_ui_contract"] = ui_contract
+st.session_state["_quantnifty_backend_ui_integrity"] = integrity_report
+
+decision = ui_contract["decision"]
+summary = ui_contract["market_summary"]
+
 header.render(dashboard)
 market_banner.render(dashboard)
 market_regime.render(dashboard)
 runtime_card.render(dashboard)
 intelligence_card.render(dashboard.intelligence, dashboard.decision_intelligence_consistency)
-decision = adapt_decision(dashboard)
 signal_card.render(decision, dashboard.dealer)
 institutional_score_card.render(dashboard.institutional_score)
 probability_gauge.render(dashboard.probability)
 
-summary = adapt_market_summary(dashboard)
 expected_move_card.render({
     "spot": summary["spot"],
     "expected_move": summary["expected_move"],
@@ -68,9 +81,6 @@ expected_move_card.render({
     "lower": summary["expected_move_lower"],
     "method": summary["expected_move_method"],
 })
-
-st.session_state["_quantnifty_dashboard_audit"] = dashboard
-st.session_state["_quantnifty_ui_contract"] = build_ui_runtime_contract(dashboard)
 
 max_pain_card.render(dashboard.max_pain)
 pcr_card.render(dashboard.pcr)
@@ -85,6 +95,12 @@ oi_heatmap.render(dashboard.option_chain)
 option_chain.render(dashboard.option_chain, dashboard.greeks, dashboard.data_provenance, dashboard.option_chain_integrity)
 greeks_table.render(dashboard.greeks)
 charts.render(dashboard)
+
+with st.expander("🔗 Backend ↔ UI Integrity", expanded=True):
+    render_backend_ui_integrity(integrity_report)
+
+with st.expander("⚡ Execution & Position State", expanded=False):
+    render_execution_state(ui_contract["sections"])
 
 with st.expander("🧠 Brain / Paper Performance", expanded=True):
     render_brain_performance()
