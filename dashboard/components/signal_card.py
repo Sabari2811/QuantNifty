@@ -22,7 +22,6 @@ def render(decision, dealer):
     st.subheader("🎯 Trade Signal")
 
     decision = decision or {}
-    dealer = dealer
 
     bullish = decision.get("bullish_probability")
     bearish = decision.get("bearish_probability")
@@ -50,19 +49,5 @@ def render(decision, dealer):
         st.write("### Reasons")
         for reason in reasons:
             st.write(f"✅ {reason}")
-
-    dealer_gamma = getattr(dealer, "dealer_gamma", None)
-    market_mode = getattr(dealer, "market_mode", None)
-    expected_volatility = getattr(dealer, "expected_volatility", None)
-
-    st.info(
-        f"""
-Gamma Position : **{_display(dealer_gamma)}**
-
-Market Mode : **{_display(market_mode)}**
-
-Expected Volatility : **{_display(expected_volatility)}**
-"""
-    )
 
     st.divider()
