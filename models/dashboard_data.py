@@ -59,6 +59,7 @@ class DashboardData:
     journal: Any = None
     statistics: dict = field(default_factory=dict)
     risk_state: Any = None
+    brain_observation: Any = None
     trade_status: str = ""
     trade_block_reason: str = ""
     runtime_status: str = ""
