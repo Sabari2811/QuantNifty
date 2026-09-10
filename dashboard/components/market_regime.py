@@ -19,7 +19,8 @@ def render(dashboard):
     """Render the canonical market-regime artifact."""
     dealer = dashboard.dealer
     probability = dashboard.probability or {}
-    signal = (dashboard.signal or {}).get("signal")
+    signal = getattr(dashboard, "signal", {}) or {}
+    signal = signal.get("signal") if isinstance(signal, dict) else None
 
     st.subheader("🌍 Market Regime")
 
@@ -27,7 +28,7 @@ def render(dashboard):
     c1.metric("Gamma Position", _display(dealer.dealer_gamma))
     c2.metric("Market Mode", _display(dealer.market_mode))
     c3.metric("Expected Volatility", _display(dealer.expected_volatility))
-    c4.metric("Regime Confidence", _confidence(probability.get("confidence"), signal))
+    c4.metric("Confidence", _confidence(probability.get("confidence"), signal))
 
     st.divider()
 
