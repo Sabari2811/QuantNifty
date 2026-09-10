@@ -66,7 +66,9 @@ def render(probability):
 
         template="plotly_dark",
 
-        height=350
+        height=230,
+
+        margin={"l": 20, "r": 20, "t": 30, "b": 10},
 
     )
 
