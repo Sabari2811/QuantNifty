@@ -144,15 +144,16 @@ class LiveEngine:
         manager = getattr(self, "risk_manager", None)
         if manager is None:
             manager = getattr(getattr(self, "trade_pipeline", None), "risk_manager", None)
-        if manager is None:
+        if manager is None or not hasattr(manager, "snapshot"):
             # Lightweight unit-test doubles may intentionally omit a risk
             # manager. Production composition always supplies one; do not
             # fabricate risk values for an incomplete runtime.
             return None
         risk_snapshot = manager.snapshot(self.paper_broker)
         self.risk_manager = manager
-        self.ctx.risk_state = manager.state
-        self.ctx.market_context.risk = risk_snapshot
+        self.ctx.risk_state = getattr(manager, "state", None)
+        if self.ctx.market_context is not None:
+            self.ctx.market_context.risk = risk_snapshot
         if isinstance(self.ctx.analytics, dict):
             self.ctx.analytics["risk"] = risk_snapshot
         return risk_snapshot
@@ -165,7 +166,13 @@ class LiveEngine:
         if self.ctx.decision is None or self.ctx.market_context is None:
             self.ctx.brain_observation = None
             return None
-        observation = self.adaptive_brain.observe(self.ctx, broker=self.paper_broker)
+        brain = getattr(self, "adaptive_brain", None)
+        if brain is None or not hasattr(brain, "observe"):
+            # Legacy/lightweight engine doubles can omit the optional Brain;
+            # production CompositionRoot always injects the persistent Brain.
+            self.ctx.brain_observation = None
+            return None
+        observation = brain.observe(self.ctx, broker=self.paper_broker)
         self.ctx.brain_observation = observation
         logger.info(
             "BRAIN OBSERVATION | cycle=%s status=%s signal=%s outcome=%s",
