@@ -42,6 +42,7 @@ class RuntimeManager:
             intelligence_service=self.composition.intelligence_service,
             paper_broker=self.composition.paper_broker,
             trade_pipeline=self.composition.trade_pipeline,
+            adaptive_brain=self.composition.adaptive_brain,
         )
         self.scheduler = Scheduler()
         self.running = False
