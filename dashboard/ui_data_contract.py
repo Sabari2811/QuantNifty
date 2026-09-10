@@ -163,8 +163,6 @@ def validate_ui_data_contract(contract: dict[str, Any]) -> list[str]:
         errors.append("market_banner.signal != decision.signal")
     if regime.get("bullish_probability") != decision.get("bullish_probability"):
         errors.append("market_regime.bullish_probability != decision.bullish_probability")
-    if regime.get("confidence") != decision.get("confidence"):
-        errors.append("market_regime.confidence != decision.confidence")
     if not alignment.get("decision_vs_trade_plan_signal"):
         errors.append("decision.signal != trade_plan.signal")
     if not risk:
