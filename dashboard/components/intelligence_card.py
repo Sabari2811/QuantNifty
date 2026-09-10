@@ -8,6 +8,15 @@ def _value(data, key, default="-"):
     return default if value is None else value
 
 
+def _confidence(value, *, wait=False):
+    if wait and value in (None, 0, 0.0):
+        return "N/A — no actionable edge"
+    try:
+        return f"{float(value):.1f}%"
+    except (TypeError, ValueError):
+        return "UNAVAILABLE"
+
+
 def _compact_provenance_reasons(reasons):
     labels = {
         "provider_quote_timestamp_unavailable": "Quote timestamp unavailable",
@@ -58,9 +67,7 @@ def _render_consistency(consistency):
             f"Intelligence direction: {consistency.get('intelligence_direction', '-')}"
         )
     else:
-        st.info(
-            f"Semantic status: {semantic_status or status or 'UNAVAILABLE'}"
-        )
+        st.info(f"Semantic status: {semantic_status or status or 'UNAVAILABLE'}")
 
     details = [
         f"Semantic status: {semantic_status or '-'}",
@@ -82,18 +89,20 @@ def render(intelligence, decision_intelligence_consistency=None):
 
     quality = _value(intelligence, "data_quality", {})
     regime = _value(intelligence, "regime", {})
+    recommendation = _value(intelligence, "recommendation")
+    wait = recommendation == "WAIT"
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Direction", _value(intelligence, "direction"))
-    c2.metric("Conviction", f"{float(_value(intelligence, 'conviction', 0.0)):.1f}%")
-    c3.metric("Opportunity", f"{float(_value(intelligence, 'opportunity_quality', 0.0)):.1f}%")
-    c4.metric("Recommendation", _value(intelligence, "recommendation"))
+    c2.metric("Conviction", _confidence(_value(intelligence, "conviction", 0.0)))
+    c3.metric("Opportunity", _confidence(_value(intelligence, "opportunity_quality", 0.0)))
+    c4.metric("Recommendation", recommendation)
 
     st.divider()
     c5, c6, c7, c8 = st.columns(4)
     c5.metric("Regime", _value(regime, "regime"))
-    c6.metric("Regime Confidence", f"{float(_value(regime, 'confidence', 0.0)):.1f}%")
-    c7.metric("Data Coverage", f"{float(_value(quality, 'coverage_score', _value(quality, 'score', 0.0))):.1f}/100")
+    c6.metric("Regime Confidence", _confidence(_value(regime, "confidence", 0.0), wait=wait))
+    c7.metric("Coverage", f"{float(_value(quality, 'coverage_score', _value(quality, 'score', 0.0))):.1f}/100")
     c8.metric("Integrity", _value(quality, "integrity_status", _value(quality, "status")))
 
     freshness = _value(quality, "freshness_status")
