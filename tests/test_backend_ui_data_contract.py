@@ -95,3 +95,28 @@ def test_contract_detects_decision_trade_plan_divergence():
     contract = build_ui_data_contract(dashboard)
     errors = validate_ui_data_contract(contract)
     assert "decision.signal != trade_plan.signal" in errors
+
+
+def test_wait_contract_requires_persisted_brain_and_no_strike():
+    dashboard = _dashboard()
+    dashboard.signal = {"signal": "WAIT", "confidence": 0.0}
+    dashboard.trade_plan = {"signal": "WAIT", "recommended_strike": "-"}
+    dashboard.brain_observation = SimpleNamespace(
+        persisted=True,
+        status="WAITING_OUTCOME",
+        cycle_no=8,
+        signal="WAIT",
+        outcome="",
+    )
+    contract = build_ui_data_contract(dashboard)
+    assert validate_ui_data_contract(contract) == []
+
+
+def test_wait_contract_rejects_missing_brain_observation():
+    dashboard = _dashboard()
+    dashboard.signal = {"signal": "WAIT", "confidence": 0.0}
+    dashboard.trade_plan = {"signal": "WAIT", "recommended_strike": "-"}
+    dashboard.brain_observation = None
+    contract = build_ui_data_contract(dashboard)
+    errors = validate_ui_data_contract(contract)
+    assert "WAIT decision has no persisted Brain observation" in errors
