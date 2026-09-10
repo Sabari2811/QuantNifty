@@ -42,7 +42,7 @@ def _manager(provider=None, selector=None):
     )
 
 
-def test_live_option_chain_attaches_integrity_without_changing_raw_values():
+def test_live_option_chain_attaches_structural_integrity_without_changing_raw_values():
     result = _manager().get_live_option_chain(
         symbol="NIFTY",
         spot_price=25050,
@@ -56,10 +56,27 @@ def test_live_option_chain_attaches_integrity_without_changing_raw_values():
     provenance = result.attrs["data_provenance"]
     integrity = result.attrs["quote_integrity"]
 
-    assert provenance.integrity_status == "SUSPECT"
-    assert "ce_ltp_below_intrinsic" in provenance.integrity_reasons
-    assert integrity["status"] == "SUSPECT"
-    assert integrity["suspect_contracts"] == 1
+    # Spot and option LTPs are separate observations. Intrinsic consistency is
+    # intentionally not a live structural-integrity gate for asynchronous LTPs.
+    assert provenance.integrity_status == "VALID"
+    assert provenance.integrity_reasons == ()
+    assert integrity["status"] == "VALID"
+    assert integrity["suspect_contracts"] == 0
+
+
+def test_intrinsic_consistency_remains_available_for_synchronized_callers():
+    from core.quote_integrity import assess_option_chain
+
+    result = _manager().get_live_option_chain(
+        symbol="NIFTY",
+        spot_price=25050,
+        levels=1,
+    )
+    report = assess_option_chain(result, 25050, check_intrinsic_consistency=True)
+
+    assert report.status == "SUSPECT"
+    assert "ce_ltp_below_intrinsic" in report.reasons
+    assert report.suspect_contracts == 1
 
 
 def test_missing_provider_contract_is_partial_and_invalid_not_silently_complete():
