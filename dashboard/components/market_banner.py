@@ -24,19 +24,22 @@ def _display_number(value, decimals=2, default="UNAVAILABLE"):
     return f"{numeric:,.{decimals}f}"
 
 
-def render(dashboard):
+def _confidence_display(signal, confidence):
+    if signal == "WAIT" and confidence in (None, 0, 0.0):
+        return "N/A — no actionable edge"
+    value = _display_number(confidence, decimals=1)
+    return f"{value}%" if value != "UNAVAILABLE" else value
 
+
+def render(dashboard):
     dealer = dashboard.dealer
     decision = adapt_decision(dashboard)
     trade = dashboard.trade_plan or {}
+    signal_value = decision.get("signal") or "UNAVAILABLE"
 
     st.markdown("## 📊 Live Market Summary")
 
     c1, c2, c3, c4 = st.columns(4)
-
-    signal_value = decision.get("signal")
-    if signal_value is None:
-        signal_value = "UNAVAILABLE"
     if signal_value == "BUY CALL":
         c1.success(signal_value)
     elif signal_value == "BUY PUT":
@@ -45,8 +48,8 @@ def render(dashboard):
         c1.warning(signal_value)
 
     c2.metric("Spot", _display_number(dashboard.spot))
-    c3.metric("Dealer", _value({"value": dealer.dealer_gamma}, "value"))
-    c4.metric("Market", _value({"value": dealer.market_mode}, "value"))
+    c3.metric("Gamma Position", _value({"value": dealer.dealer_gamma}, "value"))
+    c4.metric("Market Mode", _value({"value": dealer.market_mode}, "value"))
 
     st.divider()
 
@@ -55,21 +58,21 @@ def render(dashboard):
     c6.metric("Gamma Wall", _display_number(dealer.gamma_wall, decimals=0))
 
     bullish = decision.get("bullish_probability")
-    c7.metric("Bullish %", _display_number(bullish, decimals=1, default="UNAVAILABLE") + ("%" if bullish is not None and _display_number(bullish, decimals=1, default="UNAVAILABLE") != "UNAVAILABLE" else ""))
-
-    confidence = decision.get("confidence")
-    c8.metric("Confidence", _display_number(confidence, decimals=1, default="UNAVAILABLE") + ("%" if confidence is not None and _display_number(confidence, decimals=1, default="UNAVAILABLE") != "UNAVAILABLE" else ""))
+    bullish_display = _display_number(bullish, decimals=1)
+    c7.metric("Bullish %", bullish_display + ("%" if bullish_display != "UNAVAILABLE" else ""))
+    c8.metric("Decision Confidence", _confidence_display(signal_value, decision.get("confidence")))
 
     st.divider()
 
     c9, c10 = st.columns(2)
     recommended_strike = trade.get("recommended_strike")
     option_type = trade.get("option_type") or ""
-    c9.metric(
-        "Recommended",
-        f"{recommended_strike} {option_type}" if recommended_strike is not None else "UNAVAILABLE",
-    )
+    if recommended_strike in (None, "", "-"):
+        recommended_display = "N/A — no active strike"
+    else:
+        recommended_display = f"{recommended_strike} {option_type}".strip()
+    c9.metric("Recommended Strike", recommended_display)
     risk_reward = trade.get("risk_reward")
-    c10.metric("Risk Reward", risk_reward if risk_reward is not None else "UNAVAILABLE")
+    c10.metric("Risk Reward", "N/A — no active trade" if signal_value == "WAIT" and risk_reward in (None, "", "-") else (risk_reward if risk_reward is not None else "UNAVAILABLE"))
 
     st.divider()
