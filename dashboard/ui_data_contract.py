@@ -31,7 +31,6 @@ def build_ui_data_contract(dashboard) -> dict[str, Any]:
     decision = adapt_decision(dashboard)
     summary = adapt_market_summary(dashboard)
     trade_plan = dashboard.trade_plan or {}
-    signal = dashboard.signal or {}
     probability = dashboard.probability or {}
     dealer = dashboard.dealer
     risk = dashboard.risk or {}
@@ -122,6 +121,14 @@ def build_ui_data_contract(dashboard) -> dict[str, Any]:
             "trade_block_reason": dashboard.trade_block_reason,
             "risk_state": dashboard.risk_state,
         },
+        "brain": {
+            "observation": dashboard.brain_observation,
+            "persisted": bool(getattr(dashboard.brain_observation, "persisted", False)),
+            "status": getattr(dashboard.brain_observation, "status", None),
+            "cycle_no": getattr(dashboard.brain_observation, "cycle_no", None),
+            "signal": getattr(dashboard.brain_observation, "signal", None),
+            "outcome": getattr(dashboard.brain_observation, "outcome", None),
+        },
         "paper_performance": {
             "journal": dashboard.journal,
             "statistics": dashboard.statistics,
@@ -143,6 +150,9 @@ def validate_ui_data_contract(contract: dict[str, Any]) -> list[str]:
     banner = contract.get("market_banner", {})
     decision = contract.get("decision", {})
     regime = contract.get("market_regime", {})
+    trade_plan = contract.get("trade_plan", {})
+    risk = contract.get("risk", {})
+    brain = contract.get("brain", {})
     alignment = contract.get("alignment", {})
 
     if summary.get("spot") != identity.get("spot"):
@@ -157,6 +167,14 @@ def validate_ui_data_contract(contract: dict[str, Any]) -> list[str]:
         errors.append("market_regime.confidence != decision.confidence")
     if not alignment.get("decision_vs_trade_plan_signal"):
         errors.append("decision.signal != trade_plan.signal")
+    if not risk:
+        errors.append("risk policy/state is missing from the UI contract")
+
+    if decision.get("signal") == "WAIT":
+        if trade_plan.get("recommended_strike") not in (None, "", "-"):
+            errors.append("WAIT decision has an active recommended strike")
+        if not brain.get("persisted"):
+            errors.append("WAIT decision has no persisted Brain observation")
 
     return errors
 
