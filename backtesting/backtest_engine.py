@@ -6,137 +6,46 @@ from controllers.replay_controller import ReplayController
 
 
 class BacktestEngine:
-    """
-    QuantNifty Backtest Engine.
+    """Run historical replay through QuantNifty's canonical execution path."""
 
-    Executes historical replay through the EXACT same
-    execution pipeline used by live paper trading.
-
-    Pipeline
-    --------
-
-        ReplayController
-                │
-                ▼
-        RuntimeContext
-                │
-                ▼
-        SignalAdapter
-                │
-                ▼
-        TradingPipeline
-                │
-                ▼
-        PaperBroker
-                │
-                ▼
-        TradeJournal
-                │
-                ▼
-        PerformanceEngine
-
-    Responsibilities
-    ----------------
-    • Drive replay
-    • Extract TradingDecision
-    • Execute paper trades
-    • Update open positions
-    • Finalize replay positions
-    • Return completed statistics
-
-    It deliberately contains NO trading logic.
-    """
-
-    def __init__(
-        self,
-        replay_controller: ReplayController,
-    ):
-
+    def __init__(self, replay_controller: ReplayController):
         self.controller = replay_controller
-
         self.adapter = SignalAdapter()
-
         self.pipeline = TradingPipeline()
 
-    # =====================================================
-    # Backtest
-    # =====================================================
+    @staticmethod
+    def _option_chain(ctx):
+        """Read option-chain data from both RuntimeContext and mapping replays."""
+        if isinstance(ctx, dict):
+            return ctx.get("option_chain")
+        return getattr(ctx, "option_chain", None)
 
     def run(self):
-
         print("\n========== BACKTEST START ==========\n")
-
         broker = self.pipeline.paper_broker
         last_option_chain = None
 
         while self.controller.has_next():
-
-            #
-            # Execute one replay cycle.
-            #
             ctx = self.controller.next()
-
             if ctx is None:
                 break
 
-            #
-            # Extract TradingDecision.
-            #
             decision = self.adapter.from_context(ctx)
-
-            #
-            # Execute entry.
-            #
             if decision is not None:
+                self.pipeline.process(decision=decision, snapshot=ctx)
 
-                self.pipeline.process(
-
-                    decision=decision,
-
-                    snapshot=ctx,
-
-                )
-
-            #
-            # Update existing positions.
-            #
-            option_chain = getattr(
-
-                ctx,
-
-                "option_chain",
-
-                None,
-
-            )
-
+            option_chain = self._option_chain(ctx)
             if option_chain is not None:
                 last_option_chain = option_chain
+            broker.update_positions(option_chain)
 
-            broker.update_positions(
-
-                option_chain
-
-            )
-
-        #
-        # A replay has a finite terminal market state. Any position that
-        # survived normal stop/target handling is marked to that final state
-        # so completed-trade statistics include the full replay lifecycle.
-        # The broker leaves a position open if its final LTP is unavailable.
-        #
         finalize = getattr(broker, "close_all_positions", None)
         if callable(finalize):
             finalize(last_option_chain)
 
         print("\n========== BACKTEST COMPLETE ==========\n")
-
         return {
-
             "portfolio": broker.portfolio,
-
             "journal": broker.journal,
-
             "performance": broker.performance,
-
         }
