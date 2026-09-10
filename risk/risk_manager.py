@@ -22,6 +22,48 @@ class RiskManager:
         self.state = RiskState()
         self.market_clock = MarketClock()
 
+    def snapshot(self, broker=None):
+        """Return the canonical risk policy plus current runtime state.
+
+        The dashboard consumes this snapshot; it must not duplicate risk
+        constants or infer policy locally.
+        """
+        portfolio = getattr(getattr(broker, "portfolio_engine", None), "portfolio", None)
+        if portfolio is None and broker is not None:
+            portfolio = getattr(broker, "portfolio", None)
+
+        capital = float(getattr(portfolio, "capital", 0.0) or 0.0)
+        invested = float(getattr(portfolio, "invested_amount", 0.0) or 0.0)
+        utilization = (invested / capital) if capital > 0 else 0.0
+        cooldown_until = self.state.cooldown_until
+        cooldown = "NONE"
+        if cooldown_until is not None:
+            now = self.market_clock.now()
+            if now < cooldown_until:
+                remaining = max(0, int((cooldown_until - now).total_seconds() // 60))
+                cooldown = f"ACTIVE ({remaining} min remaining)"
+            else:
+                cooldown = "EXPIRED"
+
+        return {
+            "capital_per_trade": self.MAX_CAPITAL_PER_TRADE,
+            "capital_utilization": utilization,
+            "capital_utilization_limit": self.MAX_CAPITAL_USAGE,
+            "max_daily_loss": self.MAX_DAILY_LOSS,
+            "max_trades_per_day": self.MAX_TRADES_PER_DAY,
+            "max_open_positions": self.MAX_OPEN_POSITIONS,
+            "cooldown": cooldown,
+            "cooldown_minutes": self.COOLDOWN_MINUTES,
+            "loss_limit": self.MAX_CONSECUTIVE_LOSSES,
+            "trades_today": self.state.trades_today,
+            "todays_pnl": self.state.todays_pnl,
+            "consecutive_losses": self.state.consecutive_losses,
+            "capital": capital,
+            "invested_amount": invested,
+            "open_positions": len(getattr(portfolio, "open_positions", ()) or ()),
+            "trading_day": self.state.trading_day,
+        }
+
     def validate(self, broker, decision, context=None):
         self._reset_if_new_day()
 
