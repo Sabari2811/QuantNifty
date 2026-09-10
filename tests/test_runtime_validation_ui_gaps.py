@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from engine.live_engine import LiveEngine
+from brain.adaptive_brain import BrainStore
 from risk.risk_manager import RiskManager
 
 
@@ -54,3 +55,14 @@ def test_live_engine_persists_current_brain_observation():
     assert observation.persisted is True
     assert observation.cycle_no == 12
     assert engine.ctx.brain_observation is observation
+
+
+def test_brain_store_uses_existing_evidence_database_when_dedicated_url_is_absent(monkeypatch, tmp_path):
+    database_url = f"sqlite:///{tmp_path / 'evidence.db'}"
+    monkeypatch.delenv("BRAIN_DATABASE_URL", raising=False)
+    monkeypatch.setenv("LIVE_EVIDENCE_DATABASE_URL", database_url)
+
+    store = BrainStore()
+    assert store.path is None
+    assert store._sql_store is not None
+    store.close()
