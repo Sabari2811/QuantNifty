@@ -13,16 +13,22 @@ load_dotenv()
 class INDMoneyProvider(BaseProvider):
     def __init__(self):
         self.base_url = "https://api.indstocks.com"
-        # Prefer the explicit CI/local name, but accept the APITOKEN alias used
-        # by the live Render deployment. Never log or expose the credential.
-        self.token = os.getenv("INDSTOCKS_API_TOKEN") or os.getenv("APITOKEN")
+        # Accept the documented token name plus the existing Render aliases.
+        # Strip accidental whitespace/newlines from dashboard-pasted secrets.
+        token_sources = (
+            "INDSTOCKS_API_TOKEN",
+            "INDSTOCKS_TOKEN",
+            "APITOKEN",
+        )
+        self.token_source = next((name for name in token_sources if os.getenv(name)), None)
+        self.token = os.getenv(self.token_source).strip() if self.token_source else None
         if not self.token:
-            raise Exception("INDSTOCKS_API_TOKEN or APITOKEN not found in environment")
+            raise Exception("INDSTOCKS_API_TOKEN, INDSTOCKS_TOKEN or APITOKEN not found in environment")
         self.headers = {"Authorization": self.token, "Content-Type": "application/json"}
 
     def connect(self):
         logger.info("CONNECTING TO INDMONEY")
-        logger.info("INDMoney API Token Loaded")
+        logger.info("INDMoney API Token Loaded | source=%s", self.token_source)
         return True
 
     @staticmethod
