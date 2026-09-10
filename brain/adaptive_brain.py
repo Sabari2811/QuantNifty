@@ -111,23 +111,39 @@ class AdaptiveBrain:
                 continue
 
     @staticmethod
-    def _resolved_outcome(ctx: Any, broker: Any = None) -> str:
+    def _resolved_trade(ctx: Any, broker: Any = None) -> Any:
         broker = broker or getattr(ctx, "paper_broker", None)
         trade = getattr(broker, "last_trade", None) if broker else None
         if trade is None or not getattr(trade, "closed", False):
-            return ""
-        pnl = getattr(trade, "pnl", None)
-        if pnl is None:
-            return ""
+            return None
+        if getattr(trade, "pnl", None) is None:
+            return None
         try:
-            return "WIN" if float(pnl) > 0 else "LOSS"
+            float(trade.pnl)
         except (TypeError, ValueError):
+            return None
+        return trade
+
+    @classmethod
+    def _resolved_outcome(cls, ctx: Any, broker: Any = None) -> str:
+        trade = cls._resolved_trade(ctx, broker)
+        if trade is None:
             return ""
+        return "WIN" if float(trade.pnl) > 0 else "LOSS"
+
+    def _already_learned(self, trade_id: str) -> bool:
+        if not trade_id:
+            return False
+        return any(str(payload.get("trade_id") or "") == trade_id and payload.get("outcome") in {"WIN", "LOSS"}
+                   for payload in self.store.records())
 
     def observe(self, ctx: Any, broker: Any = None) -> BrainObservation:
         record = self.extractor.extract(ctx)
+        trade = self._resolved_trade(ctx, broker)
         outcome = self._resolved_outcome(ctx, broker)
-        if outcome:
+        trade_id = str(getattr(getattr(trade, "order", None), "order_id", "") or getattr(trade, "order_id", "") or "")
+        duplicate_outcome = bool(outcome and self._already_learned(trade_id))
+        if outcome and not duplicate_outcome:
             record.outcome = outcome
 
         historical = [r for r in self.memory.records if r.outcome in {"WIN", "LOSS"}]
@@ -143,20 +159,25 @@ class AdaptiveBrain:
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "cycle_no": int(getattr(ctx, "cycle_no", 0) or 0),
             "signal": record.signal,
-            "outcome": record.outcome,
+            "outcome": outcome if not duplicate_outcome else "",
+            "trade_id": trade_id,
+            "duplicate_outcome": duplicate_outcome,
             "similarity_score": record.similarity_score,
             "historical_win_rate": record.historical_win_rate,
             "record": asdict(record),
         })
-        self.memory.add(record)
+        # Only the first resolved observation for a real trade enters learned
+        # memory. Repeated market cycles may still be persisted as telemetry.
+        if not duplicate_outcome:
+            self.memory.add(record)
 
-        status = "LEARNED" if outcome else "WAITING_OUTCOME"
+        status = "LEARNED" if outcome and not duplicate_outcome else ("ALREADY_LEARNED" if duplicate_outcome else "WAITING_OUTCOME")
         return BrainObservation(
             status=status,
             cycle_no=int(getattr(ctx, "cycle_no", 0) or 0),
             signal=str(record.signal or ""),
             similarity=record.similarity_score,
             historical_win_rate=record.historical_win_rate,
-            outcome=outcome,
+            outcome=outcome if not duplicate_outcome else "",
             persisted=True,
         )
