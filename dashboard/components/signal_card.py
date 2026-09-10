@@ -46,8 +46,11 @@ def render(decision, dealer):
 
     reasons = decision.get("reasons", ())
     if reasons:
-        st.write("### Reasons")
-        for reason in reasons:
-            st.write(f"✅ {reason}")
+        # Keep the signal card compact when placed beside other decision cards.
+        # The complete canonical reasons remain available without removing any
+        # information from the dashboard.
+        with st.expander(f"Reasons ({len(reasons)})", expanded=False):
+            for reason in reasons:
+                st.write(f"✅ {reason}")
 
     st.divider()
