@@ -48,6 +48,25 @@ def test_brain_learning_uses_previous_resolved_history(tmp_path):
     assert brain.store.count() == 2
 
 
+def test_brain_deduplicates_resolved_trade_by_order_id(tmp_path):
+    brain = AdaptiveBrain(BrainStore(tmp_path / "brain.jsonl"))
+    brain.extractor = FakeExtractor()
+    order = SimpleNamespace(order_id="PAPER-001")
+    trade = SimpleNamespace(order=order, closed=True, pnl=100.0)
+    broker = SimpleNamespace(last_trade=trade)
+
+    first = brain.observe(SimpleNamespace(cycle_no=1), broker=broker)
+    second = brain.observe(SimpleNamespace(cycle_no=2), broker=broker)
+
+    assert first.status == "LEARNED"
+    assert first.outcome == "WIN"
+    assert second.status == "ALREADY_LEARNED"
+    assert second.outcome == ""
+    assert brain.store.count() == 2
+    learned = [r for r in brain.memory.records if r.outcome == "WIN"]
+    assert len(learned) == 1
+
+
 def test_brain_restores_resolved_history_after_restart(tmp_path):
     path = tmp_path / "brain.jsonl"
     first_brain = AdaptiveBrain(BrainStore(path))
