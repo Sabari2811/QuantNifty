@@ -21,6 +21,18 @@ def _acquisition_time(dashboard):
     return max(timestamps)
 
 
+def _format_acquisition_time(acquired_at):
+    if acquired_at is None:
+        return "UNAVAILABLE"
+    if isinstance(acquired_at, str):
+        try:
+            from datetime import datetime
+            acquired_at = datetime.fromisoformat(acquired_at.replace("Z", "+00:00"))
+        except ValueError:
+            return str(acquired_at)
+    return acquired_at.astimezone().strftime("%H:%M:%S %Z")
+
+
 def render(dashboard):
     """Render the QuantNifty terminal identity and unambiguous session state."""
     st.title("📈 QuantNifty Terminal")
@@ -36,15 +48,10 @@ def render(dashboard):
     c5.metric("Market Session", market_status)
 
     acquired_at = _acquisition_time(dashboard)
-    updated = (
-        acquired_at.astimezone().strftime("%H:%M:%S %Z")
-        if acquired_at is not None
-        else "UNAVAILABLE"
-    )
-    c6.metric("Acquired", updated)
+    c6.metric("Acquired", _format_acquisition_time(acquired_at))
 
     st.caption(
-        f"Provider connection: {'LIVE' if dashboard.provider.lower() != 'mock' else 'MOCK'}"
-        " · Market Session reflects NSE trading hours."
+        "Market Session reflects NSE trading hours. Acquired is the client-side "
+        "receipt time; provider quote timestamps are shown separately in data quality."
     )
     st.divider()
