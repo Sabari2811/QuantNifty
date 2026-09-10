@@ -50,7 +50,21 @@ with st.sidebar:
 try:
     dashboard = controller.load(symbol, levels)
 except Exception as e:
-    st.exception(e)
+    # Never expose a raw production traceback to the dashboard user. Live
+    # market data failures must remain explicit and actionable, while keeping
+    # credentials and provider response bodies out of the UI.
+    message = str(e)
+    if "403" in message or "401" in message or "authentication" in message.lower():
+        st.error("INDstocks authentication failed. Refresh the current INDstocks access token configured in Render, then redeploy.")
+        st.info("The application will not synthesize market data. After the token is refreshed, reload this page to resume live validation.")
+    elif "Unable to fetch live quote" in message:
+        st.error("Live market quote is currently unavailable. No synthetic market value is being used.")
+        st.info("Check the INDstocks live-data connection and reload the application.")
+    else:
+        st.error("QuantNifty could not build the current live dashboard cycle.")
+        st.info("The failure is isolated from the UI mapping layer; inspect the live-data/provider status before counting this cycle as valid live evidence.")
+    with st.expander("Technical status", expanded=False):
+        st.write(f"Runtime error type: {type(e).__name__}")
     st.stop()
 
 # Build the backend -> UI contract once. All affected UI sections are sourced
