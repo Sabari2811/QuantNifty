@@ -127,10 +127,11 @@ def _start_health_server(stop_event):
 
 
 def _initialize_runtime():
+    """Build one canonical Brain and inject it into the LiveEngine."""
     evidence_store = create_live_evidence_store()
     brain = AdaptiveBrain()
     provider = INDMoneyProvider()
-    engine = LiveEngine(provider=provider)
+    engine = LiveEngine(provider=provider, adaptive_brain=brain)
     logger.info(
         "LIVE VALIDATION WORKER READY | evidence_store=%s | brain_store=%s",
         type(evidence_store).__name__,
@@ -147,11 +148,26 @@ def _persistence_status(evidence_store, brain):
 
 
 def run_validation_cycle(evidence_store, brain, provider, engine):
-    """Execute exactly one validation-only live cycle and persist its evidence."""
+    """Execute one canonical validation cycle and persist its evidence.
+
+    LiveEngine owns the authoritative decision path and performs exactly one
+    Brain observation after execution. The worker must not call observe again,
+    otherwise one market cycle would create duplicate Brain telemetry and could
+    incorrectly appear as two learning events.
+    """
     ctx = engine.run_cycle()
-    brain_result = brain.observe(ctx, broker=engine.paper_broker)
-    ctx.brain_status = brain_result.status
-    ctx.learning_status = "LEARNED" if brain_result.status == "LEARNED" else "PENDING_OUTCOME"
+    observation = getattr(ctx, "brain_observation", None)
+    if observation is None:
+        # This should only occur for degraded/test runtimes. Do not fabricate a
+        # learning result when the canonical engine did not produce one.
+        brain_status = "UNAVAILABLE"
+        learning_status = "PENDING_OUTCOME"
+    else:
+        brain_status = getattr(observation, "status", "UNKNOWN")
+        learning_status = "LEARNED" if brain_status == "LEARNED" else "PENDING_OUTCOME"
+
+    ctx.brain_status = brain_status
+    ctx.learning_status = learning_status
     ctx.persistence_status = _persistence_status(evidence_store, brain)
 
     provider_name = getattr(provider, "provider_name", None) or getattr(provider, "name", None) or "INDMONEY"
