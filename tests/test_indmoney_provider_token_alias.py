@@ -39,5 +39,5 @@ def test_indmoney_provider_rejects_missing_tokens(monkeypatch):
     monkeypatch.delenv("INDSTOCKS_TOKEN", raising=False)
     monkeypatch.delenv("APITOKEN", raising=False)
 
-    with pytest.raises(Exception, match="INDSTOCKS_API_TOKEN or APITOKEN"):
+    with pytest.raises(Exception, match="INDSTOCKS_API_TOKEN.*APITOKEN"):
         INDMoneyProvider()
