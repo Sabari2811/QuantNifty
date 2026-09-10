@@ -204,7 +204,10 @@ class MarketDataPipeline:
             option_provenance = replace(option_provenance, provider_timestamp=option_timestamp, freshness_verified=freshness_verified, freshness_seconds=freshness_seconds, reasons=freshness_reasons)
         elif websocket_timeout:
             option_provenance = replace(option_provenance, provider_timestamp=None, freshness_verified=False, freshness_seconds=None, reasons=tuple(dict.fromkeys((*option_provenance.reasons, "websocket_quote_receive_timeout"))))
-        integrity = assess_option_chain(ctx.option_chain, ctx.spot)
+        # Preserve the live-chain contract: LTP and spot are separate provider
+        # observations, so below-intrinsic LTP is not a structural integrity
+        # failure unless a caller explicitly requests that synchronized check.
+        integrity = assess_option_chain(ctx.option_chain, ctx.spot, check_intrinsic_consistency=False)
         option_provenance = replace(option_provenance, integrity_status=integrity.status, integrity_reasons=integrity.reasons)
         ctx.option_chain.attrs["quote_integrity"] = integrity.as_dict()
         ctx.option_chain.attrs["data_provenance"] = option_provenance
