@@ -41,6 +41,7 @@ class BacktestEngine:
     • Extract TradingDecision
     • Execute paper trades
     • Update open positions
+    • Finalize replay positions
     • Return completed statistics
 
     It deliberately contains NO trading logic.
@@ -66,6 +67,7 @@ class BacktestEngine:
         print("\n========== BACKTEST START ==========\n")
 
         broker = self.pipeline.paper_broker
+        last_option_chain = None
 
         while self.controller.has_next():
 
@@ -108,11 +110,24 @@ class BacktestEngine:
 
             )
 
+            if option_chain is not None:
+                last_option_chain = option_chain
+
             broker.update_positions(
 
                 option_chain
 
             )
+
+        #
+        # A replay has a finite terminal market state. Any position that
+        # survived normal stop/target handling is marked to that final state
+        # so completed-trade statistics include the full replay lifecycle.
+        # The broker leaves a position open if its final LTP is unavailable.
+        #
+        finalize = getattr(broker, "close_all_positions", None)
+        if callable(finalize):
+            finalize(last_option_chain)
 
         print("\n========== BACKTEST COMPLETE ==========\n")
 
