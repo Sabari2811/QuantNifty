@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 from risk.risk_state import RiskState
+from runtime.market_clock import MarketClock
 
 
 class RiskManager:
@@ -19,6 +20,7 @@ class RiskManager:
 
     def __init__(self):
         self.state = RiskState()
+        self.market_clock = MarketClock()
 
     def validate(self, broker, decision, context=None):
         self._reset_if_new_day()
@@ -92,16 +94,13 @@ class RiskManager:
             self.state.consecutive_losses += 1
             if self.state.consecutive_losses >= self.MAX_CONSECUTIVE_LOSSES:
                 self.state.cooldown_until = (
-                    datetime.now() + timedelta(minutes=self.COOLDOWN_MINUTES)
+                    self.market_clock.now() + timedelta(minutes=self.COOLDOWN_MINUTES)
                 )
         else:
             self.state.consecutive_losses = 0
 
     def _market_hours(self):
-        now = datetime.now()
-        start = now.replace(hour=9, minute=15, second=0)
-        end = now.replace(hour=15, minute=15, second=0)
-        if now < start or now > end:
+        if not self.market_clock.is_market_open():
             return False, "Outside Market Hours"
         return True, ""
 
@@ -145,16 +144,16 @@ class RiskManager:
     def _cooldown(self):
         if self.state.cooldown_until is None:
             return True, ""
-        if datetime.now() < self.state.cooldown_until:
+        if self.market_clock.now() < self.state.cooldown_until:
             return False, "Cooldown Active"
         self.state.cooldown_until = None
         return True, ""
 
     def _reset_if_new_day(self):
-        today = datetime.now().date()
+        today = self.market_clock.now().date()
         if (
             self.state.trading_day is None or
             self.state.trading_day.date() != today
         ):
             self.state.reset()
-            self.state.trading_day = datetime.now()
+            self.state.trading_day = self.market_clock.now()
