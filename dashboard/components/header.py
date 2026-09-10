@@ -1,5 +1,7 @@
 import streamlit as st
 
+from runtime.market_clock import MarketClock
+
 
 def _acquisition_time(dashboard):
     """Return the latest canonical acquisition time used by this dashboard cycle."""
@@ -20,10 +22,7 @@ def _acquisition_time(dashboard):
 
 
 def render(dashboard):
-    """
-    QuantNifty Terminal Header
-    """
-
+    """Render the QuantNifty terminal identity and unambiguous session state."""
     st.title("📈 QuantNifty Terminal")
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -33,8 +32,8 @@ def render(dashboard):
     c3.metric("Expiry", dashboard.expiry)
     c4.metric("Provider", dashboard.provider.upper())
 
-    session = "MOCK" if dashboard.provider.lower() == "mock" else "LIVE"
-    c5.metric("Session", session)
+    market_status = MarketClock().market_status()
+    c5.metric("Market Session", market_status)
 
     acquired_at = _acquisition_time(dashboard)
     updated = (
@@ -44,4 +43,8 @@ def render(dashboard):
     )
     c6.metric("Acquired", updated)
 
+    st.caption(
+        f"Provider connection: {'LIVE' if dashboard.provider.lower() != 'mock' else 'MOCK'}"
+        " · Market Session reflects NSE trading hours."
+    )
     st.divider()
