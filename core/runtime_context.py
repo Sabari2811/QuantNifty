@@ -55,6 +55,7 @@ class RuntimeContext:
     explanation: Any = None
     intelligence: Any = None
     decision_intelligence_consistency: Any = None
+    brain_observation: Any = None
 
     # Canonical execution state. These fields carry the broker-neutral
     # execution intent/result and the derived lifecycle disposition without
