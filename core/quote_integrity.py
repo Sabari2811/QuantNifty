@@ -12,14 +12,12 @@ IntegrityStatus = Literal["VALID", "SUSPECT", "INVALID"]
 
 @dataclass(frozen=True, slots=True)
 class QuoteIntegrityReport:
-    """Deterministic structural/pricing checks for a live option chain.
+    """Deterministic structural/pricing checks for an option chain.
 
     The validator never changes raw quotes. A below-intrinsic LTP is classified
-    as SUSPECT rather than INVALID because an LTP is a last-trade observation,
-    while the underlying can move between option trades. Provider timestamp
-    presence does not by itself clear this finding because the public provider
-    contract does not establish that its full-quote timestamp is specifically
-    the observation timestamp of live_price.
+    as SUSPECT rather than INVALID when the optional intrinsic-consistency check
+    is enabled because an LTP is a last-trade observation, while the underlying
+    can move between option trades.
     """
 
     status: IntegrityStatus
@@ -71,19 +69,19 @@ def assess_option_chain(
     spot_price: float,
     *,
     intrinsic_tolerance: float = 0.01,
+    check_intrinsic_consistency: bool = True,
 ) -> QuoteIntegrityReport:
     """Assess option-chain integrity without mutating the input DataFrame.
 
-    Checks include:
-    - valid positive spot/strike values
-    - presence of contract identifiers
-    - finite, non-negative LTP/OI/volume values
-    - LTP below spot-based intrinsic value
+    Checks include valid positive spot/strike values, contract identifiers,
+    finite/non-negative LTP/OI/volume values, and (optionally) LTP below
+    spot-based intrinsic value.
 
-    A below-intrinsic LTP is SUSPECT rather than INVALID. This is a
-    conservative data-integrity finding, not a trade veto: the quote remains
-    usable for analytics while being explicitly flagged for downstream
-    quality/provenance consumers.
+    ``check_intrinsic_consistency`` is intentionally optional because a broker
+    LTP is a last-trade observation and the supplied spot may be from a
+    different observation instant. The live manager disables this cross-snapshot
+    check for certification integrity; it remains available for synchronized or
+    deterministic callers and regression tests.
     """
 
     if not isinstance(option_chain, pd.DataFrame) or option_chain.empty:
@@ -107,6 +105,14 @@ def assess_option_chain(
             checked_contracts=len(option_chain),
             invalid_contracts=len(option_chain),
             reasons=("invalid_intrinsic_tolerance",),
+        )
+
+    if not isinstance(check_intrinsic_consistency, bool):
+        return QuoteIntegrityReport(
+            status="INVALID",
+            checked_contracts=len(option_chain),
+            invalid_contracts=len(option_chain),
+            reasons=("invalid_intrinsic_consistency_flag",),
         )
 
     required_columns = {
@@ -160,7 +166,7 @@ def assess_option_chain(
             elif ltp < 0:
                 row_reasons.append(f"negative_{option_type.lower()}_ltp")
                 row_invalid = True
-            elif strike is not None:
+            elif check_intrinsic_consistency and strike is not None:
                 intrinsic = (
                     max(spot - strike, 0.0)
                     if option_type == "CE"
