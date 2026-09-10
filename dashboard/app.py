@@ -77,45 +77,110 @@ st.session_state["_quantnifty_backend_ui_integrity"] = integrity_report
 decision = ui_contract["decision"]
 summary = ui_contract["market_summary"]
 
+# ---------------------------------------------------------------------------
+# User-first dashboard hierarchy
+# ---------------------------------------------------------------------------
+# Nothing is removed here. Every existing dashboard component is still
+# rendered exactly once; only its visual position is changed. The ordering is
+# deliberately modelled on a trader's reading flow: market state -> decision
+# -> context -> execution plan -> analytics -> validation/performance.
+
 header.render(dashboard)
-market_banner.render(dashboard)
-market_regime.render(dashboard)
-runtime_card.render(dashboard)
-intelligence_card.render(dashboard.intelligence, dashboard.decision_intelligence_consistency)
-signal_card.render(decision, dashboard.dealer)
-institutional_score_card.render(dashboard.institutional_score)
-probability_gauge.render(dashboard.probability)
 
-expected_move_card.render({
-    "spot": summary["spot"],
-    "expected_move": summary["expected_move"],
-    "upper": summary["expected_move_upper"],
-    "lower": summary["expected_move_lower"],
-    "method": summary["expected_move_method"],
-})
+# 1. Decision cockpit: the three most important cards are always adjacent.
+row = st.columns([1.25, 1.25, 1.25], gap="small")
+with row[0]:
+    market_banner.render(dashboard)
+with row[1]:
+    market_regime.render(dashboard)
+with row[2]:
+    intelligence_card.render(dashboard.intelligence, dashboard.decision_intelligence_consistency)
 
-max_pain_card.render(dashboard.max_pain)
-pcr_card.render(dashboard.pcr)
-market_structure_card.render(dashboard.market_structure)
-dealer_card.render(dashboard.dealer)
-dealer_flow_card.render(dashboard.dealer_flow)
-liquidity_card.render(dashboard.liquidity)
-trade_plan.render(dashboard.trade_plan, decision)
-risk_card.render(dashboard.risk)
-gamma_heatmap.render(dashboard.greeks)
-oi_heatmap.render(dashboard.option_chain)
-option_chain.render(dashboard.option_chain, dashboard.greeks, dashboard.data_provenance, dashboard.option_chain_integrity)
-greeks_table.render(dashboard.greeks)
-charts.render(dashboard)
+# 2. Action context: signal, institutional quality and expected move.
+row = st.columns([1.15, 1.15, 1.7], gap="small")
+with row[0]:
+    signal_card.render(decision, dashboard.dealer)
+with row[1]:
+    institutional_score_card.render(dashboard.institutional_score)
+with row[2]:
+    expected_move_card.render({
+        "spot": summary["spot"],
+        "expected_move": summary["expected_move"],
+        "upper": summary["expected_move_upper"],
+        "lower": summary["expected_move_lower"],
+        "method": summary["expected_move_method"],
+    })
 
-with st.expander("🔗 Backend ↔ UI Integrity", expanded=True):
-    render_backend_ui_integrity(integrity_report)
+# Probability remains visible as a decision-support visual, rather than being
+# buried below the option-chain data.
+with st.container(border=True):
+    probability_gauge.render(dashboard.probability)
 
+# 3. Compact market context row.
+row = st.columns([1.05, 1.25, 1.25, 1.25], gap="small")
+with row[0]:
+    max_pain_card.render(dashboard.max_pain)
+with row[1]:
+    pcr_card.render(dashboard.pcr)
+with row[2]:
+    market_structure_card.render(dashboard.market_structure)
+with row[3]:
+    runtime_card.render(dashboard)
+
+# 4. Institutional mechanics: dealer positioning and liquidity stay together.
+row = st.columns([1.0, 1.0, 1.45], gap="small")
+with row[0]:
+    dealer_card.render(dashboard.dealer)
+with row[1]:
+    dealer_flow_card.render(dashboard.dealer_flow)
+with row[2]:
+    liquidity_card.render(dashboard.liquidity)
+
+# 5. Execution plan is intentionally kept as one complete section so a user
+# can read recommendation -> strike -> entry/SL/targets -> volatility/reasons
+# without jumping around the page.
+with st.container(border=True):
+    trade_plan.render(dashboard.trade_plan, decision)
+
+# 6. Risk is immediately below the execution plan, before detailed charts.
+with st.container(border=True):
+    risk_card.render(dashboard.risk)
+
+# 7. Visual analytics: the existing four chart views remain together.
+with st.container(border=True):
+    charts.render(dashboard)
+
+# 8. Full-width market data tables. Keeping these below the decision cockpit
+# prevents the large tables from pushing the actionable information down.
+with st.container(border=True):
+    option_chain.render(
+        dashboard.option_chain,
+        dashboard.greeks,
+        dashboard.data_provenance,
+        dashboard.option_chain_integrity,
+    )
+
+with st.container(border=True):
+    greeks_table.render(dashboard.greeks)
+
+# 9. Existing heatmaps remain available after the source tables, where they
+# provide a visual drill-down without competing with the primary decision.
+row = st.columns(2, gap="small")
+with row[0]:
+    gamma_heatmap.render(dashboard.greeks)
+with row[1]:
+    oi_heatmap.render(dashboard.option_chain)
+
+# 10. Runtime/execution validation and Brain/P&L are grouped at the bottom,
+# after the user has seen the current decision and its supporting evidence.
 with st.expander("⚡ Execution & Position State", expanded=False):
     render_execution_state(ui_contract["sections"])
 
 with st.expander("🧠 Brain / Paper Performance", expanded=True):
     render_brain_performance(dashboard)
+
+with st.expander("🔗 Backend ↔ UI Integrity", expanded=True):
+    render_backend_ui_integrity(integrity_report)
 
 with st.expander("📦 Analytics Output"):
     st.json(dashboard.analytics)
