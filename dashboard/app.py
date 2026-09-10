@@ -9,8 +9,6 @@ import streamlit as st
 
 from config.settings import PROVIDER
 from dashboard.dashboard_controller import DashboardController
-from dashboard.market_summary_adapter import adapt_market_summary
-from dashboard.decision_adapter import adapt_decision
 from dashboard.ui_runtime_contract import build_ui_runtime_contract
 from dashboard.ui_data_contract import build_ui_integrity_report
 from dashboard.components import institutional_score_card
@@ -117,7 +115,7 @@ with st.expander("⚡ Execution & Position State", expanded=False):
     render_execution_state(ui_contract["sections"])
 
 with st.expander("🧠 Brain / Paper Performance", expanded=True):
-    render_brain_performance()
+    render_brain_performance(dashboard)
 
 with st.expander("📦 Analytics Output"):
     st.json(dashboard.analytics)
