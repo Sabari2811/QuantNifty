@@ -32,7 +32,7 @@ class BrainObservation:
 
 
 class BrainStore:
-    """Append-only Brain persistence with optional SQL durability."""
+    """Append-only Brain persistence with SQL durability when configured."""
 
     def __init__(
         self,
@@ -40,7 +40,12 @@ class BrainStore:
         database_url: str | None = None,
     ):
         self._sql_store = None
-        configured_url = database_url or os.getenv("BRAIN_DATABASE_URL")
+        configured_url = (
+            database_url
+            or os.getenv("BRAIN_DATABASE_URL")
+            or os.getenv("LIVE_EVIDENCE_DATABASE_URL")
+            or os.getenv("PAPER_TRADE_DATABASE_URL")
+        )
         if configured_url:
             self._sql_store = SqlAppendStore(configured_url, "brain_observations")
             self.path = None
@@ -134,14 +139,21 @@ class AdaptiveBrain:
     def _already_learned(self, trade_id: str) -> bool:
         if not trade_id:
             return False
-        return any(str(payload.get("trade_id") or "") == trade_id and payload.get("outcome") in {"WIN", "LOSS"}
-                   for payload in self.store.records())
+        return any(
+            str(payload.get("trade_id") or "") == trade_id
+            and payload.get("outcome") in {"WIN", "LOSS"}
+            for payload in self.store.records()
+        )
 
     def observe(self, ctx: Any, broker: Any = None) -> BrainObservation:
         record = self.extractor.extract(ctx)
         trade = self._resolved_trade(ctx, broker)
         outcome = self._resolved_outcome(ctx, broker)
-        trade_id = str(getattr(getattr(trade, "order", None), "order_id", "") or getattr(trade, "order_id", "") or "")
+        trade_id = str(
+            getattr(getattr(trade, "order", None), "order_id", "")
+            or getattr(trade, "order_id", "")
+            or ""
+        )
         duplicate_outcome = bool(outcome and self._already_learned(trade_id))
         if outcome and not duplicate_outcome:
             record.outcome = outcome
