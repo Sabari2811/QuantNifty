@@ -100,7 +100,7 @@ class LiveEngine:
                 audit_store=self._runtime_audit_store,
             )
         else:
-            self.risk_manager = self.trade_pipeline.risk_manager
+            self.risk_manager = getattr(self.trade_pipeline, "risk_manager", None)
         self.recording_manager = RecordingManager()
         self.dashboard = ConsoleDashboard()
         self.ctx.runtime_status = "READY"
@@ -141,8 +141,17 @@ class LiveEngine:
 
     def _sync_risk_snapshot(self):
         """Expose the exact risk policy/state used by the execution gate."""
-        risk_snapshot = self.risk_manager.snapshot(self.paper_broker)
-        self.ctx.risk_state = self.risk_manager.state
+        manager = getattr(self, "risk_manager", None)
+        if manager is None:
+            manager = getattr(getattr(self, "trade_pipeline", None), "risk_manager", None)
+        if manager is None:
+            # Lightweight unit-test doubles may intentionally omit a risk
+            # manager. Production composition always supplies one; do not
+            # fabricate risk values for an incomplete runtime.
+            return None
+        risk_snapshot = manager.snapshot(self.paper_broker)
+        self.risk_manager = manager
+        self.ctx.risk_state = manager.state
         self.ctx.market_context.risk = risk_snapshot
         if isinstance(self.ctx.analytics, dict):
             self.ctx.analytics["risk"] = risk_snapshot
