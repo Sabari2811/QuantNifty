@@ -86,6 +86,24 @@ class PaperBroker:
             elif lifecycle.lifecycle.action is PositionLifecycleAction.CLOSE_TARGET:
                 self.close_position(position, ltp, "TARGET")
 
+    def close_all_positions(self, option_chain=None, reason="END_OF_REPLAY"):
+        """Close every remaining position at its latest available LTP.
+
+        Backtests must not finish with open positions, otherwise realized P&L,
+        trade counts and risk statistics are understated. Positions for which
+        no final market price is available are deliberately left open rather
+        than inventing an exit price.
+        """
+        for position in list(self.portfolio.open_positions):
+            ltp = self._find_ltp(
+                option_chain,
+                position.order.strike,
+                position.order.option_type,
+            )
+            if ltp is None:
+                continue
+            self.close_position(position, ltp, reason)
+
     def _find_ltp(self, option_chain, strike, option_type):
         if option_chain is None:
             return None
