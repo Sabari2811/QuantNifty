@@ -25,7 +25,7 @@ def render(dashboard):
     st.subheader("🌍 Market Regime")
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Gamma Position", _display(dealer.dealer_gamma))
+    c1.metric("Dealer Gamma", _display(dealer.dealer_gamma))
     c2.metric("Market Mode", _display(dealer.market_mode))
     c3.metric("Expected Volatility", _display(dealer.expected_volatility))
     c4.metric("Confidence", _confidence(probability.get("confidence"), signal))
