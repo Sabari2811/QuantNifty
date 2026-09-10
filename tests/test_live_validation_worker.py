@@ -54,7 +54,10 @@ def test_initialize_runtime_injects_one_canonical_brain(monkeypatch):
 
     result = worker._initialize_runtime()
 
-    assert result == (evidence_store, brain, provider, captured and captured)
+    assert result[0] is evidence_store
+    assert result[1] is brain
+    assert result[2] is provider
+    assert isinstance(result[3], FakeEngine)
     assert captured["provider"] is provider
     assert captured["adaptive_brain"] is brain
 
