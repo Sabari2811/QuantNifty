@@ -1,8 +1,8 @@
 class ProbabilityEngine:
     """Build directional probabilities for the NIFTY decision engine.
 
-    Trend strength (ADX) increases conviction only; it never creates a
-    bullish direction by itself. Direction must come from directional inputs.
+    Trend strength increases conviction only; it never creates a bullish
+    direction by itself. Direction must come from directional inputs.
     """
 
     def calculate(self, dealer, market_structure, pcr, iv_skew, technical):
@@ -98,14 +98,13 @@ class ProbabilityEngine:
             bearish_confirmations += 1
             reasons.append("Below VWAP")
 
-        # ADX is a strength signal, not a directional signal.
-        strength = adx.get("strength", "UNKNOWN")
-        trend_strength_bonus = 5 if strength in ("STRONG", "VERY_STRONG") else 0
-        if trend_strength_bonus:
+        # ADX is explicitly direction-neutral: it strengthens the dominant
+        # side rather than introducing an arbitrary bullish bias.
+        if adx.get("strength", "UNKNOWN") in ("STRONG", "VERY_STRONG"):
             if bullish > bearish:
-                bullish += trend_strength_bonus
+                bullish += 5
             elif bearish > bullish:
-                bearish += trend_strength_bonus
+                bearish += 5
             reasons.append("Strong Trend")
 
         bullish = max(0, min(100, bullish))
