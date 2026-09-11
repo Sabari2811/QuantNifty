@@ -1,4 +1,6 @@
-from __future__ import annotations
+from datetime import datetime, time as dt_time
+import os
+from zoneinfo import ZoneInfo
 
 from analytics.intelligence.gate import IntelligenceGate
 from execution.execution_audit_store import ExecutionAuditRecord, InMemoryExecutionAuditStore, SQLiteExecutionAuditStore
@@ -6,6 +8,10 @@ from execution.execution_contract import ExecutionStatus, ExecutionResult
 from execution.execution_lifecycle import classify_execution_result
 from execution.idempotency import IdempotencyStatus, OrderIdempotencyGuard
 from execution.paper_execution_adapter import PaperExecutionAdapter
+from config.trading_config import TradingConfig
+
+
+IST = ZoneInfo("Asia/Kolkata")
 
 
 class TradeExecutionPipeline:
@@ -37,6 +43,17 @@ class TradeExecutionPipeline:
     def _client_order_id(self, ctx):
         intent = getattr(ctx, "execution_intent", None)
         return str(getattr(intent, "client_order_id", "")).strip()
+
+    @staticmethod
+    def _live_entry_cutoff_due():
+        if os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() != "true":
+            return False
+        now = datetime.now(IST)
+        cutoff = dt_time(
+            TradingConfig.INTRADAY_FORCE_EXIT_HOUR,
+            TradingConfig.INTRADAY_FORCE_EXIT_MINUTE,
+        )
+        return now.weekday() < 5 and now.time() >= cutoff
 
     def _persist_result(self, result):
         if result is not None and result.intent.client_order_id:
@@ -86,12 +103,18 @@ class TradeExecutionPipeline:
             return
 
         # WAIT/invalid decisions intentionally produce no execution intent.
-        # They are valid no-action outcomes, not broker rejections. Never send
-        # a WAIT decision through PaperBroker or mark it as a rejected trade.
+        # They are valid no-action outcomes, not broker rejections.
         intent = getattr(ctx, "execution_intent", None)
         if intent is None:
             ctx.trade_status = "NOT_REQUESTED"
             self.sync_context(ctx)
+            return
+
+        # Live validation is strictly intraday. Existing positions are closed
+        # by PaperBroker at the same cutoff; this gate prevents a new entry from
+        # being created after the cutoff in the same or a later cycle.
+        if self._live_entry_cutoff_due():
+            self._reject(ctx, intent, "INTRADAY_ENTRY_CUTOFF")
             return
 
         if ctx.intelligence is not None:
@@ -135,10 +158,6 @@ class TradeExecutionPipeline:
         ctx.execution_result = result
         ctx.execution_lifecycle = classify_execution_result(result).value
 
-        # Preserve the broker's canonical lifecycle outcome. UNKNOWN and
-        # SUBMITTED are non-terminal reconciliation states and must never be
-        # presented as a rejection merely because execution was not
-        # immediately EXECUTED.
         ctx.trade_status = result.status.value
         if result.status in {ExecutionStatus.REJECTED, ExecutionStatus.FAILED, ExecutionStatus.NOT_SUBMITTED}:
             ctx.trade_block_reason = result.reason or "Execution was not completed."
