@@ -175,7 +175,7 @@ class LiveEngine:
             return None
         observation = brain.observe(self.ctx, broker=self.paper_broker)
         self.ctx.brain_observation = observation
-        logger.info("BRAIN OBSERVATION | cycle=%s status=%s signal=%s outcome=%s trade_id=%s samples=%s", observation.cycle_no, observation.status, observation.signal, observation.outcome or "PENDING", observation.trade_id, observation.learning_sample_count)
+        logger.info("BRAIN OBSERVATION | cycle=%s status=%s signal=%s outcome=%s trade_id=%s samples=%s", getattr(observation, "cycle_no", self.ctx.cycle_no), getattr(observation, "status", ""), getattr(observation, "signal", ""), getattr(observation, "outcome", "") or "PENDING", getattr(observation, "trade_id", ""), getattr(observation, "learning_sample_count", 0))
         return observation
 
     def _calculate_greeks(self):
