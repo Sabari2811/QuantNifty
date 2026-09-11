@@ -1,5 +1,8 @@
 from datetime import datetime
 from uuid import uuid4
+import os
+from datetime import time as dt_time
+from zoneinfo import ZoneInfo
 
 from paper_trading.models import PaperOrder, PaperPosition
 from paper_trading.portfolio import PortfolioEngine
@@ -7,6 +10,10 @@ from paper_trading.persistent_journal import PersistentTradeJournal
 from analytics.performance.performance_engine import PerformanceEngine
 from execution.position_lifecycle import PositionLifecycleAction
 from execution.position_lifecycle_adapter import evaluate_paper_position_lifecycle
+from config.trading_config import TradingConfig
+
+
+IST = ZoneInfo("Asia/Kolkata")
 
 
 class PaperBroker:
@@ -71,8 +78,21 @@ class PaperBroker:
         print(f"PaperBroker: Opened {trade.option_type} {trade.strike}")
         return position
 
+    @staticmethod
+    def _force_exit_due():
+        """Only live-validation paper trading uses the real NSE session clock."""
+        if os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() != "true":
+            return False
+        now = datetime.now(IST)
+        cutoff = dt_time(
+            TradingConfig.INTRADAY_FORCE_EXIT_HOUR,
+            TradingConfig.INTRADAY_FORCE_EXIT_MINUTE,
+        )
+        return now.weekday() < 5 and now.time() >= cutoff
+
     def update_positions(self, option_chain):
         self.portfolio.unrealized_pnl = 0
+        force_exit = self._force_exit_due()
         for position in list(self.portfolio.open_positions):
             ltp = self._find_ltp(option_chain, position.order.strike, position.order.option_type)
             if ltp is None:
@@ -80,6 +100,9 @@ class PaperBroker:
             position.current_price = ltp
             position.pnl = (ltp - position.order.entry_price) * position.order.quantity
             self.portfolio.unrealized_pnl += position.pnl
+            if force_exit:
+                self.close_position(position, ltp, "END_OF_DAY")
+                continue
             lifecycle = evaluate_paper_position_lifecycle(position, current_price=ltp)
             if lifecycle.lifecycle.action is PositionLifecycleAction.CLOSE_STOP_LOSS:
                 self.close_position(position, ltp, "STOP_LOSS")
