@@ -1,3 +1,4 @@
+from config.trading_config import TradingConfig
 from decision.execution.delta_risk import DeltaRiskModel
 
 
@@ -8,10 +9,8 @@ class PremiumEngine:
         self.movement_model = movement_model or DeltaRiskModel()
 
     def build(self, decision, contract):
-        """Populate entry and, when delta exists, NIFTY movement-based targets."""
         if contract is None:
             return decision
-
         trade = decision.trade
         premium = float(getattr(contract, "ltp", 0) or 0)
         trade.entry = round(premium, 2) if premium > 0 else 0
@@ -21,18 +20,16 @@ class PremiumEngine:
             trade.stop_loss = 0
             trade.risk_reward = 0
             return decision
-
         try:
             delta = float(getattr(contract, "delta", 0) or 0)
         except (TypeError, ValueError):
             delta = 0.0
-
-        # Live PreparationEngine validates delta before invoking the premium
-        # and risk engines. Historical fixtures may omit it; retain their
-        # existing target values instead of erasing a valid replay plan.
         if abs(delta) <= 0:
+            # Historical fixtures without Greeks retain the legacy premium
+            # multipliers. Live preparation validates delta before this point.
+            trade.target1 = round(trade.entry * TradingConfig.TARGET1_MULTIPLIER, 2)
+            trade.target2 = round(trade.entry * TradingConfig.TARGET2_MULTIPLIER, 2)
             return decision
-
         _, target1, target2 = self.movement_model.levels(trade.entry, delta)
         trade.target1 = target1
         trade.target2 = target2
