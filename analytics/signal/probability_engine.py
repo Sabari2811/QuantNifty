@@ -4,8 +4,6 @@ class ProbabilityEngine:
         bullish = 50; bearish = 50; reasons = []; bullish_confirmations = 0; bearish_confirmations = 0
         if dealer.get("dealer_gamma") == "LONG": bullish += 20; bearish -= 20; bullish_confirmations += 1; reasons.append("Dealers Long Gamma")
         elif dealer.get("dealer_gamma") == "SHORT": bullish -= 20; bearish += 20; bearish_confirmations += 1; reasons.append("Dealers Short Gamma")
-        if dealer.get("market_mode") == "PINNED": reasons.append("Pinned Market")
-        elif dealer.get("market_mode") == "TRENDING": reasons.append("Trending Market")
         sentiment = pcr.get("sentiment", "NEUTRAL")
         if sentiment == "BULLISH": bullish += 10; bearish -= 10; bullish_confirmations += 1; reasons.append("Bullish PCR")
         elif sentiment == "BEARISH": bullish -= 10; bearish += 10; bearish_confirmations += 1; reasons.append("Bearish PCR")
