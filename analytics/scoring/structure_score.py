@@ -1,96 +1,49 @@
 class StructureScore:
-    """
-    Structure Score
-
-    Maximum Score : 10
-
-    Direction Aware
-    """
+    """Direction-aware market-structure contribution for the NIFTY decision score."""
 
     MAX_SCORE = 10
 
-    def calculate(
-
-        self,
-
-        market_structure,
-
-        pcr,
-
-        expected_move,
-
-        signal,
-
-        spot
-
-    ):
-
+    def calculate(self, market_structure, pcr, expected_move, signal, spot):
+        market_structure = market_structure or {}
+        pcr = pcr or {}
+        expected_move = expected_move or {}
+        signal = signal or {}
+        trade = signal.get("signal", "NO TRADE") if isinstance(signal, dict) else "NO TRADE"
         score = 0
-
         reasons = []
 
-        trade = signal.get("signal", "NO TRADE")
-
-        # ==================================================
-        # BUY CALL
-        # ==================================================
+        bias = market_structure.get("bias")
+        structure = market_structure.get("structure")
+        oi_pcr = pcr.get("oi_pcr")
+        upper = expected_move.get("upper")
+        lower = expected_move.get("lower")
 
         if trade == "BUY CALL":
-
-            if market_structure["bias"] == "BULLISH":
-
+            if bias == "BULLISH":
                 score += 4
                 reasons.append("Bullish Structure")
-
-            if pcr["oi_pcr"] > 1:
-
+            if isinstance(oi_pcr, (int, float)) and oi_pcr > 1:
                 score += 3
                 reasons.append("Bullish PCR")
-
-            if spot < expected_move["upper"]:
-
+            if isinstance(upper, (int, float)) and spot < upper:
                 score += 3
                 reasons.append("Inside Expected Move")
-
-        # ==================================================
-        # BUY PUT
-        # ==================================================
-
         elif trade == "BUY PUT":
-
-            if market_structure["bias"] == "BEARISH":
-
+            if bias == "BEARISH":
                 score += 4
                 reasons.append("Bearish Structure")
-
-            if pcr["oi_pcr"] < 1:
-
+            if isinstance(oi_pcr, (int, float)) and oi_pcr < 1:
                 score += 3
                 reasons.append("Bearish PCR")
-
-            if spot > expected_move["lower"]:
-
+            if isinstance(lower, (int, float)) and spot > lower:
                 score += 3
                 reasons.append("Inside Expected Move")
-
-        # ==================================================
-        # Default
-        # ==================================================
-
         else:
-
-            if market_structure["structure"] == "RANGING":
-
+            if structure == "RANGING":
                 score += 2
 
-        score = min(score, self.MAX_SCORE)
-
         return {
-
-            "score": score,
-
+            "score": min(score, self.MAX_SCORE),
             "max_score": self.MAX_SCORE,
-
-            "reasons": reasons
-
+            "reasons": reasons,
         }
