@@ -25,10 +25,10 @@ def test_missing_nifty_signal_is_wait_not_score_derived_trade():
     assert decision.signal.name == Signal.WAIT.value
 
 
-def test_nifty_direction_is_authoritative():
+def test_nifty_direction_is_authoritative_before_contract_preparation():
     decision = DecisionEngine().build(_snapshot(Signal.BUY_PUT.value))
-    assert decision.signal.name == Signal.BUY_PUT.value
     assert decision.authoritative_signal == Signal.BUY_PUT.value
+    assert decision.score["direction"] == Signal.BUY_PUT.value
 
 
 def test_non_nifty_snapshot_is_rejected():
