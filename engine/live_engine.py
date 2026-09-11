@@ -2,14 +2,12 @@ from datetime import datetime
 
 from core.runtime_context import RuntimeContext
 from core.logger import logger
-
 from decision.explanation_engine import ExplanationEngine
-
+from decision.validation_result import ValidationResult
+from decision.models.trade import Trade
 from providers.indmoney_provider import INDMoneyProvider
 from providers.simulation_provider import SimulationProvider
-
 from paper_trading.broker import PaperBroker
-
 from engine.instrument_manager import InstrumentManager
 from engine.market_data_manager import MarketDataManager
 from engine.strike_selector import StrikeSelector
@@ -17,18 +15,13 @@ from engine.option_chain_manager import OptionChainManager
 from engine.live_greeks_engine import LiveGreeksEngine
 from engine.candle_manager import CandleManager
 from engine.market_data_pipeline import MarketDataPipeline
-
 from decision.market_regime_engine import MarketRegimeEngine
 from decision.decision_engine import DecisionEngine
-
 from risk.risk_manager import RiskManager
-
 from analytics.analytics_pipeline import AnalyticsPipeline
 from analytics.market_snapshot.market_snapshot import MarketSnapshot
 from analytics.intelligence.decision_consistency import reconcile_decision_intelligence
-
 from brain.adaptive_brain import AdaptiveBrain
-
 from execution.order_intent_factory import build_order_intent
 from execution.trade_execution_pipeline import TradeExecutionPipeline
 from execution.execution_lifecycle import classify_execution_result
@@ -37,21 +30,14 @@ from execution.position_runtime_config import build_position_state_store
 from execution.position_runtime_service import PositionRuntimeService
 from execution.position_recovery_runtime import recover_open_positions as recover_runtime_positions
 from execution.position_reconciliation_runtime import evaluate_position_reconciliation_runtime
-
 from recording.recording_manager import RecordingManager
-
 from ui.console_dashboard import ConsoleDashboard
-
 from runtime.runtime_mode import RuntimeMode
 from models.market_context import MarketContext
-from simulation.replay_equivalence import (
-    compare_replay_analytics,
-    compare_replay_outputs,
-)
+from simulation.replay_equivalence import compare_replay_analytics, compare_replay_outputs
 
 
 class LiveEngine:
-
     def __init__(self, provider=None, intelligence_service=None, paper_broker=None, trade_pipeline=None, adaptive_brain=None, audit_store_path=None, position_state_path=None):
         self.ctx = RuntimeContext()
         self._previous_greeks_df = None
@@ -94,11 +80,7 @@ class LiveEngine:
             self.risk_manager = RiskManager()
             if self.audit_store_path is not None:
                 self._runtime_audit_store = build_runtime_audit_store(self.audit_store_path)
-            self.trade_pipeline = TradeExecutionPipeline(
-                paper_broker=self.paper_broker,
-                risk_manager=self.risk_manager,
-                audit_store=self._runtime_audit_store,
-            )
+            self.trade_pipeline = TradeExecutionPipeline(paper_broker=self.paper_broker, risk_manager=self.risk_manager, audit_store=self._runtime_audit_store)
         else:
             self.risk_manager = getattr(self.trade_pipeline, "risk_manager", None)
         self.recording_manager = RecordingManager()
@@ -110,11 +92,7 @@ class LiveEngine:
         service = getattr(self, "position_runtime_service", None)
         if service is None:
             from execution.position_recovery_runtime import PositionRecoveryRuntimeDecision
-            decision = PositionRecoveryRuntimeDecision(
-                positions=(),
-                safe_to_continue=False,
-                reason="Position state store is unavailable.",
-            )
+            decision = PositionRecoveryRuntimeDecision(positions=(), safe_to_continue=False, reason="Position state store is unavailable.")
         else:
             decision = recover_runtime_positions(service.store)
         self.ctx.position_recovery = decision
@@ -140,14 +118,10 @@ class LiveEngine:
             service.persist_after_lifecycle(last_trade, lifecycle)
 
     def _sync_risk_snapshot(self):
-        """Expose the exact risk policy/state used by the execution gate."""
         manager = getattr(self, "risk_manager", None)
         if manager is None:
             manager = getattr(getattr(self, "trade_pipeline", None), "risk_manager", None)
         if manager is None or not hasattr(manager, "snapshot"):
-            # Lightweight unit-test doubles may intentionally omit a risk
-            # manager. Production composition always supplies one; do not
-            # fabricate risk values for an incomplete runtime.
             return None
         risk_snapshot = manager.snapshot(self.paper_broker)
         self.risk_manager = manager
@@ -158,29 +132,47 @@ class LiveEngine:
             self.ctx.analytics["risk"] = risk_snapshot
         return risk_snapshot
 
+    def _apply_brain_gate(self):
+        """Let learned evidence veto a weak repeat, never reverse CALL/PUT direction."""
+        brain = getattr(self, "adaptive_brain", None)
+        if brain is None or not hasattr(brain, "evaluate") or self.ctx.decision is None:
+            self.ctx.brain_decision = None
+            return None
+        evidence = brain.evaluate(self.ctx)
+        self.ctx.brain_decision = evidence
+        decision = self.ctx.decision
+        decision.score["brain_similarity"] = evidence.similarity
+        decision.score["brain_historical_win_rate"] = evidence.historical_win_rate
+        decision.score["brain_average_pnl"] = evidence.average_pnl
+        decision.score["brain_sample_count"] = evidence.sample_count
+        decision.score["brain_gate"] = evidence.gate
+        decision.reasons.append(f"Brain: {evidence.reason}")
+        if evidence.gate == "BLOCK" and decision.signal.name != "WAIT":
+            raw_signal = decision.signal.name
+            decision.signal.name = "WAIT"
+            decision.trade = Trade(symbol="NIFTY")
+            decision.validation = ValidationResult(valid=False, grade="BRAIN_VETO", confidence=0, risk_multiplier=0.0, warnings=[evidence.reason])
+            decision.authoritative_signal = raw_signal
+            decision.reasons.append(f"Brain vetoed repeated {raw_signal} setup based on learned outcomes.")
+            logger.info("BRAIN GATE | BLOCK | raw_signal=%s | win_rate=%.2f | avg_pnl=%.2f | samples=%s", raw_signal, evidence.historical_win_rate, evidence.average_pnl, evidence.sample_count)
+        else:
+            logger.info("BRAIN GATE | %s | signal=%s | win_rate=%.2f | avg_pnl=%.2f | samples=%s", evidence.gate, decision.signal.name, evidence.historical_win_rate, evidence.average_pnl, evidence.sample_count)
+        return evidence
+
     def _observe_brain(self):
-        """Persist one Brain observation after the canonical decision/execution path."""
         if self._is_replay():
             self.ctx.brain_observation = None
             return None
-        if self.ctx.decision is None or self.ctx.market_context is None:
+        if self.ctx.market_context is None:
             self.ctx.brain_observation = None
             return None
         brain = getattr(self, "adaptive_brain", None)
         if brain is None or not hasattr(brain, "observe"):
-            # Legacy/lightweight engine doubles can omit the optional Brain;
-            # production CompositionRoot always injects the persistent Brain.
             self.ctx.brain_observation = None
             return None
         observation = brain.observe(self.ctx, broker=self.paper_broker)
         self.ctx.brain_observation = observation
-        logger.info(
-            "BRAIN OBSERVATION | cycle=%s status=%s signal=%s outcome=%s",
-            observation.cycle_no,
-            observation.status,
-            observation.signal,
-            observation.outcome or "PENDING",
-        )
+        logger.info("BRAIN OBSERVATION | cycle=%s status=%s signal=%s outcome=%s trade_id=%s samples=%s", observation.cycle_no, observation.status, observation.signal, observation.outcome or "PENDING", observation.trade_id, observation.learning_sample_count)
         return observation
 
     def _calculate_greeks(self):
@@ -199,7 +191,6 @@ class LiveEngine:
 
     @staticmethod
     def _option_chain_ready_for_analytics(ctx):
-        """Allow analytics only when the canonical option chain is complete and valid."""
         provenance = getattr(ctx, "data_provenance", None)
         option = getattr(provenance, "option_chain", None) if provenance else None
         if option is None:
@@ -212,13 +203,7 @@ class LiveEngine:
 
     def _run_analytics(self):
         replay_recompute = self._is_replay_recompute()
-        computed_analytics = self.pipeline.run(
-            greeks_engine=self.greeks.greeks,
-            greeks_df=self.ctx.greeks_df,
-            spot_price=self.ctx.spot,
-            candles=self.ctx.candles,
-            previous_greeks_df=getattr(self, "_previous_greeks_df", None),
-        )
+        computed_analytics = self.pipeline.run(greeks_engine=self.greeks.greeks, greeks_df=self.ctx.greeks_df, spot_price=self.ctx.spot, candles=self.ctx.candles, previous_greeks_df=getattr(self, "_previous_greeks_df", None))
         computed_context = computed_analytics.get("context")
         if computed_context is None:
             raise RuntimeError("AnalyticsPipeline returned no canonical MarketContext")
@@ -245,9 +230,7 @@ class LiveEngine:
             self.ctx.replay_analytics_equivalence = None
             self.ctx.analytics = computed_analytics
 
-        greeks_for_snapshot = self.ctx.greeks_df
-        if not hasattr(greeks_for_snapshot, "copy"):
-            greeks_for_snapshot = computed_analytics.get("greeks")
+        greeks_for_snapshot = self.ctx.greeks_df if hasattr(self.ctx.greeks_df, "copy") else computed_analytics.get("greeks")
         self.ctx.snapshot = MarketSnapshot().save(greeks_df=greeks_for_snapshot, spot=self.ctx.spot, analytics=self.ctx.analytics)
         self.ctx.snapshot.market_context = self.ctx.market_context
         regime = self.market_regime.analyze(self.ctx.snapshot)
@@ -263,6 +246,9 @@ class LiveEngine:
                 if canonical_strike is not None:
                     self.ctx.decision.trade.strike = canonical_strike
 
+        # Learned evidence is applied after the canonical direction is known,
+        # but before order intent/execution. It can only veto to WAIT.
+        self._apply_brain_gate()
         self.ctx.explanation = self.explanation_engine.build(decision=self.ctx.decision, regime=self.ctx.regime, snapshot=self.ctx.snapshot)
 
         if self.intelligence_service is not None:
@@ -316,7 +302,7 @@ class LiveEngine:
                     self.risk_manager.on_trade_closed(position)
             self._persist_position_runtime_state()
             self.trade_pipeline.sync_context(self.ctx)
-            if self._is_replay_fast():
+            if self._is_replay_fast:
                 pass
             else:
                 if self._is_replay_recompute():
