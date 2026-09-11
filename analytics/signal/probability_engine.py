@@ -23,10 +23,9 @@ class ProbabilityEngine:
             bearish_confirmations += 1
             reasons.append("Dealers Short Gamma")
 
-        mode = dealer.get("market_mode", "UNKNOWN")
-        if mode == "PINNED":
+        if dealer.get("market_mode") == "PINNED":
             reasons.append("Pinned Market")
-        elif mode == "TRENDING":
+        elif dealer.get("market_mode") == "TRENDING":
             reasons.append("Trending Market")
 
         sentiment = pcr.get("sentiment", "NEUTRAL")
@@ -98,8 +97,6 @@ class ProbabilityEngine:
             bearish_confirmations += 1
             reasons.append("Below VWAP")
 
-        # ADX is explicitly direction-neutral: it strengthens the dominant
-        # side rather than introducing an arbitrary bullish bias.
         if adx.get("strength", "UNKNOWN") in ("STRONG", "VERY_STRONG"):
             if bullish > bearish:
                 bullish += 5
@@ -109,12 +106,10 @@ class ProbabilityEngine:
 
         bullish = max(0, min(100, bullish))
         bearish = max(0, min(100, bearish))
-        confidence = abs(bullish - bearish)
-
         return {
             "bullish_probability": bullish,
             "bearish_probability": bearish,
-            "confidence": confidence,
+            "confidence": abs(bullish - bearish),
             "bullish_confirmations": bullish_confirmations,
             "bearish_confirmations": bearish_confirmations,
             "reasons": reasons,
