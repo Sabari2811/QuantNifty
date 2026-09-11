@@ -11,7 +11,15 @@ class PremiumEngine:
     def build(self, decision, contract):
         if contract is None:
             return decision
+
         trade = decision.trade
+        # Keep the exact selected contract attached to the decision so the
+        # downstream risk/order engines consume the same NIFTY option.
+        trade.contract = contract
+        trade.symbol = "NIFTY"
+        trade.option_type = str(getattr(contract, "option_type", trade.option_type) or trade.option_type)
+        trade.strike = float(getattr(contract, "strike", trade.strike) or trade.strike)
+
         premium = float(getattr(contract, "ltp", 0) or 0)
         trade.entry = round(premium, 2) if premium > 0 else 0
         if trade.entry <= 0:
