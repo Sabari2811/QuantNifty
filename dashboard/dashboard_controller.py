@@ -24,15 +24,22 @@ _WAIT_ACTIVE_FIELDS = (
     "risk_reward",
 )
 
+_TERMINAL_NON_EXECUTION = {"REJECTED", "FAILED", "NOT_SUBMITTED"}
+
 
 def _effective_signal(ctx):
     """Return the executable signal after execution preparation/validation.
 
-    MarketContext.signal represents the analytical direction before execution
-    validation. ``ctx.decision.signal`` is the state the execution layer
-    actually permits. The dashboard must never display a pre-validation BUY
-    signal as actionable after the execution layer has vetoed it.
+    A raw Decision may be BUY/SELL while the canonical execution gate rejects
+    it (for example because Intelligence or decision/intelligence consistency
+    vetoed the action). In that state the dashboard must expose WAIT as the
+    executable state and must not display a stale actionable trade plan.
     """
+    execution_result = getattr(ctx, "execution_result", None)
+    execution_status = str(getattr(getattr(execution_result, "status", None), "value", "") or "").upper()
+    if execution_status in _TERMINAL_NON_EXECUTION:
+        return "WAIT"
+
     decision = getattr(ctx, "decision", None)
     signal = getattr(getattr(decision, "signal", None), "name", None)
     if signal:
@@ -71,6 +78,8 @@ def _project_signal(ctx):
         return {"signal": "WAIT", "confidence": 0.0, "reasons": []}
     signal = _effective_signal(ctx)
     confidence = getattr(getattr(decision, "signal", None), "confidence", 0.0)
+    if signal == "WAIT":
+        confidence = 0.0
     return {
         "signal": signal,
         "confidence": confidence,
