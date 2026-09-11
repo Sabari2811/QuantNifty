@@ -25,9 +25,7 @@ class TradeExecutionPipeline:
         self.execution_adapter = execution_adapter if execution_adapter is not None else PaperExecutionAdapter(paper_broker)
         if audit_store is not None and audit_db_path is not None:
             raise ValueError("Provide either audit_store or audit_db_path, not both")
-        self.audit_store = audit_store if audit_store is not None else (
-            SQLiteExecutionAuditStore(audit_db_path) if audit_db_path is not None else InMemoryExecutionAuditStore()
-        )
+        self.audit_store = audit_store if audit_store is not None else (SQLiteExecutionAuditStore(audit_db_path) if audit_db_path is not None else InMemoryExecutionAuditStore())
         self.idempotency_guard = idempotency_guard if idempotency_guard is not None else OrderIdempotencyGuard(self.audit_store)
 
     def sync_context(self, ctx):
@@ -82,11 +80,7 @@ class TradeExecutionPipeline:
             if getattr(ctx, "nifty_session_date", None) != session_date:
                 ctx.nifty_session_date = session_date
                 ctx.nifty_session_open_spot = float(getattr(ctx, "spot", 0.0) or 0.0)
-
-            ok, reason = self.nifty_policy.validate_daily_move(
-                getattr(ctx, "nifty_session_open_spot", None),
-                getattr(ctx, "spot", None),
-            )
+            ok, reason = self.nifty_policy.validate_daily_move(getattr(ctx, "nifty_session_open_spot", None), getattr(ctx, "spot", None))
             if not ok:
                 intent = getattr(ctx, "execution_intent", None)
                 if intent is not None:
@@ -96,7 +90,6 @@ class TradeExecutionPipeline:
                     ctx.trade_block_reason = reason
                 self.sync_context(ctx)
                 return
-
             ok, reason = self.nifty_policy.entry_allowed(now)
             if not ok and reason == "NIFTY_INTRADAY_ENTRY_CUTOFF":
                 self.paper_broker.close_all_positions(ctx.option_chain, reason="NIFTY_INTRADAY_FORCE_EXIT")
@@ -114,11 +107,13 @@ class TradeExecutionPipeline:
             self.sync_context(ctx)
             return
 
-        ok, reason = self.nifty_policy.validate_symbol(getattr(trade, "symbol", "NIFTY"))
+        symbol = getattr(trade, "symbol", None) or getattr(intent, "symbol", None) or "NIFTY"
+        option_type = getattr(trade, "option_type", None) or getattr(intent, "option_type", None) or ""
+        ok, reason = self.nifty_policy.validate_symbol(symbol)
         if not ok:
             self._reject(ctx, intent, reason)
             return
-        ok, reason = self.nifty_policy.validate_option(getattr(trade, "option_type", ""))
+        ok, reason = self.nifty_policy.validate_option(option_type)
         if not ok:
             self._reject(ctx, intent, reason)
             return
