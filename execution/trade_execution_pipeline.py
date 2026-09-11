@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+from zoneinfo import ZoneInfo
 
 from analytics.intelligence.gate import IntelligenceGate
 from execution.execution_audit_store import ExecutionAuditRecord, InMemoryExecutionAuditStore, SQLiteExecutionAuditStore
@@ -8,6 +9,9 @@ from execution.execution_lifecycle import classify_execution_result
 from execution.idempotency import IdempotencyStatus, OrderIdempotencyGuard
 from execution.paper_execution_adapter import PaperExecutionAdapter
 from decision.nifty_policy import NiftyPolicy
+
+
+IST = ZoneInfo("Asia/Kolkata")
 
 
 class TradeExecutionPipeline:
@@ -71,11 +75,29 @@ class TradeExecutionPipeline:
         ctx.execution_result = None
         ctx.execution_lifecycle = ""
 
-        # The NIFTY strategy is strictly intraday. At the cutoff, close an
-        # existing paper position before evaluating any new entry, even when
-        # the current cycle is WAIT and therefore has no execution intent.
-        if os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() == "true":
-            ok, reason = self.nifty_policy.entry_allowed()
+        live_mode = os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() == "true"
+        if live_mode:
+            now = datetime.now(IST)
+            session_date = now.date().isoformat()
+            if getattr(ctx, "nifty_session_date", None) != session_date:
+                ctx.nifty_session_date = session_date
+                ctx.nifty_session_open_spot = float(getattr(ctx, "spot", 0.0) or 0.0)
+
+            ok, reason = self.nifty_policy.validate_daily_move(
+                getattr(ctx, "nifty_session_open_spot", None),
+                getattr(ctx, "spot", None),
+            )
+            if not ok:
+                intent = getattr(ctx, "execution_intent", None)
+                if intent is not None:
+                    self._reject(ctx, intent, reason)
+                else:
+                    ctx.trade_status = "BLOCKED"
+                    ctx.trade_block_reason = reason
+                self.sync_context(ctx)
+                return
+
+            ok, reason = self.nifty_policy.entry_allowed(now)
             if not ok and reason == "NIFTY_INTRADAY_ENTRY_CUTOFF":
                 self.paper_broker.close_all_positions(ctx.option_chain, reason="NIFTY_INTRADAY_FORCE_EXIT")
                 self.sync_context(ctx)
@@ -101,8 +123,8 @@ class TradeExecutionPipeline:
             self._reject(ctx, intent, reason)
             return
 
-        if os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() == "true":
-            ok, reason = self.nifty_policy.entry_allowed()
+        if live_mode:
+            ok, reason = self.nifty_policy.entry_allowed(now)
             if not ok:
                 self._reject(ctx, intent, reason)
                 return
