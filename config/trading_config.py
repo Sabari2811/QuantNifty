@@ -29,7 +29,18 @@ class TradingConfig:
     MIN_OPTION_VOLUME = 1000
 
     # -------------------------------------
-    # Premium Targets
+    # Intraday Movement Model
+    # -------------------------------------
+    # These are risk-model bounds, not claims that NIFTY can never exceed
+    # them. The execution plan must stay inside the configured trade horizon.
+    MAX_DAILY_UNDERLYING_MOVE = 400.0
+    MAX_TRADE_UNDERLYING_MOVE = 250.0
+    STOP_UNDERLYING_POINTS = 100.0
+    TARGET1_UNDERLYING_POINTS = 150.0
+    TARGET2_UNDERLYING_POINTS = 250.0
+
+    # -------------------------------------
+    # Premium Targets (legacy fallback only)
     # -------------------------------------
 
     TARGET1_MULTIPLIER = 1.35
@@ -37,7 +48,7 @@ class TradingConfig:
     TARGET2_MULTIPLIER = 1.70
 
     # -------------------------------------
-    # Stop Loss
+    # Stop Loss (legacy fallback only)
     # -------------------------------------
 
     STOPLOSS_LOW_IV = 0.20
@@ -45,7 +56,6 @@ class TradingConfig:
     STOPLOSS_NORMAL_IV = 0.25
 
     STOPLOSS_HIGH_IV = 0.30
-
 
     # -------------------------------------
     # IV Thresholds
