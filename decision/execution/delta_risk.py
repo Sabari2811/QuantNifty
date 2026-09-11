@@ -2,16 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from config.trading_config import TradingConfig
+
 
 @dataclass(frozen=True)
 class DeltaRiskModel:
     """Translate bounded NIFTY movement into option-premium levels via delta."""
 
-    max_daily_underlying_points: float = 400.0
-    max_trade_underlying_points: float = 250.0
-    stop_underlying_points: float = 100.0
-    target1_underlying_points: float = 150.0
-    target2_underlying_points: float = 250.0
+    max_daily_underlying_points: float = TradingConfig.MAX_DAILY_UNDERLYING_MOVE
+    max_trade_underlying_points: float = TradingConfig.MAX_TRADE_UNDERLYING_MOVE
+    stop_underlying_points: float = TradingConfig.STOP_UNDERLYING_POINTS
+    target1_underlying_points: float = TradingConfig.TARGET1_UNDERLYING_POINTS
+    target2_underlying_points: float = TradingConfig.TARGET2_UNDERLYING_POINTS
 
     def __post_init__(self):
         if self.max_trade_underlying_points > self.max_daily_underlying_points:
