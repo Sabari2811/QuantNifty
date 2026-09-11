@@ -9,27 +9,26 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import Column, DateTime, Integer, MetaData, Table, Text, create_engine, select, func
 
 
 def _normalize_database_url(database_url: str) -> str:
-    """Normalize PostgreSQL URLs to the installed psycopg 3 SQLAlchemy driver.
-
-    Render commonly supplies ``postgresql://`` (or legacy ``postgres://``)
-    URLs. SQLAlchemy's generic PostgreSQL URL otherwise defaults to the
-    psycopg2 dialect, which is not installed in QuantNifty. The project pins
-    psycopg 3, so production PostgreSQL connections must use ``+psycopg``.
-    Other SQLAlchemy URLs are left unchanged so deterministic SQLite tests and
-    future supported dialects retain their existing behavior.
-    """
+    """Normalize PostgreSQL URLs to psycopg 3 and require TLS."""
     value = database_url.strip()
     if value.startswith("postgres://"):
-        return "postgresql+psycopg://" + value[len("postgres://") :]
-    if value.startswith("postgresql://"):
-        return "postgresql+psycopg://" + value[len("postgresql://") :]
-    if value.startswith("postgresql+psycopg2://"):
-        return "postgresql+psycopg://" + value[len("postgresql+psycopg2://") :]
+        value = "postgresql+psycopg://" + value[len("postgres://") :]
+    elif value.startswith("postgresql://"):
+        value = "postgresql+psycopg://" + value[len("postgresql://") :]
+    elif value.startswith("postgresql+psycopg2://"):
+        value = "postgresql+psycopg://" + value[len("postgresql+psycopg2://") :]
+
+    if value.startswith("postgresql+psycopg://"):
+        parts = urlsplit(value)
+        params = dict(parse_qsl(parts.query, keep_blank_values=True))
+        params.setdefault("sslmode", "require")
+        value = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(params), parts.fragment))
     return value
 
 
