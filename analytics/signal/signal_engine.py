@@ -77,11 +77,8 @@ class SignalEngine:
         elif oi_bias == "BEARISH":
             bearish_evidence.append("NIFTY OI Flow Bearish")
 
-        # ProbabilityEngine supplies the canonical confirmation count. For
-        # legacy callers that do not provide it, dealer evidence is the minimum
-        # compatibility fallback; live pipeline always provides the count.
-        bullish_confirmations = int(probability.get("bullish_confirmations", len(bullish_evidence) if bullish_evidence else 0))
-        bearish_confirmations = int(probability.get("bearish_confirmations", len(bearish_evidence) if bearish_evidence else 0))
+        bullish_confirmations = int(probability.get("bullish_confirmations", len(bullish_evidence)))
+        bearish_confirmations = int(probability.get("bearish_confirmations", len(bearish_evidence)))
 
         signal = "WAIT"
         reasons = list(probability.get("reasons", []))
