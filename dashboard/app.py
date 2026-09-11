@@ -16,7 +16,6 @@ from dashboard.components import intelligence_card
 from dashboard.components.brain_performance import render as render_brain_performance
 from dashboard.components.backend_ui_integrity import render as render_backend_ui_integrity
 from dashboard.components.execution_state import render as render_execution_state
-from dashboard.live_validation_worker import start_live_validation_worker
 
 from dashboard.components import (
     header, market_banner, market_regime, runtime_card, signal_card,
@@ -27,9 +26,6 @@ from dashboard.components import (
 )
 
 st.set_page_config(page_title="QuantNifty Terminal", page_icon="📈", layout="wide")
-
-if os.getenv("RENDER_LIVE_WORKER", "").strip().lower() == "true":
-    start_live_validation_worker()
 
 
 @st.cache_resource
