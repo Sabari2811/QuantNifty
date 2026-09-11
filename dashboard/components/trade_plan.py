@@ -14,9 +14,9 @@ def _display(value, default="N/A"):
 
 
 def render(trade_plan, signal=None):
-    """Render the complete canonical trade plan in a compact decision layout."""
+    """Render the complete canonical trade plan without stale executable values."""
     trade_plan = trade_plan or {}
-    trade_signal = trade_plan.get("signal", "WAIT")
+    trade_signal = str(trade_plan.get("signal", "WAIT") or "WAIT").upper()
     is_wait = trade_signal == "WAIT"
 
     st.subheader("🎯 Smart Trade Plan")
@@ -35,9 +35,6 @@ def render(trade_plan, signal=None):
         else _display(confidence)
     )
 
-    # Keep recommendation, strike analytics, and entry plan visually adjacent.
-    # No trade-plan field is removed; the same canonical values are simply
-    # grouped into the three cards a trader reads left-to-right.
     c1, c2, c3 = st.columns([1.0, 1.35, 1.0], gap="small")
 
     with c1:
@@ -47,7 +44,10 @@ def render(trade_plan, signal=None):
             confidence_display if confidence_display.startswith("N/A") else f"{confidence_display}%",
         )
         st.metric("Signal", trade_signal)
-        st.caption("The decision remains WAIT when there is no actionable edge.")
+        if is_wait:
+            st.caption("WAIT — no executable trade is active for this cycle.")
+        else:
+            st.caption("Executable decision and trade plan are aligned for this cycle.")
 
         st.markdown("### 🌡 Market Volatility")
         st.info(
@@ -66,10 +66,10 @@ def render(trade_plan, signal=None):
     with c2:
         st.markdown("### 🎯 Smart Strike Recommendation")
         strike = trade_plan.get("recommended_strike")
-        has_recommendation = strike not in (None, "", "-")
+        has_recommendation = not is_wait and strike not in (None, "", "-")
 
         if not has_recommendation:
-            st.info("No strike recommended for the current market condition (WAIT).")
+            st.info("No strike recommended for the current executable state (WAIT).")
             c21, c22, c23 = st.columns(3)
             c21.metric("Strike", "N/A")
             c22.metric("Strike Score", "N/A")
@@ -99,10 +99,18 @@ def render(trade_plan, signal=None):
         st.markdown("### 📍 Entry Plan")
         if is_wait:
             st.info("No entry, stop, target, or risk/reward is active while the decision is WAIT.")
-        e1, e2 = st.columns(2)
-        e1.metric("Entry", _display(trade_plan.get("entry")))
-        e2.metric("Stop Loss", _display(trade_plan.get("stop_loss")))
-        e3, e4 = st.columns(2)
-        e3.metric("Risk Reward", _display(trade_plan.get("risk_reward")))
-        e4.metric("Target 1", _display(trade_plan.get("target1")))
-        st.metric("Target 2", _display(trade_plan.get("target2")))
+            e1, e2 = st.columns(2)
+            e1.metric("Entry", "N/A")
+            e2.metric("Stop Loss", "N/A")
+            e3, e4 = st.columns(2)
+            e3.metric("Risk Reward", "N/A")
+            e4.metric("Target 1", "N/A")
+            st.metric("Target 2", "N/A")
+        else:
+            e1, e2 = st.columns(2)
+            e1.metric("Entry", _display(trade_plan.get("entry")))
+            e2.metric("Stop Loss", _display(trade_plan.get("stop_loss")))
+            e3, e4 = st.columns(2)
+            e3.metric("Risk Reward", _display(trade_plan.get("risk_reward")))
+            e4.metric("Target 1", _display(trade_plan.get("target1")))
+            st.metric("Target 2", _display(trade_plan.get("target2")))
