@@ -45,15 +45,56 @@ class NiftyPolicy:
         return True, ""
 
     def validate_daily_move(self, session_open: float | None, spot: float | None) -> tuple[bool, str]:
+        """Enforce the strategy's absolute intraday NIFTY movement ceiling."""
         if session_open is None or spot is None:
             return True, ""
         try:
-            move = abs(float(spot) - float(session_open))
+            opening = float(session_open)
+            current = float(spot)
         except (TypeError, ValueError):
             return False, "NIFTY_SESSION_MOVE_UNAVAILABLE"
+        if opening <= 0 or current <= 0:
+            return False, "NIFTY_SESSION_MOVE_UNAVAILABLE"
+        move = abs(current - opening)
         if move > self.max_daily_move:
             return False, f"NIFTY_DAILY_MOVE_BOUND_EXCEEDED:{move:.2f}"
         return True, ""
+
+    def session_open_from_snapshot(self, snapshot) -> float | None:
+        """Extract a real session-open observation without fabricating one."""
+        context = getattr(snapshot, "market_context", None)
+        candidates = []
+        if context is not None:
+            technical = getattr(context, "technical", {}) or {}
+            candidates.extend([
+                technical.get("session_open"),
+                technical.get("day_open"),
+                technical.get("open"),
+            ])
+        analytics = getattr(snapshot, "analytics", {}) or {}
+        technical = analytics.get("technical", {}) or {}
+        candidates.extend([
+            analytics.get("session_open"),
+            analytics.get("day_open"),
+            technical.get("session_open"),
+            technical.get("day_open"),
+            technical.get("open"),
+        ])
+        for value in candidates:
+            try:
+                parsed = float(value)
+                if parsed > 0:
+                    return parsed
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    def validate_snapshot_move(self, snapshot) -> tuple[bool, str]:
+        """Validate current NIFTY movement when a real session-open is present."""
+        return self.validate_daily_move(
+            self.session_open_from_snapshot(snapshot),
+            getattr(snapshot, "spot", None),
+        )
 
     def entry_allowed(self, now: datetime | None = None) -> tuple[bool, str]:
         current = (now or datetime.now(IST)).astimezone(IST)
@@ -66,8 +107,8 @@ class NiftyPolicy:
     def metadata(self) -> dict:
         return {
             "underlying": self.symbol,
-            "max_daily_move_points": self.max_daily_move,
-            "max_trade_move_points": self.max_trade_move,
+            "max_daily_underlying_move_points": self.max_daily_move,
+            "max_trade_underlying_move_points": self.max_trade_move,
             "max_trades_per_day": self.max_trades_per_day,
             "entry_cutoff_ist": self.entry_cutoff.strftime("%H:%M"),
             "execution": "BUY_NIFTY_CE_OR_PE",
