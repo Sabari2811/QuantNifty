@@ -11,45 +11,16 @@ class SignalEngine:
 
     MIN_PROBABILITY = 70
     MIN_CONFIDENCE = 20
+    MIN_CONFIRMATIONS = 2
 
     @staticmethod
-    def _text(payload, *keys, default="UNKNOWN"):
-        if not isinstance(payload, dict):
-            return default
-        for key in keys:
-            value = payload.get(key)
-            if value is not None:
-                return str(value).upper()
-        return default
+    def _number(payload, key, default):
+        try:
+            return float(payload.get(key, default))
+        except (TypeError, ValueError, AttributeError):
+            return float(default)
 
-    @staticmethod
-    def _number(payload, *keys, default=None):
-        if not isinstance(payload, dict):
-            return default
-        for key in keys:
-            value = payload.get(key)
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                continue
-        return default
-
-    def generate(
-        self,
-        dealer,
-        probability,
-        spot,
-        market_structure=None,
-        pcr=None,
-        technical=None,
-        oi_flow=None,
-    ):
-        """Return an authoritative NIFTY CALL/PUT/WAIT decision.
-
-        ``market_structure``, ``pcr``, ``technical`` and ``oi_flow`` are
-        optional for compatibility with historical callers. When supplied,
-        they become confirmation evidence rather than separate trade engines.
-        """
+    def generate(self, dealer, probability, spot, market_structure=None, pcr=None, technical=None, oi_flow=None):
         dealer = dealer or {}
         probability = probability or {}
         market_structure = market_structure or {}
@@ -57,26 +28,24 @@ class SignalEngine:
         technical = technical or {}
         oi_flow = oi_flow or {}
 
-        bullish = self._number(probability, "bullish_probability", default=50.0)
-        bearish = self._number(probability, "bearish_probability", default=50.0)
-        confidence = self._number(probability, "confidence", default=abs(bullish - bearish))
+        bullish = self._number(probability, "bullish_probability", 50)
+        bearish = self._number(probability, "bearish_probability", 50)
+        confidence = self._number(probability, "confidence", abs(bullish - bearish))
 
         bullish_evidence = []
         bearish_evidence = []
 
-        dealer_gamma = self._text(dealer, "dealer_gamma")
-        if dealer_gamma == "LONG":
+        if str(dealer.get("dealer_gamma", "")).upper() == "LONG":
             bullish_evidence.append("Dealers Long Gamma")
-        elif dealer_gamma == "SHORT":
+        elif str(dealer.get("dealer_gamma", "")).upper() == "SHORT":
             bearish_evidence.append("Dealers Short Gamma")
 
-        structure_bias = self._text(market_structure, "bias")
-        if structure_bias == "BULLISH":
+        if str(market_structure.get("bias", "")).upper() == "BULLISH":
             bullish_evidence.append("NIFTY Structure Bullish")
-        elif structure_bias == "BEARISH":
+        elif str(market_structure.get("bias", "")).upper() == "BEARISH":
             bearish_evidence.append("NIFTY Structure Bearish")
 
-        pcr_bias = self._text(pcr, "sentiment", "bias")
+        pcr_bias = str(pcr.get("sentiment", pcr.get("bias", ""))).upper()
         if pcr_bias == "BULLISH":
             bullish_evidence.append("NIFTY PCR Bullish")
         elif pcr_bias == "BEARISH":
@@ -85,49 +54,49 @@ class SignalEngine:
         ema = technical.get("ema", {}) if isinstance(technical, dict) else {}
         vwap = technical.get("vwap", {}) if isinstance(technical, dict) else {}
         rsi = technical.get("rsi", {}) if isinstance(technical, dict) else {}
-        ema_trend = self._text(ema, "trend")
-        vwap_position = self._text(vwap, "position")
-        rsi_state = self._text(rsi, "state")
+        ema_trend = str(ema.get("trend", "")).upper()
         if ema_trend in {"BULLISH", "STRONG_BULLISH"}:
             bullish_evidence.append("NIFTY EMA Bullish")
         elif ema_trend in {"BEARISH", "STRONG_BEARISH"}:
             bearish_evidence.append("NIFTY EMA Bearish")
+        vwap_position = str(vwap.get("position", "")).upper()
         if vwap_position == "ABOVE":
             bullish_evidence.append("NIFTY Above VWAP")
         elif vwap_position == "BELOW":
             bearish_evidence.append("NIFTY Below VWAP")
+        rsi_state = str(rsi.get("state", "")).upper()
         if rsi_state == "BULLISH":
             bullish_evidence.append("NIFTY RSI Bullish")
         elif rsi_state == "BEARISH":
             bearish_evidence.append("NIFTY RSI Bearish")
 
         oi_summary = oi_flow.get("summary", {}) if isinstance(oi_flow, dict) else {}
-        oi_bias = self._text(oi_summary, "market_bias")
+        oi_bias = str(oi_summary.get("market_bias", "")).upper()
         if oi_bias == "BULLISH":
             bullish_evidence.append("NIFTY OI Flow Bullish")
         elif oi_bias == "BEARISH":
             bearish_evidence.append("NIFTY OI Flow Bearish")
 
-        # Probability is the primary directional input. Additional evidence
-        # can only confirm it; it can never manufacture a direction against
-        # the probability engine.
+        # ProbabilityEngine supplies the canonical confirmation count. For
+        # legacy callers that do not provide it, dealer evidence is the minimum
+        # compatibility fallback; live pipeline always provides the count.
+        bullish_confirmations = int(probability.get("bullish_confirmations", len(bullish_evidence) if bullish_evidence else 0))
+        bearish_confirmations = int(probability.get("bearish_confirmations", len(bearish_evidence) if bearish_evidence else 0))
+
         signal = "WAIT"
         reasons = list(probability.get("reasons", []))
-        required = self.MIN_PROBABILITY
-        if bullish >= required and bullish > bearish and confidence >= self.MIN_CONFIDENCE:
-            confirmations = len(bullish_evidence)
-            if confirmations >= 2 or not any((market_structure, pcr, technical, oi_flow)):
+        if bullish >= self.MIN_PROBABILITY and bullish > bearish and confidence >= self.MIN_CONFIDENCE:
+            if bullish_confirmations >= self.MIN_CONFIRMATIONS:
                 signal = "BUY CALL"
                 reasons.extend(bullish_evidence)
             else:
-                reasons.append("NIFTY Bullish probability lacks confirmation")
-        elif bearish >= required and bearish > bullish and confidence >= self.MIN_CONFIDENCE:
-            confirmations = len(bearish_evidence)
-            if confirmations >= 2 or not any((market_structure, pcr, technical, oi_flow)):
+                reasons.append("NIFTY bullish setup lacks directional confluence")
+        elif bearish >= self.MIN_PROBABILITY and bearish > bullish and confidence >= self.MIN_CONFIDENCE:
+            if bearish_confirmations >= self.MIN_CONFIRMATIONS:
                 signal = "BUY PUT"
                 reasons.extend(bearish_evidence)
             else:
-                reasons.append("NIFTY Bearish probability lacks confirmation")
+                reasons.append("NIFTY bearish setup lacks directional confluence")
         else:
             reasons.append("NIFTY probability/confidence below entry threshold")
 
@@ -138,7 +107,7 @@ class SignalEngine:
             "underlying": "NIFTY",
             "bullish_probability": bullish,
             "bearish_probability": bearish,
-            "bullish_confirmations": len(bullish_evidence),
-            "bearish_confirmations": len(bearish_evidence),
+            "bullish_confirmations": bullish_confirmations,
+            "bearish_confirmations": bearish_confirmations,
             "reasons": list(dict.fromkeys(reasons)),
         }
