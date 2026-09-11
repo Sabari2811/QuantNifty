@@ -7,15 +7,16 @@ from decision.execution.execution_engine import ExecutionEngine
 from decision.market_analyzer import MarketAnalyzer
 from decision.nifty_policy import NiftyPolicy
 from decision.scoring.directional_score_adapter import DirectionalScoreAdapter
-from decision.scoring_engine import ScoringEngine
 from decision.strategy_selector import StrategySelector
 
 
 class DecisionEngine:
-    """NIFTY-specific market decision engine.
+    """NIFTY-only decision engine.
 
-    The engine decides only the direction of the NIFTY underlying. Option
-    contract selection and premium risk are downstream execution concerns.
+    Direction comes exclusively from the canonical NIFTY signal produced by
+    the analytics pipeline. Scoring measures conviction/quality; it is never
+    allowed to invent or reverse direction. Options are selected only after
+    the underlying NIFTY direction is known.
     """
 
     VALID_DIRECTIONS = {
@@ -29,7 +30,6 @@ class DecisionEngine:
         self.analyzer = MarketAnalyzer()
         self.scoring = ScoreEngine()
         self.directional_adapter = DirectionalScoreAdapter()
-        self.legacy_scoring = ScoringEngine()
         self.selector = StrategySelector()
         self.builder = DecisionBuilder()
         self.execution = ExecutionEngine()
@@ -41,6 +41,10 @@ class DecisionEngine:
         if not ok:
             raise ValueError(reason)
 
+        ok, reason = self.policy.validate_snapshot_move(snapshot)
+        if not ok:
+            raise ValueError(reason)
+
     def _extract_direction(self, snapshot):
         signal_payload = snapshot.get("signal", None)
         if isinstance(signal_payload, dict):
@@ -49,7 +53,7 @@ class DecisionEngine:
             direction = signal_payload
         else:
             direction = None
-        return direction if direction in self.VALID_DIRECTIONS else None
+        return direction if direction in self.VALID_DIRECTIONS else Signal.WAIT.value
 
     def _calculate_advanced_score(self, snapshot, direction):
         signal_payload = snapshot.get("signal", {"signal": direction})
@@ -71,11 +75,7 @@ class DecisionEngine:
         institutional = score_result.get("institutional", {})
         quality_score = institutional.get("score", 0)
         adapted = self.directional_adapter.adapt(direction=direction, quality_score=quality_score)
-        return score_result, adapted["signed_score"], direction
-
-    def _build_legacy_score(self, market):
-        score_result = self.legacy_scoring.score(market)
-        return score_result["score"], score_result["reasons"], score_result["breakdown"]
+        return score_result, adapted["signed_score"]
 
     def build(self, snapshot, config: RuntimeConfig | None = None):
         if config is None:
@@ -84,25 +84,22 @@ class DecisionEngine:
         self._validate_nifty_snapshot(snapshot)
         market = self.analyzer.analyze(snapshot)
         direction = self._extract_direction(snapshot)
+        score_result, score = self._calculate_advanced_score(snapshot, direction)
 
-        if direction is not None:
-            score_result, score, direction = self._calculate_advanced_score(snapshot, direction)
-            institutional = score_result.get("institutional", {})
-            reasons = list(institutional.get("reasons", []))
-            breakdown = {}
-            for component_name in (
-                "dealer_score", "liquidity_score", "gamma_score",
-                "structure_score", "volatility_score",
-            ):
-                component = score_result.get(component_name, {})
-                breakdown[component_name] = component.get("score", 0)
-                reasons.extend(component.get("reasons", []))
-            breakdown["institutional"] = institutional.get("score", 0)
-            breakdown["direction"] = direction
-            breakdown["quality_score"] = institutional.get("score", 0)
-            breakdown["signed_score"] = score
-        else:
-            score, reasons, breakdown = self._build_legacy_score(market)
+        institutional = score_result.get("institutional", {})
+        reasons = list(institutional.get("reasons", []))
+        breakdown = {}
+        for component_name in (
+            "dealer_score", "liquidity_score", "gamma_score",
+            "structure_score", "volatility_score",
+        ):
+            component = score_result.get(component_name, {})
+            breakdown[component_name] = component.get("score", 0)
+            reasons.extend(component.get("reasons", []))
+        breakdown["institutional"] = institutional.get("score", 0)
+        breakdown["direction"] = direction
+        breakdown["quality_score"] = institutional.get("score", 0)
+        breakdown["signed_score"] = score
 
         strategy = self.selector.select(market)
         strategy_name = strategy.name
