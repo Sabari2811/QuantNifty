@@ -1,6 +1,5 @@
-from datetime import datetime, time as dt_time
+from datetime import datetime
 import os
-from zoneinfo import ZoneInfo
 
 from analytics.intelligence.gate import IntelligenceGate
 from execution.execution_audit_store import ExecutionAuditRecord, InMemoryExecutionAuditStore, SQLiteExecutionAuditStore
@@ -8,26 +7,22 @@ from execution.execution_contract import ExecutionStatus, ExecutionResult
 from execution.execution_lifecycle import classify_execution_result
 from execution.idempotency import IdempotencyStatus, OrderIdempotencyGuard
 from execution.paper_execution_adapter import PaperExecutionAdapter
-from config.trading_config import TradingConfig
-
-
-IST = ZoneInfo("Asia/Kolkata")
+from decision.nifty_policy import NiftyPolicy
 
 
 class TradeExecutionPipeline:
-    """Canonical trade execution workflow and audit boundary."""
+    """Canonical NIFTY intraday execution workflow and audit boundary."""
 
     def __init__(self, paper_broker, risk_manager, intelligence_gate=None, idempotency_guard=None, execution_adapter=None, audit_store=None, audit_db_path=None):
         self.paper_broker = paper_broker
         self.risk_manager = risk_manager
+        self.nifty_policy = NiftyPolicy()
         self.intelligence_gate = intelligence_gate if intelligence_gate is not None else IntelligenceGate()
         self.execution_adapter = execution_adapter if execution_adapter is not None else PaperExecutionAdapter(paper_broker)
         if audit_store is not None and audit_db_path is not None:
             raise ValueError("Provide either audit_store or audit_db_path, not both")
         self.audit_store = audit_store if audit_store is not None else (
-            SQLiteExecutionAuditStore(audit_db_path)
-            if audit_db_path is not None
-            else InMemoryExecutionAuditStore()
+            SQLiteExecutionAuditStore(audit_db_path) if audit_db_path is not None else InMemoryExecutionAuditStore()
         )
         self.idempotency_guard = idempotency_guard if idempotency_guard is not None else OrderIdempotencyGuard(self.audit_store)
 
@@ -44,17 +39,6 @@ class TradeExecutionPipeline:
         intent = getattr(ctx, "execution_intent", None)
         return str(getattr(intent, "client_order_id", "")).strip()
 
-    @staticmethod
-    def _live_entry_cutoff_due():
-        if os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() != "true":
-            return False
-        now = datetime.now(IST)
-        cutoff = dt_time(
-            TradingConfig.INTRADAY_FORCE_EXIT_HOUR,
-            TradingConfig.INTRADAY_FORCE_EXIT_MINUTE,
-        )
-        return now.weekday() < 5 and now.time() >= cutoff
-
     def _persist_result(self, result):
         if result is not None and result.intent.client_order_id:
             self.audit_store.append(ExecutionAuditRecord.from_result(result))
@@ -63,27 +47,18 @@ class TradeExecutionPipeline:
         ctx.trade_status = "BLOCKED"
         ctx.trade_block_reason = reason
         if intent is not None:
-            ctx.execution_result = ExecutionResult(
-                status=ExecutionStatus.REJECTED,
-                intent=intent,
-                reason=reason,
-            )
+            ctx.execution_result = ExecutionResult(status=ExecutionStatus.REJECTED, intent=intent, reason=reason)
             ctx.execution_lifecycle = classify_execution_result(ctx.execution_result).value
             self._persist_result(ctx.execution_result)
 
     def _execute_adapter(self, intent, decision, reconciliation_result, reconciliation_report):
         if reconciliation_result is not None:
             try:
-                return self.execution_adapter.execute(
-                    intent=intent,
-                    reconciliation_result=reconciliation_result,
-                    reconciliation_report=reconciliation_report,
-                )
+                return self.execution_adapter.execute(intent=intent, reconciliation_result=reconciliation_result, reconciliation_report=reconciliation_report)
             except TypeError as exc:
                 if "reconciliation_result" not in str(exc) and "reconciliation_report" not in str(exc):
                     raise
                 return self.execution_adapter.execute(intent, decision)
-
         try:
             return self.execution_adapter.execute(intent, decision)
         except TypeError:
@@ -96,33 +71,51 @@ class TradeExecutionPipeline:
         ctx.execution_result = None
         ctx.execution_lifecycle = ""
 
+        # The NIFTY strategy is strictly intraday. At the cutoff, close an
+        # existing paper position before evaluating any new entry, even when
+        # the current cycle is WAIT and therefore has no execution intent.
+        if os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() == "true":
+            ok, reason = self.nifty_policy.entry_allowed()
+            if not ok and reason == "NIFTY_INTRADAY_ENTRY_CUTOFF":
+                self.paper_broker.close_all_positions(ctx.option_chain, reason="NIFTY_INTRADAY_FORCE_EXIT")
+                self.sync_context(ctx)
+
         if ctx.decision is None:
             return
         trade = getattr(ctx.decision, "trade", None)
         if trade is None:
             return
 
-        # WAIT/invalid decisions intentionally produce no execution intent.
-        # They are valid no-action outcomes, not broker rejections.
         intent = getattr(ctx, "execution_intent", None)
         if intent is None:
             ctx.trade_status = "NOT_REQUESTED"
             self.sync_context(ctx)
             return
 
-        # Live validation is strictly intraday. Existing positions are closed
-        # by PaperBroker at the same cutoff; this gate prevents a new entry from
-        # being created after the cutoff in the same or a later cycle.
-        if self._live_entry_cutoff_due():
-            self._reject(ctx, intent, "INTRADAY_ENTRY_CUTOFF")
+        ok, reason = self.nifty_policy.validate_symbol(getattr(trade, "symbol", "NIFTY"))
+        if not ok:
+            self._reject(ctx, intent, reason)
             return
+        ok, reason = self.nifty_policy.validate_option(getattr(trade, "option_type", ""))
+        if not ok:
+            self._reject(ctx, intent, reason)
+            return
+
+        if os.getenv("LIVE_VALIDATION_MODE", "").strip().lower() == "true":
+            ok, reason = self.nifty_policy.entry_allowed()
+            if not ok:
+                self._reject(ctx, intent, reason)
+                return
+            trades_today = int(getattr(getattr(self.risk_manager, "state", None), "trades_today", 0))
+            if trades_today >= self.nifty_policy.max_trades_per_day:
+                self._reject(ctx, intent, "NIFTY_DAILY_TRADE_LIMIT")
+                return
 
         if ctx.intelligence is not None:
             intelligence_result = self.intelligence_gate.evaluate(ctx.intelligence)
             if not intelligence_result.allowed:
                 self._reject(ctx, intent, intelligence_result.reason)
                 return
-
             consistency = getattr(ctx, "decision_intelligence_consistency", None)
             if consistency is not None and not consistency.actionable:
                 self._reject(ctx, intent, consistency.reason)
@@ -132,7 +125,6 @@ class TradeExecutionPipeline:
             ok, reason = self.risk_manager.validate(self.paper_broker, ctx.decision, context=ctx)
         except TypeError:
             ok, reason = self.risk_manager.validate(self.paper_broker, ctx.decision)
-
         if not ok:
             self._reject(ctx, intent, reason)
             return
@@ -149,21 +141,13 @@ class TradeExecutionPipeline:
 
         reconciliation_result = getattr(ctx, "reconciliation_result", None)
         reconciliation_report = getattr(ctx, "reconciliation_report", None)
-        result = self._execute_adapter(
-            intent,
-            ctx.decision,
-            reconciliation_result,
-            reconciliation_report,
-        )
+        result = self._execute_adapter(intent, ctx.decision, reconciliation_result, reconciliation_report)
         ctx.execution_result = result
         ctx.execution_lifecycle = classify_execution_result(result).value
-
         ctx.trade_status = result.status.value
         if result.status in {ExecutionStatus.REJECTED, ExecutionStatus.FAILED, ExecutionStatus.NOT_SUBMITTED}:
             ctx.trade_block_reason = result.reason or "Execution was not completed."
         self._persist_result(result)
-
         if result.status is ExecutionStatus.EXECUTED:
             ctx.position = getattr(self.paper_broker, "position", None)
-
         self.sync_context(ctx)

@@ -12,16 +12,12 @@ IST = ZoneInfo("Asia/Kolkata")
 
 @dataclass(frozen=True)
 class NiftyPolicy:
-    """Single source of truth for the NIFTY-only trading contract.
-
-    QuantNifty is deliberately not a multi-asset strategy. Direction is always
-    expressed as a NIFTY underlying view and execution is limited to buying the
-    corresponding NIFTY CE/PE option.
-    """
+    """Single source of truth for the NIFTY-only intraday trading contract."""
 
     symbol: str = "NIFTY"
     max_daily_move: float = TradingConfig.MAX_DAILY_UNDERLYING_MOVE
     max_trade_move: float = TradingConfig.MAX_TRADE_UNDERLYING_MOVE
+    max_trades_per_day: int = TradingConfig.MAX_TRADES_PER_DAY
     entry_cutoff: time = time(
         TradingConfig.INTRADAY_FORCE_EXIT_HOUR,
         TradingConfig.INTRADAY_FORCE_EXIT_MINUTE,
@@ -49,7 +45,6 @@ class NiftyPolicy:
         return True, ""
 
     def validate_daily_move(self, session_open: float | None, spot: float | None) -> tuple[bool, str]:
-        """Guard the NIFTY risk model against an already-exhausted daily move."""
         if session_open is None or spot is None:
             return True, ""
         try:
@@ -73,6 +68,7 @@ class NiftyPolicy:
             "underlying": self.symbol,
             "max_daily_move_points": self.max_daily_move,
             "max_trade_move_points": self.max_trade_move,
+            "max_trades_per_day": self.max_trades_per_day,
             "entry_cutoff_ist": self.entry_cutoff.strftime("%H:%M"),
             "execution": "BUY_NIFTY_CE_OR_PE",
             "overnight_position": False,

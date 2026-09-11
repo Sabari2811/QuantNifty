@@ -2,16 +2,15 @@ from __future__ import annotations
 
 from hashlib import sha256
 
+from decision.nifty_policy import NiftyPolicy
 from execution.execution_contract import ExecutionAction, OrderIntent
 
 
-def build_order_intent(decision, *, source: str = "decision") -> OrderIntent | None:
-    """Create the canonical broker-neutral order intent from an executable Decision.
+POLICY = NiftyPolicy()
 
-    WAIT or invalid decisions have no execution intent. The client order ID is
-    deterministic for the decision's execution identity so retrying the same
-    decision cannot manufacture a second order identity.
-    """
+
+def build_order_intent(decision, *, source: str = "decision") -> OrderIntent | None:
+    """Create an executable order intent for NIFTY CE/PE only."""
     if decision is None or not getattr(decision, "valid", False):
         return None
 
@@ -24,36 +23,43 @@ def build_order_intent(decision, *, source: str = "decision") -> OrderIntent | N
     if trade is None or execution is None:
         return None
 
+    ok, _ = POLICY.validate_symbol(getattr(trade, "symbol", "NIFTY"))
+    if not ok:
+        return None
+    ok, _ = POLICY.validate_option(getattr(trade, "option_type", ""))
+    if not ok:
+        return None
+    ok, _ = POLICY.validate_delta(getattr(getattr(trade, "contract", None), "delta", None))
+    if not ok:
+        return None
+
     quantity = int(getattr(execution, "lot_size", 0)) * int(getattr(execution, "lots", 0))
     if quantity <= 0:
         return None
 
-    symbol = str(getattr(trade, "symbol", "NIFTY") or "NIFTY")
-    option_type = str(getattr(trade, "option_type", ""))
-    strike = float(getattr(trade, "strike", 0))
-    limit_price = float(getattr(trade, "entry", 0))
-
-    if signal == "BUY CALL" or signal == "BUY PUT":
+    if signal in {"BUY CALL", "BUY PUT"}:
         action = ExecutionAction.BUY
     else:
         return None
 
+    symbol = POLICY.symbol
+    option_type = str(getattr(trade, "option_type", ""))
+    strike = float(getattr(trade, "strike", 0))
+    limit_price = float(getattr(trade, "entry", 0))
     contract = getattr(trade, "contract", None)
     expiry = str(getattr(contract, "expiry", "") or "")
 
-    identity = "|".join(
-        (
-            source,
-            symbol,
-            option_type,
-            f"{strike:.8f}",
-            action.value,
-            str(quantity),
-            f"{limit_price:.8f}",
-            str(getattr(decision, "strategy_name", "")),
-            expiry,
-        )
-    )
+    identity = "|".join((
+        source,
+        symbol,
+        option_type,
+        f"{strike:.8f}",
+        action.value,
+        str(quantity),
+        f"{limit_price:.8f}",
+        str(getattr(decision, "strategy_name", "")),
+        expiry,
+    ))
     client_order_id = "qn-" + sha256(identity.encode("utf-8")).hexdigest()[:24]
 
     return OrderIntent(
@@ -66,5 +72,11 @@ def build_order_intent(decision, *, source: str = "decision") -> OrderIntent | N
         strategy_name=str(getattr(decision, "strategy_name", "")),
         source=source,
         client_order_id=client_order_id,
-        metadata={"signal": signal, "expiry": expiry},
+        metadata={
+            "signal": signal,
+            "expiry": expiry,
+            "underlying": POLICY.symbol,
+            "max_trade_underlying_move": POLICY.max_trade_move,
+            "overnight_position": False,
+        },
     )
