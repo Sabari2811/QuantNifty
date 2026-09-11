@@ -11,106 +11,43 @@ class ProbabilityEngine:
         reasons = []
         bullish_confirmations = 0
         bearish_confirmations = 0
-
         if dealer.get("dealer_gamma") == "LONG":
-            bullish += 20
-            bearish -= 20
-            bullish_confirmations += 1
-            reasons.append("Dealers Long Gamma")
+            bullish += 20; bearish -= 20; bullish_confirmations += 1; reasons.append("Dealers Long Gamma")
         elif dealer.get("dealer_gamma") == "SHORT":
-            bullish -= 20
-            bearish += 20
-            bearish_confirmations += 1
-            reasons.append("Dealers Short Gamma")
-
-        if dealer.get("market_mode") == "PINNED":
-            reasons.append("Pinned Market")
-        elif dealer.get("market_mode") == "TRENDING":
-            reasons.append("Trending Market")
-
+            bullish -= 20; bearish += 20; bearish_confirmations += 1; reasons.append("Dealers Short Gamma")
+        if dealer.get("market_mode") == "PINNED": reasons.append("Pinned Market")
+        elif dealer.get("market_mode") == "TRENDING": reasons.append("Trending Market")
         sentiment = pcr.get("sentiment", "NEUTRAL")
         if sentiment == "BULLISH":
-            bullish += 10
-            bearish -= 10
-            bullish_confirmations += 1
-            reasons.append("Bullish PCR")
+            bullish += 10; bearish -= 10; bullish_confirmations += 1; reasons.append("Bullish PCR")
         elif sentiment == "BEARISH":
-            bullish -= 10
-            bearish += 10
-            bearish_confirmations += 1
-            reasons.append("Bearish PCR")
-
+            bullish -= 10; bearish += 10; bearish_confirmations += 1; reasons.append("Bearish PCR")
         bias = iv_skew.get("iv_bias", "UNKNOWN")
         if bias == "CALLS_EXPENSIVE":
-            bullish += 5
-            bearish -= 5
-            reasons.append("Call IV Expensive")
+            bullish += 5; bearish -= 5; reasons.append("Call IV Expensive")
         elif bias == "PUTS_EXPENSIVE":
-            bullish -= 5
-            bearish += 5
-            reasons.append("Put IV Expensive")
-
-        ema = technical.get("ema", {})
-        rsi = technical.get("rsi", {})
-        vwap = technical.get("vwap", {})
-        adx = technical.get("adx", {})
-
+            bullish -= 5; bearish += 5; reasons.append("Put IV Expensive")
+        ema = technical.get("ema", {}); rsi = technical.get("rsi", {}); vwap = technical.get("vwap", {}); adx = technical.get("adx", {})
         trend = ema.get("trend", "UNKNOWN")
         if trend in ("BULLISH", "STRONG_BULLISH"):
-            bullish += 10
-            bearish -= 10
-            bullish_confirmations += 1
-            reasons.append("EMA Bullish")
+            bullish += 10; bearish -= 10; bullish_confirmations += 1; reasons.append("EMA Bullish")
         elif trend in ("BEARISH", "STRONG_BEARISH"):
-            bullish -= 10
-            bearish += 10
-            bearish_confirmations += 1
-            reasons.append("EMA Bearish")
-
+            bullish -= 10; bearish += 10; bearish_confirmations += 1; reasons.append("EMA Bearish")
         state = rsi.get("state", "UNKNOWN")
         if state == "BULLISH":
-            bullish += 5
-            bearish -= 5
-            bullish_confirmations += 1
-            reasons.append("RSI Bullish")
+            bullish += 5; bearish -= 5; bullish_confirmations += 1; reasons.append("RSI Bullish")
         elif state == "BEARISH":
-            bullish -= 5
-            bearish += 5
-            bearish_confirmations += 1
-            reasons.append("RSI Bearish")
-        elif state == "OVERBOUGHT":
-            bearish += 5
-            reasons.append("RSI Overbought")
-        elif state == "OVERSOLD":
-            bullish += 5
-            reasons.append("RSI Oversold")
-
+            bullish -= 5; bearish += 5; bearish_confirmations += 1; reasons.append("RSI Bearish")
+        elif state == "OVERBOUGHT": bullish += 0; bearish += 5; reasons.append("RSI Overbought")
+        elif state == "OVERSOLD": bullish += 5; reasons.append("RSI Oversold")
         position = vwap.get("position", "UNKNOWN")
         if position == "ABOVE":
-            bullish += 5
-            bearish -= 5
-            bullish_confirmations += 1
-            reasons.append("Above VWAP")
+            bullish += 5; bearish -= 5; bullish_confirmations += 1; reasons.append("Above VWAP")
         elif position == "BELOW":
-            bullish -= 5
-            bearish += 5
-            bearish_confirmations += 1
-            reasons.append("Below VWAP")
-
+            bullish -= 5; bearish += 5; bearish_confirmations += 1; reasons.append("Below VWAP")
         if adx.get("strength", "UNKNOWN") in ("STRONG", "VERY_STRONG"):
-            if bullish > bearish:
-                bullish += 5
-            elif bearish > bullish:
-                bearish += 5
+            if bullish > bearish: bullish += 5
+            elif bearish > bullish: bearish += 5
             reasons.append("Strong Trend")
-
-        bullish = max(0, min(100, bullish))
-        bearish = max(0, min(100, bearish))
-        return {
-            "bullish_probability": bullish,
-            "bearish_probability": bearish,
-            "confidence": abs(bullish - bearish),
-            "bullish_confirmations": bullish_confirmations,
-            "bearish_confirmations": bearish_confirmations,
-            "reasons": reasons,
-        }
+        bullish = max(0, min(100, bullish)); bearish = max(0, min(100, bearish))
+        return {"bullish_probability": bullish, "bearish_probability": bearish, "confidence": abs(bullish - bearish), "bullish_confirmations": bullish_confirmations, "bearish_confirmations": bearish_confirmations, "reasons": reasons}
