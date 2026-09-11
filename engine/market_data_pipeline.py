@@ -112,7 +112,27 @@ class MarketDataPipeline:
 
     def _fetch_spot(self, ctx):
         acquired_at = datetime.now(timezone.utc)
+        spot_source = "INDMoney index quote"
+        expiry = self.instrument.get_nearest_weekly_expiry(ctx.symbol)
         quote = self.market.get_spot_quote(ctx.symbol)
+
+        if quote is None:
+            fallback_getter = getattr(self.provider, "get_index_option_chain_ltp", None)
+            if callable(fallback_getter):
+                quote = fallback_getter(ctx.symbol, expiry, strike_count=1)
+                if quote is not None:
+                    spot_source = "INDMoney option-chain underlying LTP"
+                    logger_reasons = ("index_quote_unavailable", "provider_underlying_ltp_timestamp_unavailable")
+                    # Keep the reason local to this acquisition path. The value
+                    # remains provider-supplied live market data; no synthetic
+                    # or historical value is substituted.
+                else:
+                    logger_reasons = ("index_quote_unavailable",)
+            else:
+                logger_reasons = ("index_quote_unavailable",)
+        else:
+            logger_reasons = None
+
         websocket_freshness = None
         websocket_instrument = None
         if self.live_feed is not None:
@@ -128,8 +148,10 @@ class MarketDataPipeline:
                 tick = batch.ticks.get(websocket_instrument)
                 if tick is not None:
                     quote = self._tick_quote(tick)
+                    spot_source = "INDMoney WebSocket index quote"
                     websocket_freshness = self._websocket_freshness(batch, websocket_instrument)
                     acquired_at = batch.received_at.get(websocket_instrument, batch.acquired_at)
+
         if quote is None:
             raise Exception("Unable to fetch live quote.")
         price = None
@@ -144,7 +166,23 @@ class MarketDataPipeline:
             provider_timestamp, freshness_verified, freshness_seconds, reasons = websocket_freshness
         else:
             provider_timestamp, freshness_verified, freshness_seconds, reasons = self._quote_freshness(quote, acquired_at)
-        ctx.data_provenance = RuntimeDataProvenance(spot=AcquisitionProvenance(source="INDMoney index quote", acquired_at=acquired_at, provider_timestamp=provider_timestamp, expected_count=1, received_count=1, missing_count=0, freshness_verified=freshness_verified, freshness_seconds=freshness_seconds, reasons=reasons))
+            if logger_reasons:
+                freshness_verified = False
+                freshness_seconds = None
+                reasons = tuple(dict.fromkeys((*logger_reasons, *reasons)))
+        ctx.data_provenance = RuntimeDataProvenance(
+            spot=AcquisitionProvenance(
+                source=spot_source,
+                acquired_at=acquired_at,
+                provider_timestamp=provider_timestamp,
+                expected_count=1,
+                received_count=1,
+                missing_count=0,
+                freshness_verified=freshness_verified,
+                freshness_seconds=freshness_seconds,
+                reasons=reasons,
+            )
+        )
 
     def _fetch_option_chain(self, ctx):
         ctx.expiry = self.instrument.get_nearest_weekly_expiry(ctx.symbol)
