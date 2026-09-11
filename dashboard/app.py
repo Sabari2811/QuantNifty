@@ -16,6 +16,7 @@ from dashboard.components import intelligence_card
 from dashboard.components.brain_performance import render as render_brain_performance
 from dashboard.components.backend_ui_integrity import render as render_backend_ui_integrity
 from dashboard.components.execution_state import render as render_execution_state
+from dashboard.components.live_trade_monitor import render as render_live_trade_monitor
 
 from dashboard.components import (
     header, market_banner, market_regime, runtime_card, signal_card,
@@ -67,10 +68,13 @@ st.session_state["_quantnifty_backend_ui_integrity"] = integrity_report
 decision = ui_contract["decision"]
 summary = ui_contract["market_summary"]
 
-# User-first hierarchy. Every existing component remains rendered exactly once;
-# only grouping and visual placement are adjusted to prevent Streamlit's
-# column-height behavior from creating large empty regions.
 header.render(dashboard)
+
+# Live monitor is deliberately adjacent to the decision cockpit. Its fragment
+# refreshes only provider LTP/P&L; it does not invoke another decision cycle or
+# submit another order.
+with st.container(border=True):
+    render_live_trade_monitor(dashboard)
 
 # 1. Decision cockpit.
 row = st.columns([1.25, 1.25, 1.25], gap="small")
