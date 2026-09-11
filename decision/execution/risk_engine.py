@@ -1,100 +1,35 @@
-from config.trading_config import TradingConfig
+from decision.execution.delta_risk import DeltaRiskModel
 
 
 class RiskEngine:
-    """
-    Calculates premium-based risk.
+    """Calculate premium risk from option delta and bounded NIFTY movement."""
 
-    Responsibilities
-    ----------------
-    - Calculate Stop Loss
-    - Calculate Risk / Reward
-
-    Stop-loss percentage is determined
-    using the implied volatility (IV) regime.
-
-    Future Enhancements
-    -------------------
-    - ATR-aware stop loss
-    - Gamma-aware stop loss
-    - Market regime-aware stop loss
-    """
+    def __init__(self, movement_model: DeltaRiskModel | None = None):
+        self.movement_model = movement_model or DeltaRiskModel()
 
     def build(self, decision, contract):
-        """
-        Populate stop loss and risk/reward
-        for the selected trade.
-        """
-
+        """Populate stop loss and risk/reward for the selected intraday trade."""
         if contract is None:
             return decision
 
         trade = decision.trade
+        premium = float(getattr(contract, "ltp", 0) or 0)
+        delta = float(getattr(contract, "delta", 0) or 0)
 
-        premium = contract.ltp
-
-        # -------------------------------------
-        # Invalid Premium
-        # -------------------------------------
-
-        if premium <= 0:
+        if premium <= 0 or abs(delta) <= 0 or trade.entry <= 0:
             trade.stop_loss = 0
             trade.risk_reward = 0
             return decision
 
-        # -------------------------------------
-        # Stop Loss
-        # -------------------------------------
+        stop_loss, target1, target2 = self.movement_model.levels(trade.entry, delta)
+        trade.stop_loss = stop_loss
 
-        risk_pct = self._risk_percent(contract.iv)
-
-        trade.stop_loss = round(
-            premium * (1 - risk_pct),
-            2
-        )
-
-        # -------------------------------------
-        # Validate Trade Levels
-        # -------------------------------------
-
-        if (
-            trade.entry <= 0
-            or trade.target1 <= trade.entry
-        ):
-            trade.risk_reward = 0
-            return decision
-
-        # -------------------------------------
-        # Risk / Reward
-        # -------------------------------------
+        # PremiumEngine owns targets. Recalculate only to guarantee that risk
+        # and target calculations use the exact same delta/movement model.
+        trade.target1 = target1
+        trade.target2 = target2
 
         risk = trade.entry - trade.stop_loss
         reward = trade.target1 - trade.entry
-
-        if risk <= 0:
-            trade.risk_reward = 0
-        else:
-            trade.risk_reward = round(
-                reward / risk,
-                2
-            )
-
+        trade.risk_reward = round(reward / risk, 2) if risk > 0 else 0
         return decision
-
-    # ==================================================
-    # Private Methods
-    # ==================================================
-
-    def _risk_percent(self, iv):
-        """
-        Determine stop-loss percentage
-        based on the IV regime.
-        """
-
-        if iv >= TradingConfig.HIGH_IV_THRESHOLD:
-            return TradingConfig.STOPLOSS_HIGH_IV
-
-        if iv <= TradingConfig.LOW_IV_THRESHOLD:
-            return TradingConfig.STOPLOSS_LOW_IV
-
-        return TradingConfig.STOPLOSS_NORMAL_IV
