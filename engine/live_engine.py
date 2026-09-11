@@ -134,6 +134,9 @@ class LiveEngine:
 
     def _apply_brain_gate(self):
         """Let learned evidence veto a weak repeat, never reverse CALL/PUT direction."""
+        if self._is_replay():
+            self.ctx.brain_decision = None
+            return None
         brain = getattr(self, "adaptive_brain", None)
         if brain is None or not hasattr(brain, "evaluate") or self.ctx.decision is None:
             self.ctx.brain_decision = None
@@ -210,7 +213,6 @@ class LiveEngine:
         computed_greeks_df = getattr(computed_context, "greeks", None)
         if hasattr(computed_greeks_df, "copy"):
             self.ctx.greeks_df = computed_greeks_df.copy(deep=True)
-
         if replay_recompute:
             expected_analytics = getattr(self.ctx, "replay_expected_analytics", None)
             if expected_analytics:
@@ -229,7 +231,6 @@ class LiveEngine:
             self.ctx.replay_computed_market_context = None
             self.ctx.replay_analytics_equivalence = None
             self.ctx.analytics = computed_analytics
-
         greeks_for_snapshot = self.ctx.greeks_df if hasattr(self.ctx.greeks_df, "copy") else computed_analytics.get("greeks")
         self.ctx.snapshot = MarketSnapshot().save(greeks_df=greeks_for_snapshot, spot=self.ctx.spot, analytics=self.ctx.analytics)
         self.ctx.snapshot.market_context = self.ctx.market_context
@@ -237,7 +238,6 @@ class LiveEngine:
         self.ctx.snapshot.regime = regime
         self.ctx.regime = regime
         self.ctx.decision = self.decision_engine.build(self.ctx.snapshot)
-
         if replay_recompute:
             expected_decision = getattr(self.ctx, "replay_expected_decision", None)
             if isinstance(expected_decision, dict):
@@ -245,18 +245,13 @@ class LiveEngine:
                 canonical_strike = canonical_trade.get("strike")
                 if canonical_strike is not None:
                     self.ctx.decision.trade.strike = canonical_strike
-
-        # Learned evidence is applied after the canonical direction is known,
-        # but before order intent/execution. It can only veto to WAIT.
         self._apply_brain_gate()
         self.ctx.explanation = self.explanation_engine.build(decision=self.ctx.decision, regime=self.ctx.regime, snapshot=self.ctx.snapshot)
-
         if self.intelligence_service is not None:
             self.ctx.intelligence = self.intelligence_service.analyze(self.ctx)
             self.ctx.decision_intelligence_consistency = reconcile_decision_intelligence(self.ctx.decision, self.ctx.intelligence)
         else:
             self.ctx.decision_intelligence_consistency = None
-
         if replay_recompute:
             expected_decision = getattr(self.ctx, "replay_expected_decision", None)
             expected_intelligence = getattr(self.ctx, "replay_expected_intelligence", None)
@@ -265,7 +260,6 @@ class LiveEngine:
                 self.ctx.replay_equivalence = compare_replay_outputs(expected_decision, self.ctx.decision, expected_intelligence, actual_intelligence)
             else:
                 self.ctx.replay_equivalence = None
-
         self.ctx.execution_intent = build_order_intent(self.ctx.decision)
         self.trade_pipeline.execute(self.ctx)
         execution_result = getattr(self.ctx, "execution_result", None)
@@ -292,7 +286,6 @@ class LiveEngine:
                 if not self._is_replay():
                     self.recording_manager.record(self.ctx)
                 return self.ctx
-
             closed_before = len(self.paper_broker.portfolio.closed_positions)
             self.paper_broker.update_positions(self.ctx.option_chain)
             closed_after = len(self.paper_broker.portfolio.closed_positions)
@@ -302,7 +295,7 @@ class LiveEngine:
                     self.risk_manager.on_trade_closed(position)
             self._persist_position_runtime_state()
             self.trade_pipeline.sync_context(self.ctx)
-            if self._is_replay_fast:
+            if self._is_replay_fast():
                 pass
             else:
                 if self._is_replay_recompute():
