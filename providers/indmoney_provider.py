@@ -141,6 +141,83 @@ class INDMoneyProvider(BaseProvider):
         quote = data.get("data", {}).get(f"NIDX_{security_id}")
         return self._normalise_quote(quote)
 
+    def get_index_option_chain_ltp(self, index_name, expiry, strike_count=1):
+        """Return the provider's live underlying LTP from the option-chain API.
+
+        INDstocks currently rejects the direct NIDX market-quote request in the
+        live deployment while the authenticated option-chain endpoint remains
+        available. The option-chain response explicitly carries
+        ``underlying_ltp``; using it is still provider market data, not a
+        synthetic or derived value. The caller must mark freshness as
+        unverified when the endpoint does not provide a provider timestamp.
+        """
+        from engine.instrument_manager import InstrumentManager
+
+        instrument = InstrumentManager()
+        security_id = instrument.get_index_security_id(index_name)
+        if security_id is None:
+            raise ValueError(f"Index not found : {index_name}")
+        expiry = str(expiry).strip()
+        if not expiry:
+            raise ValueError("Expiry is required for underlying option-chain LTP")
+        try:
+            strike_count = int(strike_count)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("strike_count must be an integer") from exc
+        strike_count = max(1, min(strike_count, 10))
+
+        url = f"{self.base_url}/market/option-chain"
+        params = {
+            "exchange": "NSE",
+            "segment": "INDEX",
+            "underlying-scrip": security_id,
+            "expiry": expiry,
+            "strike_count": strike_count,
+        }
+        logger.info(
+            "INDEX OPTION-CHAIN LTP REQUEST | index=%s | security_id=%s | expiry=%s | strike_count=%s",
+            index_name,
+            security_id,
+            expiry,
+            strike_count,
+        )
+        try:
+            response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            logger.error(
+                "INDEX OPTION-CHAIN LTP REQUEST FAILED | index=%s | security_id=%s | error=%s",
+                index_name,
+                security_id,
+                exc,
+            )
+            return None
+        try:
+            data = response.json()
+        except ValueError:
+            logger.error("INDEX OPTION-CHAIN LTP INVALID JSON | index=%s", index_name)
+            return None
+        if data.get("status") != "success":
+            logger.error(
+                "INDEX OPTION-CHAIN LTP API FAILURE | index=%s | status=%s",
+                index_name,
+                data.get("status"),
+            )
+            return None
+        underlying_ltp = (data.get("data") or {}).get("underlying_ltp")
+        if underlying_ltp is None:
+            logger.error("INDEX OPTION-CHAIN LTP MISSING | index=%s", index_name)
+            return None
+        try:
+            price = float(underlying_ltp)
+        except (TypeError, ValueError):
+            logger.error("INDEX OPTION-CHAIN LTP INVALID | index=%s | value=%r", index_name, underlying_ltp)
+            return None
+        if price <= 0:
+            logger.error("INDEX OPTION-CHAIN LTP NON-POSITIVE | index=%s | value=%s", index_name, price)
+            return None
+        return {"live_price": price, "provider_timestamp": None}
+
     def get_index_quote(self, index_name):
         from engine.instrument_manager import InstrumentManager
         instrument = InstrumentManager()
