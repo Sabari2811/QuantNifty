@@ -58,7 +58,8 @@ ANALYTICS = {
 }
 
 
-def test_paper_broker_receives_current_decision_contract():
+def test_paper_broker_honors_nifty_authoritative_wait_decision():
+    """Without an authoritative NIFTY direction, the engine must remain WAIT."""
     snapshot = MarketSnapshot().save(
         greeks_df=canonical_greeks_df(),
         spot=24310,
@@ -68,8 +69,8 @@ def test_paper_broker_receives_current_decision_contract():
     decision = DecisionEngine().build(snapshot)
 
     assert decision is not None
+    assert decision.signal.name == "WAIT"
+    assert decision.trade.contract is None
 
     broker = PaperBroker()
-    position = broker.execute(decision)
-
-    assert position is not None
+    assert broker.execute(decision) is None
