@@ -1,96 +1,57 @@
 class DealerScore:
-    """
-    Dealer Score
-
-    Maximum Score : 20
-
-    Direction Aware
-    """
+    """Direction-aware dealer contribution for the NIFTY decision score."""
 
     MAX_SCORE = 20
 
-    def calculate(
-
-        self,
-
-        dealer,
-
-        dealer_flow,
-
-        signal
-
-    ):
-
+    def calculate(self, dealer, dealer_flow, signal):
+        dealer = dealer or {}
+        dealer_flow = dealer_flow or {}
         score = 0
-
         reasons = []
+        trade = signal.get("signal", "NO TRADE") if isinstance(signal, dict) else "NO TRADE"
 
-        trade = signal.get("signal", "NO TRADE")
-
-        # ====================================================
-        # BUY CALL
-        # ====================================================
+        dealer_gamma = dealer.get("dealer_gamma")
+        market_mode = dealer.get("market_mode")
+        dealer_delta = dealer_flow.get("dealer_delta")
+        dealer_vanna = dealer_flow.get("dealer_vanna")
+        dealer_charm = dealer_flow.get("dealer_charm")
 
         if trade == "BUY CALL":
-
-            if dealer["dealer_gamma"] == "LONG":
+            if dealer_gamma == "LONG":
                 score += 6
                 reasons.append("Dealers Long Gamma")
-
-            if dealer["market_mode"] == "TRENDING":
+            if market_mode == "TRENDING":
                 score += 4
                 reasons.append("Trending Market")
-
-            if dealer_flow["dealer_delta"] == "LONG":
+            if dealer_delta == "LONG":
                 score += 5
                 reasons.append("Positive Delta")
-
-            if dealer_flow["dealer_vanna"] == "POSITIVE":
+            if dealer_vanna == "POSITIVE":
                 score += 5
                 reasons.append("Positive Vanna")
 
-        # ====================================================
-        # BUY PUT
-        # ====================================================
-
         elif trade == "BUY PUT":
-
-            if dealer["dealer_gamma"] == "SHORT":
+            if dealer_gamma == "SHORT":
                 score += 6
                 reasons.append("Dealers Short Gamma")
-
-            if dealer["market_mode"] == "TRENDING":
+            if market_mode == "TRENDING":
                 score += 4
                 reasons.append("Trending Market")
-
-            if dealer_flow["dealer_delta"] == "LONG":
+            if dealer_delta == "LONG":
                 score += 5
                 reasons.append("Dealers Hedging")
-
-            if dealer_flow["dealer_charm"] == "NEGATIVE":
+            if dealer_charm == "NEGATIVE":
                 score += 5
                 reasons.append("Negative Charm")
 
-        # ====================================================
-        # NO TRADE
-        # ====================================================
-
         else:
-
-            if dealer["dealer_gamma"] == "LONG":
+            if dealer_gamma == "LONG":
                 score += 3
-
-            if dealer["market_mode"] == "TRENDING":
+            if market_mode == "TRENDING":
                 score += 2
 
-        score = min(score, self.MAX_SCORE)
-
         return {
-
-            "score": score,
-
+            "score": min(score, self.MAX_SCORE),
             "max_score": self.MAX_SCORE,
-
-            "reasons": reasons
-
+            "reasons": reasons,
         }
