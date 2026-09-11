@@ -85,15 +85,24 @@ class TradeExecutionPipeline:
         if trade is None:
             return
 
+        # WAIT/invalid decisions intentionally produce no execution intent.
+        # They are valid no-action outcomes, not broker rejections. Never send
+        # a WAIT decision through PaperBroker or mark it as a rejected trade.
+        intent = getattr(ctx, "execution_intent", None)
+        if intent is None:
+            ctx.trade_status = "NOT_REQUESTED"
+            self.sync_context(ctx)
+            return
+
         if ctx.intelligence is not None:
             intelligence_result = self.intelligence_gate.evaluate(ctx.intelligence)
             if not intelligence_result.allowed:
-                self._reject(ctx, getattr(ctx, "execution_intent", None), intelligence_result.reason)
+                self._reject(ctx, intent, intelligence_result.reason)
                 return
 
             consistency = getattr(ctx, "decision_intelligence_consistency", None)
             if consistency is not None and not consistency.actionable:
-                self._reject(ctx, getattr(ctx, "execution_intent", None), consistency.reason)
+                self._reject(ctx, intent, consistency.reason)
                 return
 
         try:
@@ -102,12 +111,11 @@ class TradeExecutionPipeline:
             ok, reason = self.risk_manager.validate(self.paper_broker, ctx.decision)
 
         if not ok:
-            self._reject(ctx, getattr(ctx, "execution_intent", None), reason)
+            self._reject(ctx, intent, reason)
             return
 
-        intent = getattr(ctx, "execution_intent", None)
         client_order_id = self._client_order_id(ctx)
-        if intent is not None and client_order_id:
+        if client_order_id:
             idempotency = self.idempotency_guard.check_and_reserve(client_order_id)
             if idempotency.status is IdempotencyStatus.INVALID:
                 self._reject(ctx, intent, idempotency.reason)
@@ -116,36 +124,27 @@ class TradeExecutionPipeline:
                 self._reject(ctx, intent, "Client order already submitted.")
                 return
 
-        if intent is not None:
-            reconciliation_result = getattr(ctx, "reconciliation_result", None)
-            reconciliation_report = getattr(ctx, "reconciliation_report", None)
-            result = self._execute_adapter(
-                intent,
-                ctx.decision,
-                reconciliation_result,
-                reconciliation_report,
-            )
-            ctx.execution_result = result
-            ctx.execution_lifecycle = classify_execution_result(result).value
+        reconciliation_result = getattr(ctx, "reconciliation_result", None)
+        reconciliation_report = getattr(ctx, "reconciliation_report", None)
+        result = self._execute_adapter(
+            intent,
+            ctx.decision,
+            reconciliation_result,
+            reconciliation_report,
+        )
+        ctx.execution_result = result
+        ctx.execution_lifecycle = classify_execution_result(result).value
 
-            # Preserve the broker's canonical lifecycle outcome. UNKNOWN and
-            # SUBMITTED are non-terminal reconciliation states and must never
-            # be presented as a rejection merely because execution was not
-            # immediately EXECUTED.
-            ctx.trade_status = result.status.value
-            if result.status in {ExecutionStatus.REJECTED, ExecutionStatus.FAILED, ExecutionStatus.NOT_SUBMITTED}:
-                ctx.trade_block_reason = result.reason or "Execution was not completed."
-            self._persist_result(result)
+        # Preserve the broker's canonical lifecycle outcome. UNKNOWN and
+        # SUBMITTED are non-terminal reconciliation states and must never be
+        # presented as a rejection merely because execution was not
+        # immediately EXECUTED.
+        ctx.trade_status = result.status.value
+        if result.status in {ExecutionStatus.REJECTED, ExecutionStatus.FAILED, ExecutionStatus.NOT_SUBMITTED}:
+            ctx.trade_block_reason = result.reason or "Execution was not completed."
+        self._persist_result(result)
 
-            if result.status is ExecutionStatus.EXECUTED:
-                ctx.position = getattr(self.paper_broker, "position", None)
-        else:
-            position = self.paper_broker.execute(ctx.decision)
-            if position is not None:
-                ctx.trade_status = "EXECUTED"
-                ctx.position = position
-            else:
-                ctx.trade_status = "REJECTED"
-                ctx.trade_block_reason = "Broker rejected trade execution."
+        if result.status is ExecutionStatus.EXECUTED:
+            ctx.position = getattr(self.paper_broker, "position", None)
 
         self.sync_context(ctx)
