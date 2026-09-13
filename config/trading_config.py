@@ -15,7 +15,9 @@ class TradingConfig:
 
     MAX_DAILY_UNDERLYING_MOVE = 400.0
     MAX_TRADE_UNDERLYING_MOVE = 250.0
-    STOP_UNDERLYING_POINTS = 100.0
+    # Keep the default risk geometry strictly above the execution RR floor:
+    # target1 / stop = 150 / 90 = 1.67 before rounding.
+    STOP_UNDERLYING_POINTS = 90.0
     TARGET1_UNDERLYING_POINTS = 150.0
     TARGET2_UNDERLYING_POINTS = 250.0
 
