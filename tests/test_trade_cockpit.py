@@ -21,3 +21,8 @@ def test_trade_cockpit_missing_optional_values_are_safe():
     assert _regime(dashboard) == "UNKNOWN"
     assert _brain_status(dashboard) == "UNAVAILABLE"
     assert _value({}, "missing") == "—"
+
+
+def test_trade_cockpit_regime_is_safe_when_dealer_is_missing():
+    dashboard = SimpleNamespace(dealer=None)
+    assert _regime(dashboard) == "UNKNOWN"
