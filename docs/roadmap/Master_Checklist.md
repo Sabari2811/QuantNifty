@@ -1,355 +1,287 @@
 # QuantNifty — Master Progress & Continuation Tracker
 
-**Last updated:** 2026-09-09
+**Last updated:** 2026-09-13
 **Repository:** `Sabari2811/QuantNifty`
 **Authoritative branch:** `main`
-**Current verified HEAD:** `62c1177301a3fa3eff7cc1804556246ede1d1dad`
-**Current state:** Backend validation infrastructure implemented / live certification pending
+**Current verified HEAD:** `86c729e043c368e5b04b027e11ade178e3889b04`
+**Current state:** NIFTY decision/trade cockpit and execution-policy hardening deployed; live certification remains evidence-gated.
 
-> This file is the primary continuation tracker for future ChatGPT sessions. Read it before starting new work. Do not restart completed architecture work unless new evidence requires it.
+> This is the primary continuation tracker. Read it before starting new work. Continue from the current `main` state; do not restart completed architecture work unless new evidence requires it.
 
 ---
 
 ## 1. Project Summary
 
-QuantNifty is a modular NIFTY options market-intelligence platform covering:
+QuantNifty is a NIFTY-specific options market-intelligence, decision, paper-trading, replay/backtesting, learning, monitoring and dashboard platform.
 
-- market-data providers and instrument management
-- live option-chain analytics
-- Greeks, GEX, DEX, Gamma Walls and Gamma Flip
-- OI flow, IV/skew and market-structure analytics
-- expected move, Max Pain and PCR
-- dealer/institutional intelligence
-- direction-aware scoring and decision intelligence
-- risk and trade validation
-- execution planning and safe execution lifecycle handling
-- paper trading
-- replay / historical simulation / backtesting foundations
-- canonical DashboardData-driven dashboard architecture
-- provenance, freshness and quote-integrity controls
-- monitoring and health infrastructure
-- Adaptive Brain / learning infrastructure
-- live-session evidence and validation
-- production hardening and durable audit/idempotency foundations
-- after-market/backtest/walk-forward/robustness validation infrastructure
+Canonical chain:
 
-The project is being developed as a production-grade institutional market-intelligence system, with strict separation between **direction**, **actionability**, **risk permission**, **execution**, **historical replay**, and **learning/intelligence**.
+```text
+Live NIFTY Market Data
+        ↓
+Market / Option Analytics
+        ↓
+Direction-aware Signal
+        ↓
+Authoritative NIFTY Decision
+        ↓
+Brain / Learning Gate
+        ↓
+Risk Gate
+        ↓
+Execution Intent
+        ↓
+Paper / Broker Execution
+        ↓
+Position / Trade Lifecycle
+        ↓
+P&L / Performance
+        ↓
+Learning Observation
+        ↓
+Dashboard / Audit Evidence
+```
+
+The system is intentionally NIFTY-specific rather than a generic multi-index engine.
 
 ---
 
-## 2. Authoritative Source / Repository Rules
-
-### QuantNifty
+## 2. Repository Rules
 
 - Repository: `Sabari2811/QuantNifty`
 - Branch: **`main`**
-- `main` is the authoritative code branch for continuation.
-- Current HEAD: **`62c1177301a3fa3eff7cc1804556246ede1d1dad`**
-- Latest commit: `test: cover after-market validation orchestration`
-
-### Separate project — DO NOT TOUCH
-
-`Sabari2811/QuantNifty-Next` is a separate project.
-
-- Do not modify its code.
-- Do not modify its environment variables.
-- Do not use its Render/Postgres resources for QuantNifty.
-- Do not merge or copy QuantNifty-Next changes into QuantNifty unless explicitly requested.
+- Never modify `Sabari2811/QuantNifty-Next`.
+- Never expose or commit credentials, API tokens, database URLs or other secrets.
+- Existing Render services must be reused; do not create duplicate services.
+- Workflow: **Inspect → identify gap → implement → test → commit → deploy → validate → report**.
 
 ---
 
-## 3. Engineering Operating Rules
+## 3. Latest Git State
 
-Every change follows:
+Current HEAD:
 
-1. Inspect current repository state.
-2. Identify the exact gap.
-3. Make **one focused change**.
-4. Add/update targeted regression tests.
-5. Run targeted tests.
-6. Run full regression before release.
-7. Review the diff for unintended changes.
-8. Commit to `main`.
-9. Deploy only when the change is ready.
-10. Validate deployment/runtime evidence.
+```text
+86c729e043c368e5b04b027e11ade178e3889b04
+```
 
-### Architecture guardrails
+Latest commit:
 
-- One canonical owner per domain concept.
-- `DashboardData` is authoritative for dashboard rendering.
-- UI adapters/presenters are read-only mappings; they must not silently recompute canonical analytics.
-- Direction is not actionability.
-- Intelligence may inform but must not silently veto an authoritative live direction/decision.
-- Gamma Flip is regime/level evidence, not a standalone trading signal.
-- Historical/replay logic must not silently veto live direction.
-- Freshness and integrity are separate dimensions.
-- Missing/invalid/suspect values fail closed and are explicitly represented.
-- Execution outcomes of `UNKNOWN` require reconciliation; they must not be treated as success or ordinary failure.
-- Audit history is append-only.
-- Idempotency must survive process restart when durable audit storage is configured.
-- No real-money order placement from tests.
-- Deployment is not certification; live evidence is required for live certification.
+```text
+test: lock explicit NIFTY cutoff semantics
+```
+
+Recent relevant commits:
+
+```text
+86c729e  test: lock explicit NIFTY cutoff semantics
+9d5bc7e  refactor: make NIFTY entry and force-exit cutoffs explicit
+58d73d1  fix: keep live monitor only in NIFTY cockpit
+7fc08de  test: enforce cockpit-only live monitor placement
+```
+
+The latest GitHub Actions regression observed for `86c729e` completed successfully.
 
 ---
 
-## 4. Milestone / Workstream Status
+## 4. NIFTY Trading Policy
 
-| Workstream | Status | Notes |
+The active trading architecture enforces/intends:
+
+- Symbol: `NIFTY`
+- Options: CE / PE only
+- Direction comes from the canonical NIFTY signal.
+- Scoring must not invent or reverse direction.
+- Delta validation is required for selected option contracts.
+- Maximum daily underlying movement: **400 points**
+- Maximum trade movement: **250 points**
+- Risk movement model: **100 points**
+- Target-1 movement model: **150 points**
+- Target-2 movement model: **250 points**
+- Maximum trades/day: **3**
+- Maximum simultaneous position: **1**
+- Entry cutoff: **15:35 IST**
+- Overnight position: disabled
+- Force-close at the intraday cutoff
+- Risk/data/authentication/reconciliation failures fail closed
+
+---
+
+## 5. Workstream Status
+
+| Workstream | Status | Current evidence / note |
 |---|---|---|
-| Initial architecture / provider migration | ✅ Complete | Active provider architecture uses INDMoney / INDstocks; legacy Breeze remains isolated in legacy areas. |
-| Instrument master / instrument management | ✅ Complete | Index/equity/F&O masters and strike selection implemented. |
-| Live option-chain retrieval | ✅ Complete | Provider integration and canonical option-chain path implemented. |
-| Greeks | ✅ Complete | Live/canonical Greeks pipeline implemented. |
-| GEX / DEX | ✅ Complete | Exposure analytics implemented. |
-| Gamma Wall / Gamma Flip | ✅ Complete | Regime/level analytics implemented. |
+| Provider migration | ✅ Complete | Active provider architecture uses INDMoney / INDstocks; legacy Breeze isolated. |
+| Instrument master / strike selection | ✅ Complete | Index/equity/F&O masters and NIFTY strike selection implemented. |
+| Live option-chain retrieval | ✅ Complete | Canonical provider option-chain path implemented. |
+| Greeks / GEX / DEX | ✅ Complete | Canonical exposure/Greeks pipeline implemented. |
+| Gamma Wall / Gamma Flip | ✅ Complete | Used as regime/level evidence, not standalone signal. |
 | Market Structure | ✅ Complete | Canonical market-structure engine integrated. |
-| Expected Move / Max Pain / PCR | ✅ Complete | Canonical fields and fail-closed dashboard semantics covered. |
-| OI Flow | ✅ Complete | OI analyzer and decision-intelligence integration covered. |
-| Dealer / institutional intelligence | ✅ Complete | Dealer flow/intelligence foundation integrated. |
-| Direction-aware scoring | ✅ Complete | Direction preserved through scoring/strategy/decision pipeline. |
-| Decision / risk / trade validation | ✅ Complete | Direction and actionability are explicitly separated. |
-| Execution lifecycle safety | ✅ Complete | `UNKNOWN` -> reconciliation; retry behavior is explicit. |
-| Execution audit / idempotency | ✅ Complete | Append-only audit and durable audit-backed idempotency implemented. |
-| Position runtime / restart recovery | ✅ Complete | Restart persistence regression covered. |
+| Expected Move / Max Pain / PCR | ✅ Complete | Canonical fields and fail-closed UI semantics covered. |
+| OI Flow / Dealer intelligence | ✅ Complete | Decision-intelligence inputs integrated. |
+| Direction-aware scoring | ✅ Complete | Authoritative direction preserved through scoring/strategy/decision. |
+| Decision / risk / trade validation | ✅ Complete | Direction and actionability separated. |
+| NIFTY execution policy | ✅ Complete | Entry/force-exit cutoff semantics explicitly enforced and regression-tested. |
+| Execution lifecycle safety | ✅ Complete | UNKNOWN requires reconciliation; retry semantics explicit. |
+| Execution audit / idempotency | ✅ Complete | Append-only audit and durable idempotency foundations implemented. |
+| Position restart recovery | ✅ Complete | Recovery/reconciliation boundary regression covered. |
 | Replay / live isolation | ✅ Complete | Replay cannot create/import live execution state. |
-| Dashboard canonical architecture | ✅ Complete | DashboardData + adapters + controller cycle established. |
-| Dashboard fail-closed semantics | ✅ Complete | Missing/invalid values do not become fabricated zeroes or stale actionability. |
-| Provenance / freshness / integrity | ✅ Complete | Separate freshness/integrity state with explicit degraded/unavailable states. |
-| Runtime card / market banner / signal card | ✅ Complete | Contract tests added. |
-| Monitoring / health | ✅ Complete | Alert-event and runtime-health infrastructure implemented. |
-| Market clock | ✅ Complete | IST/Asia-Kolkata session boundaries and weekend behavior tested. |
-| Adaptive Brain | ✅ Complete | Observation, historical similarity/win-rate logic, outcome resolution and restart recovery implemented. |
-| Brain SQL persistence | ✅ Implemented/tested | SQL-backed path and restart regression implemented; real production observation/restart verification remains live-evidence work. |
-| Live-cycle evidence | ✅ Implemented/tested | Fail-closed evidence builder, JSONL and SQL stores implemented. |
-| Live certification verifier | ✅ Implemented/tested | Multi-cycle fail-closed verifier requires live identity, fresh/valid data and durable persistence. |
-| Production readiness/health | ✅ Implemented/tested | Non-secret configuration/readiness surface exists. |
-| Live validation worker | ✅ Implemented | Dedicated foreground worker with health endpoint and one-cycle path deployed. |
-| Production PostgreSQL wiring | ✅ Wired | QuantNifty-specific Render Postgres configured for Brain/evidence stores; runtime persistence still needs genuine-cycle verification. |
-| Backtest metrics/gates | ✅ Implemented/tested | P&L, win rate, profit factor, expectancy, drawdown and consecutive-loss gates. |
-| Strategy contract validation | ✅ Implemented/tested | Daily trade limit, actionability/risk execution boundaries and UNKNOWN reconciliation checks. |
-| After-market validation harness | ✅ Implemented/tested | Orchestrates strategy contract, backtest, temporal integrity, leakage, walk-forward and regime analysis. |
-| Walk-forward / out-of-sample framework | ✅ Implemented/tested | Chronological non-shuffled train/test windows with temporal-order validation. |
-| Data leakage validation | ✅ Implemented/tested | Future-feature and early-outcome checks. |
-| Robustness / regime analysis | ✅ Implemented/tested | Regime and parameter-run evaluation without silently selecting a winner. |
-| Unified certification report | ✅ Implemented/tested | Fail-closed overall status; live certification remains an independent gate. |
-| CI / dependency reproducibility | 🟡 Pending latest validation | Earlier CI baseline was green; latest validation-framework commits require fresh CI confirmation. |
-| Genuine live-market certification | ⚠️ Pending | Genuine live cycles must be captured and independently verified. |
-| Autonomous production worker | 🟡 Deployed workaround | Dedicated Render web-service worker is running; true background-worker runtime remains an infrastructure improvement, not a strategy-code blocker. |
-| Streamlit UI finalization | ⏸️ Deferred | Explicitly deferred until backend/project completion and validation. |
+| Adaptive Brain | ✅ Implemented/tested | Similarity, outcome resolution, learning and restart recovery implemented; live production evidence still pending. |
+| Live-cycle evidence | ✅ Implemented/tested | Fail-closed evidence model and stores implemented. |
+| Live certification verifier | ✅ Implemented/tested | Requires genuine live identity, freshness/integrity and durable persistence. |
+| After-market validation | ✅ Implemented/tested | Backtest, strategy contract, temporal integrity, leakage, walk-forward and robustness orchestration available. |
+| Backtest metrics/gates | ✅ Implemented/tested | P&L, win rate, profit factor, expectancy, drawdown and loss-streak gates. |
+| Dashboard canonical architecture | ✅ Complete | DashboardData + controller + read-only presentation mapping. |
+| NIFTY Trade Cockpit | ✅ Implemented/deployed | Primary one-screen NIFTY decision/trade view. |
+| Live Trade Monitor | ✅ Implemented/deployed | Owned only by NIFTY cockpit; provider-observed option LTP/P&L refresh. |
+| Full Terminal duplication cleanup | ✅ Complete | Live monitor removed from Full Terminal; detailed analytics retained. |
+| Backend ↔ UI integrity | ✅ Implemented/tested | Canonical UI contract and integrity checks retained. |
+| CI regression | ✅ Green | Latest observed run for `86c729e` succeeded. |
+| Render UI deployment | ✅ Live | `quantnifty-validation` deployed from `main`; latest observed deployment for `86c729e` is live. |
+| Production PostgreSQL wiring | 🟡 Wired / verify | QuantNifty-specific DB wiring exists; genuine-cycle persistence/restart verification remains. |
+| WebSocket live feed | ⚠️ Not certified | REST quote path works where authenticated; WebSocket requires successful authenticated handshake + real tick evidence before certification. |
+| Genuine live-market certification | ⚠️ Pending | Requires multiple independently verified live cycles. |
+| Historical strategy acceptance | ⚠️ Pending | Requires real machine-readable historical NIFTY option data and explicit acceptance thresholds. |
+| Final E2E certification | ⚠️ Pending | Depends on live evidence + historical validation + durable persistence evidence. |
 
 ---
 
-## 5. Validation Infrastructure Added
+## 6. Current UI Architecture
 
-The following backend-only validation components are now available:
+Primary tab:
 
-- `validation/backtest_gates.py` — deterministic backtest metrics and explicit acceptance thresholds.
-- `validation/strategy_contract.py` — fail-closed strategy output/safety invariants.
-- `validation/walk_forward.py` — chronological walk-forward windows and temporal ordering checks.
-- `validation/data_leakage.py` — feature/decision/outcome temporal leakage checks.
-- `validation/robustness.py` — regime and parameter-run analysis.
-- `validation/after_market.py` — single orchestrator for post-market validation.
-- `validation/certification_report.py` — unified, secret-free, fail-closed certification status.
-- `monitoring/live_certification.py` — genuine-live evidence certification gate.
+### 🎯 NIFTY Trade Cockpit
 
-These modules consume recorded outputs/evidence and do not place broker orders or alter live decisions.
+Contains the decision-critical single-screen view:
 
----
-
-## 6. Recently Completed Contract / Safety Work
-
-### Dashboard fail-closed semantics
-
-Completed contract coverage includes:
-
-- KPI missing probability/confidence -> `—`; zero remains `0%`.
-- Expected Move missing/invalid -> `UNAVAILABLE`; zero preserved.
-- Max Pain missing/invalid -> `UNAVAILABLE`; zero preserved.
-- PCR missing/invalid -> `UNAVAILABLE`.
-- Probability gauge missing/invalid -> unavailable; zero preserved.
-- Market banner missing/invalid critical fields -> fail closed.
-- Signal card does not infer dealer fields when source data is absent.
-- Provenance adapter distinguishes `UNAVAILABLE`, `DEGRADED` and `READY`.
-- Runtime card uses canonical runtime/trade/block/position/last-trade state.
-
-### Execution safety
-
-- Adapter timeout/connection failure -> `UNKNOWN` and reconciliation required.
-- Mapping/ordinary execution failures -> `FAILED`.
-- Lifecycle classification is explicit.
-- `UNKNOWN` / `SUBMITTED` -> reconciliation.
-- `REJECTED` / `FAILED` / `NOT_SUBMITTED` -> do not retry automatically.
-- Execution audit is append-only.
-- Repeated lifecycle events for the same client order remain auditable.
-- Durable audit-backed idempotency survives restart when durable storage is configured.
-
-### Replay isolation
-
-Regression tests prove replay restores recorded decisions without creating live execution state and does not import live decision/execution attributes from snapshots.
-
----
-
-## 7. Adaptive Brain Status
-
-The Brain is downstream of the authoritative decision/analytics pipeline and **does not modify the live decision**.
-
-Implemented behavior:
-
-- extracts observations from the canonical runtime context
-- stores observations append-only
-- resolves WIN/LOSS only from closed trades with numeric P&L
-- leaves unresolved outcomes as waiting for outcome
-- searches historical resolved observations for similarity
-- calculates signal-specific historical win rate when evidence exists
-- persists and restores resolved history across restart
-- supports SQL-backed persistence when `BRAIN_DATABASE_URL` is configured
-
-Production SQL is now wired for QuantNifty. The remaining verification is an actual production observation and restart/read-back check during live validation.
-
----
-
-## 8. Live Validation Status
-
-Live evidence is represented by a dedicated cycle-evidence model containing:
-
-- timestamp
-- provider / provider mode
-- cycle number
-- spot
-- option-chain coverage
-- option-chain integrity
-- runtime status
-- trade status
-- block reason
-- provenance freshness
+- NIFTY spot
+- signal / confidence / regime
+- support / resistance
+- liquidity support/resistance
+- call/put walls
+- gamma flip / gamma wall
+- dealer gamma / dealer flow
+- PCR / Max Pain / market structure
+- expected move and probabilities
+- action / CE-PE / strike / entry / SL / targets
+- risk/reward / risk state
 - Brain status
-- learning status
-- persistence status
-- evidence state
+- trade status / block reason
+- **Live Trade Monitor**
 
-The evidence builder is **fail closed**:
+The Live Trade Monitor refreshes only current provider quote/P&L state; it does not rerun the decision engine every few seconds and therefore does not create duplicate decisions/trades.
 
-- provider must explicitly identify as a supported live provider
-- provider mode must explicitly be `LIVE_PROVIDER`
-- missing provider mode is not treated as live
-- live certification cannot be inferred from deterministic/replay execution
+Secondary tab:
 
-The new certification verifier additionally requires multiple valid cycles and rejects stale, incomplete, invalid or non-durable cycles.
+### 📊 Full Terminal
 
-### Certification rule
+Retains the detailed analytics, option chain, Greeks, heatmaps, execution state, Brain/paper performance, integrity report and analytics output.
 
-Do **not** mark live validation as PASS merely because:
-
-- code tests pass
-- Render deploys
-- provider HTTP calls return status 200
-- a validation script executes
-
-Live certification requires genuine live provider runtime evidence with verified freshness/integrity and persistence state.
+The live monitor is intentionally **not** rendered here to avoid visual duplication.
 
 ---
 
-## 9. Render / Production Infrastructure Status
+## 7. Brain / Learning Rules
 
-### Dedicated QuantNifty live-validation worker
+The Brain is an evidence-based downstream learning layer.
 
-- Service: `quantnifty-live-validation-worker`
-- Service ID: `srv-dagittou01pc7383fqv0`
-- Repository: `Sabari2811/QuantNifty`
-- Branch: `main`
-- Start command: `python -m dashboard.live_validation_worker`
-- Region: Singapore
-- Current runtime: Render web-service workaround with HTTP health endpoint.
-- `LIVE_VALIDATION_MODE=true`
-- `LIVE_VALIDATION_INTERVAL_SECONDS=60`
-- `INDSTOCKS_ENABLE_WS_LIVE_QUOTES=1`
-- `APITOKEN` is configured in Render; never paste or expose it in chat.
+- Uses canonical NIFTY setup fingerprints.
+- Learns from resolved trade outcomes, not arbitrary historical research leakage.
+- Requires sufficient similar resolved setups before a historical profitability gate can affect actionability.
+- Can PASS or VETO an otherwise valid trade to WAIT; it must not reverse BUY_CALL into BUY_PUT.
+- Outcome resolution is tied to the original trade/entry identity.
+- Resolved observations are idempotent.
+- Restart recovery restores resolved learning history when the configured durable store is available.
+- Adaptive mutation remains disabled during validation.
 
-### QuantNifty production Postgres
-
-- Dedicated Render Postgres: `quantnifty-production`
-- Region: Singapore
-- Used only by QuantNifty.
-- `BRAIN_DATABASE_URL` and `LIVE_EVIDENCE_DATABASE_URL` are configured in the dedicated worker.
-- PostgreSQL URL normalization uses the installed psycopg 3 driver.
-
-### Infrastructure limitation
-
-The dedicated validation process is currently a Render web service rather than a native background worker because of the available deployment tooling. It has a health server and foreground worker, so it is no longer dependent on Streamlit startup. A native background-worker conversion can be made later if the deployment plan requires it.
-
-### Database rule
-
-Never attach QuantNifty to the separate `quantnifty-next` database.
+Production Brain/PostgreSQL behavior is not considered certified until a genuine production observation and restart/read-back are evidenced.
 
 ---
 
-## 10. Remaining Work — Exact Order
+## 8. Live Validation Rules
 
-### P1 — Fresh CI/regression verification
+Do not mark live validation PASS merely because:
 
-- Allow the latest validation-framework commits to complete CI.
-- Confirm targeted and full regression are green.
-- Resolve only concrete failures; do not redesign completed architecture.
+- unit/regression tests pass
+- Render deployment succeeds
+- an HTTP provider request returns 200
+- a validation script runs
 
-### P2 — Genuine live certification
+Genuine live certification requires:
 
-During market hours:
+1. supported live provider identity
+2. `LIVE_PROVIDER` mode
+3. fresh provider data
+4. valid option-chain coverage/integrity
+5. raw analytics evidence
+6. decision/intelligence consistency
+7. Brain/evidence persistence
+8. multiple valid cycles
+9. independent fail-closed certification verification
 
-1. Run the dedicated live worker.
-2. Use configured INDMoney/INDstocks credentials from Render.
-3. Capture multiple genuine live cycles.
-4. Verify `LIVE_PROVIDER` identity.
-5. Verify freshness.
-6. Verify option-chain coverage/integrity.
-7. Verify raw analytics evidence.
-8. Verify decision/intelligence consistency.
-9. Verify Brain and evidence PostgreSQL persistence.
-10. Run the fail-closed live certification verifier.
-11. Produce a durable live-session certification report.
+Deployment, test completion, live validation and production certification are separate states.
 
-Only then change the tracker to **LIVE CERTIFIED**.
+---
 
-### P3 — After-market strategy validation on captured live/replay data
+## 9. Render Status
 
-Run the new after-market orchestrator against real captured/replay strategy records and inspect:
+Existing QuantNifty services remain the deployment boundary.
 
-- strategy contract
-- P&L metrics
-- profit factor / expectancy
-- drawdown
-- daily trade frequency
-- temporal integrity
-- leakage
-- walk-forward windows
-- regime results
-- parameter sensitivity
+- Streamlit UI: `quantnifty-validation`
+- Live validation worker service: `quantnifty-live-validation-worker`
+- QuantNifty-specific Postgres: `quantnifty-production`
+- Current UI deployment from `86c729e` is **live**.
+- The worker architecture remains a foreground web-service workaround; native background-worker conversion is optional infrastructure work, not a strategy-code blocker.
 
-### P4 — Final strategy/backtest acceptance
+Never use the separate `QuantNifty-Next` infrastructure.
 
-Use actual historical datasets to establish explicit acceptance thresholds. Do not invent thresholds or performance from synthetic fixtures.
+---
 
-### P5 — Final end-to-end certification
+## 10. Current Priority Queue
 
-Combine:
+### P0 — Live provider/runtime correctness
 
-- software regression
-- replay isolation
-- execution safety
-- historical/backtest results
-- walk-forward results
-- robustness results
-- genuine live evidence
-- durable persistence
+- Confirm current INDstocks authentication in production runtime.
+- Confirm genuine option-chain freshness/integrity.
+- Confirm live provider identity and cycle evidence.
+- Confirm WebSocket only if a real authenticated handshake and timestamped ticks are observed.
 
-### P6 — Streamlit UI
+### P1 — Durable live validation
 
-Deferred until backend and strategy validation are sufficiently complete.
+- Capture multiple genuine NIFTY cycles during market hours.
+- Verify Brain/evidence PostgreSQL writes.
+- Restart the worker and verify durable read-back.
+- Run the fail-closed live certification verifier.
+
+### P2 — Historical strategy validation
+
+- Obtain an accepted machine-readable historical NIFTY option dataset.
+- Run chronological replay/backtest.
+- Evaluate P&L, expectancy, drawdown, trade frequency, leakage, walk-forward and regime robustness.
+- Do not invent historical performance from synthetic fixtures.
+
+### P3 — Final certification
+
+Combine software regression, replay isolation, execution safety, historical results, walk-forward/out-of-sample evidence, robustness, genuine live evidence and durable persistence.
+
+### P4 — Further strategy refinement
+
+Only after the gates above are green:
+
+- false-breakout filtering
+- entry timing
+- strike selection
+- setup matching
+- trade attribution
+- profitable-scenario preference
+
+Do not add strategy complexity before core data/decision/risk/execution contracts are proven.
 
 ---
 
 ## 11. What Is NOT Pending
 
-Do not reopen these areas without a concrete regression or new requirement:
+Do not reopen these without a concrete regression or new requirement:
 
 - provider architecture migration
 - core option-chain pipeline
@@ -363,16 +295,18 @@ Do not reopen these areas without a concrete regression or new requirement:
 - canonical DashboardData architecture
 - dashboard fail-closed semantics
 - provenance/freshness/integrity contracts
-- Adaptive Brain core behavior
+- Adaptive Brain core implementation
 - live evidence implementation
 - live certification verifier implementation
 - after-market validation framework implementation
+- NIFTY cockpit/live-monitor architecture
+- removal of duplicate live-monitor presentation
 
 ---
 
-## 12. Current Definition of Done
+## 12. Definition of Done
 
-QuantNifty is considered fully production-ready only when all of the following are true:
+### Engineering
 
 - [x] Core backend architecture implemented.
 - [x] Canonical decision/risk/execution boundaries enforced.
@@ -381,79 +315,44 @@ QuantNifty is considered fully production-ready only when all of the following a
 - [x] Dashboard contract regression green.
 - [x] Brain restart recovery regression green.
 - [x] Live evidence framework implemented.
-- [x] QuantNifty-specific production DB provisioned and wired.
 - [x] After-market/backtest validation framework implemented.
-- [x] Walk-forward/leakage/robustness validation framework implemented.
+- [x] Walk-forward/leakage/robustness framework implemented.
 - [x] Fail-closed live certification verifier implemented.
-- [ ] Latest full CI/regression run confirmed after validation-framework changes.
-- [ ] Genuine live cycles captured during market hours.
-- [ ] Freshness/integrity/raw-analytics evidence verified from live cycles.
-- [ ] Brain/evidence persistence verified across genuine production cycles/restart.
-- [ ] Historical strategy results evaluated against explicit acceptance thresholds.
+- [x] NIFTY-specific execution cutoff semantics regression-tested.
+- [x] Primary NIFTY Trade Cockpit deployed.
+- [x] Live monitor consolidated into cockpit only.
+- [x] Latest observed GitHub regression for `86c729e` green.
+
+### Still gated
+
+- [ ] Genuine live cycles captured and independently verified.
+- [ ] Freshness/integrity/raw analytics verified from live cycles.
+- [ ] Brain/evidence persistence verified across genuine production restart.
+- [ ] WebSocket authenticated handshake and real tick evidence, if WebSocket is used for certification.
+- [ ] Historical NIFTY option dataset accepted and decoded.
+- [ ] Historical strategy acceptance thresholds evaluated from real data.
 - [ ] Walk-forward/out-of-sample results accepted.
 - [ ] Robustness/regime results accepted.
 - [ ] Durable live-session certification report produced.
-- [ ] Final Streamlit UI validation completed.
+- [ ] Final end-to-end production certification.
 
 ---
 
-## 13. Continuation Instructions for a New ChatGPT Session
+## 13. Continuation Instructions
 
-When a new chat starts:
+When continuing QuantNifty in a new session:
 
-1. Read this file first.
-2. Treat `main` at the latest verified HEAD as authoritative.
-3. Inspect the repository before editing.
-4. Do not repeat completed architecture work.
-5. Start from the first unchecked item in **Section 10 — Remaining Work** unless the user explicitly changes priority.
-6. Work implementation-first: inspect → gap → implement → test → commit → deploy → validate.
-7. Make one focused change at a time.
-8. Run targeted regression after each behavior change.
-9. Run full regression before release.
-10. Never claim live certification from unit/CI/deployment evidence alone.
-11. Never expose `APITOKEN` or other credentials.
-12. Never touch `QuantNifty-Next`.
-13. Streamlit is deferred unless explicitly reactivated by the user.
+1. Read this tracker first.
+2. Inspect `Sabari2811/QuantNifty` on `main` before making claims.
+3. Never touch `QuantNifty-Next`.
+4. Compare current repository state with this tracker and recent commits.
+5. Identify the highest-priority concrete blocker/gap.
+6. Implement the smallest safe change automatically when the next step is clear.
+7. Add targeted regression coverage.
+8. Run targeted tests and full regression before release.
+9. Let existing Render auto-deployment handle `main` changes where configured.
+10. Validate GitHub, CI, Render, runtime, data, decision, execution, persistence and UI evidence separately.
+11. Update this tracker after meaningful progress with the latest commit, project state, completed work, remaining gates and evidence.
+12. Never claim live certification without genuine live evidence.
 
-### First inspection targets when continuing
-
-- `brain/adaptive_brain.py`
-- `monitoring/live_session_evidence.py`
-- `monitoring/live_certification.py`
-- `dashboard/live_validation_worker.py`
-- `validation/after_market.py`
-- `validation/backtest_gates.py`
-- `validation/walk_forward.py`
-- `validation/data_leakage.py`
-- `validation/robustness.py`
-- `validation/strategy_contract.py`
-- `validation/certification_report.py`
-- `requirements.txt`
-
-Then verify the latest CI and Render deployment state before editing again.
-
----
-
-## 14. Release / Continuation Snapshot
-
-**Software implementation:** ✅ Backend validation scope implemented
-
-**Regression:** 🟡 Fresh CI verification pending for latest validation framework
-
-**CI:** 🟡 Fresh confirmation pending
-
-**Production PostgreSQL:** ✅ Provisioned and wired
-
-**Live validation worker:** ✅ Deployed and independent of Streamlit startup
-
-**Production live certification:** ⚠️ Pending genuine market evidence
-
-**After-market strategy framework:** ✅ Implemented; real captured/historical data evaluation pending
-
-**Backtest/walk-forward/robustness framework:** ✅ Implemented; real dataset acceptance pending
-
-**Streamlit finalization:** ⏸️ Deferred by user
-
-**Separate QuantNifty-Next project:** 🔒 Untouched / must remain untouched
-
-**Next engineering priority:** fresh CI verification → genuine live evidence tomorrow → after-market evaluation of captured session → final strategy acceptance.
+**Final principle:** correctness, evidence, risk control, canonical ownership and incremental learning take priority over feature count.
