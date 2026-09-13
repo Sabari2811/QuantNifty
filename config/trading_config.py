@@ -18,6 +18,10 @@ class TradingConfig:
     TARGET1_UNDERLYING_POINTS = 150.0
     TARGET2_UNDERLYING_POINTS = 250.0
 
+    # Keep entry and forced-exit cutoffs as separate policy concepts even when
+    # the current strategy uses the same clock boundary for both.
+    INTRADAY_ENTRY_CUTOFF_HOUR = 15
+    INTRADAY_ENTRY_CUTOFF_MINUTE = 35
     INTRADAY_FORCE_EXIT_HOUR = 15
     INTRADAY_FORCE_EXIT_MINUTE = 35
     MAX_TRADES_PER_DAY = 3
