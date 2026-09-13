@@ -50,9 +50,6 @@ class MarketDataPipeline:
     def _run_live(self, ctx):
         self._fetch_spot(ctx)
         self._fetch_option_chain(ctx)
-        # Five-minute candles are analytical context, not tick data. Reuse the
-        # last provider snapshot for up to one minute instead of blocking every
-        # decision cycle on another historical REST request.
         acquired_at = getattr(ctx, "candles_acquired_at", None)
         if ctx.candles is None or acquired_at is None or (datetime.now(timezone.utc) - acquired_at).total_seconds() >= self.CANDLE_REFRESH_SECONDS:
             self._fetch_historical_candles(ctx)
@@ -114,11 +111,7 @@ class MarketDataPipeline:
 
     @staticmethod
     def attach_option_quote_timestamps(option_chain, timestamps):
-        option_chain.attrs["option_quote_timestamps"] = {
-            str(security_id): timestamp
-            for security_id, timestamp in (timestamps or {}).items()
-            if timestamp is not None
-        }
+        option_chain.attrs["option_quote_timestamps"] = {str(security_id): timestamp for security_id, timestamp in (timestamps or {}).items() if timestamp is not None}
         return option_chain
 
     def _fetch_spot(self, ctx):
@@ -127,10 +120,7 @@ class MarketDataPipeline:
         quote = None
         logger_reasons = None
         websocket_freshness = None
-        websocket_instrument = None
 
-        # When the persistent WebSocket is enabled, make it the hot-path source
-        # and use REST only as a bounded fallback/recovery mechanism.
         if self.live_feed is not None:
             security_id = self.instrument.get_index_security_id(ctx.symbol)
             if security_id is None:
@@ -179,9 +169,7 @@ class MarketDataPipeline:
                 freshness_verified = False
                 freshness_seconds = None
                 reasons = tuple(dict.fromkeys((*logger_reasons, *reasons)))
-        ctx.data_provenance = RuntimeDataProvenance(
-            spot=AcquisitionProvenance(source=spot_source, acquired_at=acquired_at, provider_timestamp=provider_timestamp, expected_count=1, received_count=1, missing_count=0, freshness_verified=freshness_verified, freshness_seconds=freshness_seconds, reasons=reasons)
-        )
+        ctx.data_provenance = RuntimeDataProvenance(spot=AcquisitionProvenance(source=spot_source, acquired_at=acquired_at, provider_timestamp=provider_timestamp, expected_count=1, received_count=1, missing_count=0, freshness_verified=freshness_verified, freshness_seconds=freshness_seconds, reasons=reasons))
 
     def _fetch_option_chain(self, ctx):
         ctx.expiry = self.instrument.get_nearest_weekly_expiry(ctx.symbol)
@@ -189,6 +177,7 @@ class MarketDataPipeline:
         acquired_at = datetime.now(timezone.utc)
         websocket_timeout = False
         websocket_freshness = None
+        option_timestamp = None
         option_quote_timestamps = dict(ctx.option_chain.attrs.get("option_quote_timestamps", {}))
         if self.live_feed is not None and not ctx.option_chain.empty:
             instruments = []
@@ -196,7 +185,6 @@ class MarketDataPipeline:
                 if column in ctx.option_chain.columns:
                     for value in ctx.option_chain[column].dropna():
                         instruments.append(self.live_feed.option_instrument(value))
-            option_timestamp = None
             if instruments:
                 try:
                     batch = self.live_feed.collect(instruments, mode="quote")
@@ -213,16 +201,14 @@ class MarketDataPipeline:
                     if assessments and all(assessment is not None for assessment in assessments):
                         verified = all(assessment.status in {"fresh", "fresh_with_clock_skew"} for assessment in assessments)
                         freshness_seconds = max(0.0, max(assessment.transport_age_ms for assessment in assessments) / 1000.0) if verified else None
-                        reasons = batch.freshness_reasons
-                        websocket_freshness = (option_timestamp, verified, freshness_seconds, reasons)
+                        websocket_freshness = (option_timestamp, verified, freshness_seconds, batch.freshness_reasons)
                     else:
                         websocket_freshness = (option_timestamp, False, None, ("provider_quote_timestamp_unavailable",))
                     for id_column, price_column in (("CE_ID", "CE_LTP"), ("PE_ID", "PE_LTP")):
                         if id_column not in ctx.option_chain.columns or price_column not in ctx.option_chain.columns:
                             continue
                         for index, security_id in ctx.option_chain[id_column].items():
-                            ws_instrument = self.live_feed.option_instrument(security_id)
-                            tick = batch.ticks.get(ws_instrument)
+                            tick = batch.ticks.get(self.live_feed.option_instrument(security_id))
                             if tick is not None and tick.ltp is not None:
                                 ctx.option_chain.at[index, price_column] = tick.ltp
         self.attach_option_quote_timestamps(ctx.option_chain, option_quote_timestamps)
