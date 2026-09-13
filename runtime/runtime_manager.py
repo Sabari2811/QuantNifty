@@ -1,6 +1,7 @@
 import threading
 
 from engine.live_engine import LiveEngine
+from engine.nifty_hot_path_engine import NiftyHotPathEngine
 
 from providers.indmoney_provider import INDMoneyProvider
 from providers.simulation_provider import SimulationProvider
@@ -21,15 +22,10 @@ class RuntimeManager:
             try:
                 instance._initialize(mode, replay_session)
             except Exception:
-                # Do not leave a partially initialized singleton behind. A
-                # failed provider/runtime construction must not poison later
-                # deterministic tests or recovery attempts in the same process.
                 cls._instance = None
                 raise
             cls._instance = instance
         elif not hasattr(cls._instance, "engine"):
-            # Backstop for legacy callers that may have retained a partially
-            # initialized instance from an older construction path.
             cls._instance._initialize(mode, replay_session)
         return cls._instance
 
@@ -37,7 +33,8 @@ class RuntimeManager:
         self.mode = mode
         self.composition = CompositionRoot()
         self.provider = self._create_provider(mode, replay_session)
-        self.engine = LiveEngine(
+        engine_class = NiftyHotPathEngine if mode == RuntimeMode.LIVE else LiveEngine
+        self.engine = engine_class(
             provider=self.provider,
             intelligence_service=self.composition.intelligence_service,
             paper_broker=self.composition.paper_broker,
