@@ -16,7 +16,6 @@ from dashboard.components import intelligence_card
 from dashboard.components.brain_performance import render as render_brain_performance
 from dashboard.components.backend_ui_integrity import render as render_backend_ui_integrity
 from dashboard.components.execution_state import render as render_execution_state
-from dashboard.components.live_trade_monitor import render as render_live_trade_monitor
 from dashboard.components.trade_cockpit import render as render_trade_cockpit
 
 from dashboard.components import (
@@ -78,10 +77,8 @@ with main_tab:
     render_trade_cockpit(dashboard)
 
 with terminal_tab:
-    # Existing terminal intentionally preserved in full.
-    with st.container(border=True):
-        render_live_trade_monitor(dashboard)
-
+    # Existing terminal intentionally preserved in full, except the live
+    # monitor which is now owned exclusively by the primary cockpit.
     row = st.columns([1.25, 1.25, 1.25], gap="small")
     with row[0]:
         market_banner.render(dashboard)
@@ -96,13 +93,7 @@ with terminal_tab:
     with row[1]:
         institutional_score_card.render(dashboard.institutional_score)
     with row[2]:
-        expected_move_card.render({
-            "spot": summary["spot"],
-            "expected_move": summary["expected_move"],
-            "upper": summary["expected_move_upper"],
-            "lower": summary["expected_move_lower"],
-            "method": summary["expected_move_method"],
-        })
+        expected_move_card.render(dashboard.expected_move)
 
     with st.container(border=True):
         probability_gauge.render(dashboard.probability)
