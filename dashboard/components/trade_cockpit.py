@@ -39,7 +39,7 @@ def _pct(value: Any) -> str:
 
 
 def _regime(dashboard: Any) -> str:
-    dealer = dashboard.dealer
+    dealer = getattr(dashboard, "dealer", None)
     return str(getattr(dealer, "market_mode", None) or "UNKNOWN").replace("_", " ").upper()
 
 
@@ -57,23 +57,23 @@ def render(dashboard: Any) -> None:
     DashboardData and existing live monitor; it never recomputes or mutates
     trading state and does not remove any existing terminal components.
     """
-    dealer = dashboard.dealer
-    liquidity = dashboard.liquidity or {}
-    expected = dashboard.expected_move or {}
-    probability = dashboard.probability or {}
-    signal = dashboard.signal or {}
-    plan = dashboard.trade_plan or {}
-    risk = dashboard.risk or {}
-    pcr = dashboard.pcr or {}
-    max_pain = dashboard.max_pain or {}
-    structure = dashboard.market_structure or {}
+    dealer = getattr(dashboard, "dealer", None)
+    liquidity = getattr(dashboard, "liquidity", None) or {}
+    expected = getattr(dashboard, "expected_move", None) or {}
+    probability = getattr(dashboard, "probability", None) or {}
+    signal = getattr(dashboard, "signal", None) or {}
+    plan = getattr(dashboard, "trade_plan", None) or {}
+    risk = getattr(dashboard, "risk", None) or {}
+    pcr = getattr(dashboard, "pcr", None) or {}
+    max_pain = getattr(dashboard, "max_pain", None) or {}
+    structure = getattr(dashboard, "market_structure", None) or {}
     imbalance = liquidity.get("order_imbalance", {}) if isinstance(liquidity, dict) else {}
 
     st.title("🎯 NIFTY Trade Cockpit")
     st.caption("Single-screen decision view • analytical context + execution plan + live position state")
 
     top = st.columns(6, gap="small")
-    top[0].metric("NIFTY Spot", _fmt(dashboard.spot, "₹"))
+    top[0].metric("NIFTY Spot", _fmt(getattr(dashboard, "spot", None), "₹"))
     top[1].metric("Signal", str(_value(signal, "signal", default="WAIT")).upper())
     top[2].metric("Confidence", _pct(_value(signal, "confidence")))
     top[3].metric("Regime", _regime(dashboard))
@@ -92,7 +92,7 @@ def render(dashboard: Any) -> None:
 
     row = st.columns(6, gap="small")
     row[0].metric("Dealer Gamma", str(getattr(dealer, "dealer_gamma", None) or "—"))
-    row[1].metric("Dealer Flow", str(_value(dashboard.dealer_flow, "flow", "regime", "signal")))
+    row[1].metric("Dealer Flow", str(_value(getattr(dashboard, "dealer_flow", None), "flow", "regime", "signal")))
     row[2].metric("OI PCR", _fmt(_value(imbalance, "oi_ratio")))
     row[3].metric("Volume PCR", _fmt(_value(imbalance, "volume_ratio")))
     row[4].metric("Max Pain", _fmt(_value(max_pain, "max_pain", "value")))
@@ -121,10 +121,13 @@ def render(dashboard: Any) -> None:
     row[0].metric("Risk / Reward", _fmt(_value(plan, "risk_reward", "rr")))
     row[1].metric("Risk State", str(_value(risk, "status", "state", "decision", default="—")).upper())
     row[2].metric("Brain", _brain_status(dashboard))
-    row[3].metric("Trade Status", str(dashboard.trade_status or "—").upper())
-    row[4].metric("Block Reason", str(dashboard.trade_block_reason or "NONE"))
+    row[3].metric("Trade Status", str(getattr(dashboard, "trade_status", None) or "—").upper())
+    row[4].metric("Block Reason", str(getattr(dashboard, "trade_block_reason", None) or "NONE"))
 
     with st.container(border=True):
         render_live_trade_monitor(dashboard)
 
-    st.caption(f"Expiry: {dashboard.expiry} • Provider: {dashboard.provider} • Runtime: {dashboard.runtime_status or '—'} • Cycle: {dashboard.cycle_no}")
+    st.caption(
+        f"Expiry: {getattr(dashboard, 'expiry', '—')} • Provider: {getattr(dashboard, 'provider', '—')} "
+        f"• Runtime: {getattr(dashboard, 'runtime_status', None) or '—'} • Cycle: {getattr(dashboard, 'cycle_no', '—')}"
+    )
