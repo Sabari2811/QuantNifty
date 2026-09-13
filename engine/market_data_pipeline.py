@@ -19,6 +19,7 @@ class MarketDataPipeline:
     CANDLE_FRESH_SECONDS = 5 * 60
     CANDLE_AGING_SECONDS = 15 * 60
     CANDLE_STALE_SECONDS = 30 * 60
+    CANDLE_REFRESH_SECONDS = 60
 
     def __init__(self, provider, instrument, market, chain_manager, candle_manager):
         self.provider = provider
@@ -49,7 +50,18 @@ class MarketDataPipeline:
     def _run_live(self, ctx):
         self._fetch_spot(ctx)
         self._fetch_option_chain(ctx)
-        self._fetch_historical_candles(ctx)
+        # Five-minute candles are analytical context, not tick data. Reuse the
+        # last provider snapshot for up to one minute instead of blocking every
+        # decision cycle on another historical REST request.
+        acquired_at = getattr(ctx, "candles_acquired_at", None)
+        if ctx.candles is None or acquired_at is None or (datetime.now(timezone.utc) - acquired_at).total_seconds() >= self.CANDLE_REFRESH_SECONDS:
+            self._fetch_historical_candles(ctx)
+        else:
+            ctx.data_provenance = RuntimeDataProvenance(
+                spot=ctx.data_provenance.spot,
+                option_chain=ctx.data_provenance.option_chain,
+                candles=getattr(ctx.data_provenance, "candles", None),
+            )
 
     def _run_replay(self, ctx):
         snapshot = self.provider.current_snapshot()
@@ -102,7 +114,6 @@ class MarketDataPipeline:
 
     @staticmethod
     def attach_option_quote_timestamps(option_chain, timestamps):
-        """Attach actual per-contract provider timestamps without changing quote values."""
         option_chain.attrs["option_quote_timestamps"] = {
             str(security_id): timestamp
             for security_id, timestamp in (timestamps or {}).items()
@@ -113,26 +124,13 @@ class MarketDataPipeline:
     def _fetch_spot(self, ctx):
         acquired_at = datetime.now(timezone.utc)
         spot_source = "INDMoney index quote"
-        quote = self.market.get_spot_quote(ctx.symbol)
+        quote = None
         logger_reasons = None
-
-        if quote is None:
-            fallback_getter = getattr(self.provider, "get_index_option_chain_ltp", None)
-            if callable(fallback_getter):
-                expiry = self.instrument.get_nearest_weekly_expiry(ctx.symbol)
-                quote = fallback_getter(ctx.symbol, expiry, strike_count=1)
-                if quote is not None:
-                    spot_source = "INDMoney option-chain underlying LTP"
-                    logger_reasons = ("index_quote_unavailable", "provider_underlying_ltp_timestamp_unavailable")
-                    # The value remains provider-supplied live market data; no
-                    # synthetic or historical value is substituted.
-                else:
-                    logger_reasons = ("index_quote_unavailable",)
-            else:
-                logger_reasons = ("index_quote_unavailable",)
-
         websocket_freshness = None
         websocket_instrument = None
+
+        # When the persistent WebSocket is enabled, make it the hot-path source
+        # and use REST only as a bounded fallback/recovery mechanism.
         if self.live_feed is not None:
             security_id = self.instrument.get_index_security_id(ctx.symbol)
             if security_id is None:
@@ -149,6 +147,19 @@ class MarketDataPipeline:
                     spot_source = "INDMoney WebSocket index quote"
                     websocket_freshness = self._websocket_freshness(batch, websocket_instrument)
                     acquired_at = batch.received_at.get(websocket_instrument, batch.acquired_at)
+
+        if quote is None:
+            quote = self.market.get_spot_quote(ctx.symbol)
+            if quote is None:
+                fallback_getter = getattr(self.provider, "get_index_option_chain_ltp", None)
+                if callable(fallback_getter):
+                    expiry = self.instrument.get_nearest_weekly_expiry(ctx.symbol)
+                    quote = fallback_getter(ctx.symbol, expiry, strike_count=1)
+                    if quote is not None:
+                        spot_source = "INDMoney option-chain underlying LTP"
+                        logger_reasons = ("index_quote_unavailable", "provider_underlying_ltp_timestamp_unavailable")
+                else:
+                    logger_reasons = ("index_quote_unavailable",)
 
         if quote is None:
             raise Exception("Unable to fetch live quote.")
@@ -169,17 +180,7 @@ class MarketDataPipeline:
                 freshness_seconds = None
                 reasons = tuple(dict.fromkeys((*logger_reasons, *reasons)))
         ctx.data_provenance = RuntimeDataProvenance(
-            spot=AcquisitionProvenance(
-                source=spot_source,
-                acquired_at=acquired_at,
-                provider_timestamp=provider_timestamp,
-                expected_count=1,
-                received_count=1,
-                missing_count=0,
-                freshness_verified=freshness_verified,
-                freshness_seconds=freshness_seconds,
-                reasons=reasons,
-            )
+            spot=AcquisitionProvenance(source=spot_source, acquired_at=acquired_at, provider_timestamp=provider_timestamp, expected_count=1, received_count=1, missing_count=0, freshness_verified=freshness_verified, freshness_seconds=freshness_seconds, reasons=reasons)
         )
 
     def _fetch_option_chain(self, ctx):
@@ -224,8 +225,6 @@ class MarketDataPipeline:
                             tick = batch.ticks.get(ws_instrument)
                             if tick is not None and tick.ltp is not None:
                                 ctx.option_chain.at[index, price_column] = tick.ltp
-        else:
-            option_timestamp = None
         self.attach_option_quote_timestamps(ctx.option_chain, option_quote_timestamps)
         option_provenance = ctx.option_chain.attrs.get("data_provenance")
         if option_provenance is None:
@@ -244,7 +243,7 @@ class MarketDataPipeline:
         option_provenance = replace(option_provenance, integrity_status=integrity.status, integrity_reasons=integrity.reasons)
         ctx.option_chain.attrs["quote_integrity"] = integrity.as_dict()
         ctx.option_chain.attrs["data_provenance"] = option_provenance
-        ctx.data_provenance = RuntimeDataProvenance(spot=ctx.data_provenance.spot, option_chain=option_provenance)
+        ctx.data_provenance = RuntimeDataProvenance(spot=ctx.data_provenance.spot, option_chain=option_provenance, candles=getattr(ctx.data_provenance, "candles", None))
 
     @staticmethod
     def _provider_candle_timestamp(candles):
@@ -271,6 +270,7 @@ class MarketDataPipeline:
         start = end - timedelta(days=5)
         candles = self.provider.get_historical_data(scrip_code=scrip_code, interval="5minute", start_time=int(start.timestamp() * 1000), end_time=int(end.timestamp() * 1000))
         ctx.candles = self.candle_manager.to_dataframe(candles)
+        ctx.candles_acquired_at = end
         provider_timestamp = self._provider_candle_timestamp(candles)
         freshness_verified, freshness_seconds, freshness_status, freshness_reasons = self._candle_freshness(provider_timestamp, end)
         ctx.data_provenance = RuntimeDataProvenance(spot=ctx.data_provenance.spot, option_chain=ctx.data_provenance.option_chain, candles=AcquisitionProvenance(source=f"INDMoney historical candles:{scrip_code}", acquired_at=end, provider_timestamp=provider_timestamp, expected_count=1, received_count=1 if len(ctx.candles) > 0 else 0, missing_count=0 if len(ctx.candles) > 0 else 1, freshness_verified=freshness_verified, freshness_seconds=freshness_seconds, reasons=freshness_reasons, freshness_status_override=freshness_status))
