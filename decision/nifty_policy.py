@@ -19,6 +19,10 @@ class NiftyPolicy:
     max_trade_move: float = TradingConfig.MAX_TRADE_UNDERLYING_MOVE
     max_trades_per_day: int = TradingConfig.MAX_TRADES_PER_DAY
     entry_cutoff: time = time(
+        TradingConfig.INTRADAY_ENTRY_CUTOFF_HOUR,
+        TradingConfig.INTRADAY_ENTRY_CUTOFF_MINUTE,
+    )
+    force_exit_cutoff: time = time(
         TradingConfig.INTRADAY_FORCE_EXIT_HOUR,
         TradingConfig.INTRADAY_FORCE_EXIT_MINUTE,
     )
@@ -63,6 +67,12 @@ class NiftyPolicy:
             return False, "NIFTY_INTRADAY_ENTRY_CUTOFF"
         return True, ""
 
+    def force_exit_due(self, now: datetime | None = None) -> bool:
+        current = (now or datetime.now(IST)).astimezone(IST)
+        if current.weekday() >= 5:
+            return False
+        return current.time() >= self.force_exit_cutoff
+
     def metadata(self) -> dict:
         return {
             "underlying": self.symbol,
@@ -70,6 +80,7 @@ class NiftyPolicy:
             "max_trade_move_points": self.max_trade_move,
             "max_trades_per_day": self.max_trades_per_day,
             "entry_cutoff_ist": self.entry_cutoff.strftime("%H:%M"),
+            "force_exit_cutoff_ist": self.force_exit_cutoff.strftime("%H:%M"),
             "execution": "BUY_NIFTY_CE_OR_PE",
             "overnight_position": False,
         }
