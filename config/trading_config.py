@@ -35,7 +35,8 @@ class TradingConfig:
     MAX_TRADES_PER_DAY = 3
     MAX_OPEN_POSITIONS = 1
 
-    TARGET1_MULTIPLIER = 1.35
+    # Target 1 must clear the strict RR gate even in the highest-IV stop regime.
+    TARGET1_MULTIPLIER = 1.55
     TARGET2_MULTIPLIER = 1.70
 
     STOPLOSS_LOW_IV = 0.20
