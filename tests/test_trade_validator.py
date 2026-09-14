@@ -4,10 +4,10 @@ from decision.models.option_contract import OptionContract
 from decision.validation_result import ValidationResult
 
 
-def test_trade_validator_returns_validation_result():
+def test_trade_validator_rejects_rr_at_or_below_configured_floor():
     decision = Decision()
     decision.trade.entry = 182.45
-    decision.trade.risk_reward = 1.40
+    decision.trade.risk_reward = 1.50
     decision.trade.contract = OptionContract(
         strike=24400,
         option_type="CE",
@@ -20,11 +20,12 @@ def test_trade_validator_returns_validation_result():
     result = TradeValidator().validate(decision)
 
     assert isinstance(result, ValidationResult)
-    assert result.valid is True
+    assert result.valid is False
     assert result.grade == "B"
     assert result.confidence == 80
     assert result.risk_multiplier == 0.50
-    assert result.warnings == ["Risk/Reward below 1.5"]
+    assert result.warnings == ["Risk/Reward must be greater than 1.5"]
+
 
 def test_trade_validator_uses_quality_not_signed_directional_score():
     decision = Decision()
