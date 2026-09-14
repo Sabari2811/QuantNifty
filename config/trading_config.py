@@ -11,17 +11,22 @@ class TradingConfig:
     MIN_RISK_REWARD = 1.5
     MIN_OPTION_OI = 50000
     MIN_OPTION_VOLUME = 1000
+    MIN_OPTION_PREMIUM = 20.0
+    MAX_OPTION_RISK_PERCENT = 20.0
+    NIFTY_LOT_SIZE = 65
 
     # NIFTY intraday movement model. These are risk-model bounds, not claims
     # that the market can never exceed them.
     MAX_DAILY_UNDERLYING_MOVE = 400.0
     MAX_TRADE_UNDERLYING_MOVE = 250.0
-    STOP_UNDERLYING_POINTS = 100.0
+    STOP_UNDERLYING_POINTS = 90.0
     TARGET1_UNDERLYING_POINTS = 150.0
     TARGET2_UNDERLYING_POINTS = 250.0
 
     # No new entries after 15:35 IST. Open positions must be closed by this
     # point so the strategy never intentionally carries overnight risk.
+    INTRADAY_ENTRY_CUTOFF_HOUR = 15
+    INTRADAY_ENTRY_CUTOFF_MINUTE = 35
     INTRADAY_FORCE_EXIT_HOUR = 15
     INTRADAY_FORCE_EXIT_MINUTE = 35
 
