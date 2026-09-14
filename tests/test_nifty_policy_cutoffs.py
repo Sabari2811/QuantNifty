@@ -11,9 +11,10 @@ def test_nifty_policy_exposes_entry_and_force_exit_cutoffs_separately():
     policy = NiftyPolicy()
     metadata = policy.metadata()
 
+    assert policy.entry_cutoff is not None
+    assert policy.force_exit_cutoff is not None
     assert metadata["entry_cutoff_ist"] == "15:35"
     assert metadata["force_exit_cutoff_ist"] == "15:35"
-    assert policy.entry_cutoff != policy.force_exit_cutoff or metadata["entry_cutoff_ist"] == metadata["force_exit_cutoff_ist"]
 
 
 def test_entry_is_blocked_at_cutoff_and_force_exit_is_due():
